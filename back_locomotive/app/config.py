@@ -9,7 +9,7 @@ import os
 LOCOMOTIVE_ID = "KTZ-2001"
 PORT = 3001
 
-# Broker
+# Kafka producer
 KAFKA_ENABLED = os.getenv("KAFKA_ENABLED", "false").lower() == "true"
 KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
 KAFKA_TOPIC_EVENTS = os.getenv("KAFKA_TOPIC_EVENTS", "ktz.locomotive.events")

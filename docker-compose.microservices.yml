@@ -34,6 +34,8 @@ services:
       KAFKA_TOPIC_EVENTS: ${KAFKA_TOPIC_EVENTS}
     ports:
       - "${LOCOMOTIVE_PORT}:${LOCOMOTIVE_PORT}"
+    depends_on:
+      - kafka
     restart: unless-stopped
 
   back_dispatcher:

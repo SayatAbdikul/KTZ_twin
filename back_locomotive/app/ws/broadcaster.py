@@ -17,9 +17,11 @@ from app.config import (
     HEARTBEAT_INTERVAL_S,
     ALERT_CHECK_BASE_S,
     MESSAGE_CHECK_BASE_S,
+    LOCOMOTIVE_ID,
 )
-from app.models import now_ms
+from app.models import make_event_envelope, now_ms
 from app.state import state
+from app.broker import publish_event
 from app.broker import publish_event
 
 
@@ -29,17 +31,25 @@ from app.broker import publish_event
 
 async def broadcast_message(msg_type: str, payload: object) -> None:
     """Send a WS message to all connected clients. Remove dead clients silently."""
+    locomotive_id = LOCOMOTIVE_ID
+    if isinstance(payload, dict):
+        locomotive_id = str(payload.get("locomotive_id") or payload.get("locomotiveId") or LOCOMOTIVE_ID)
+
+    event = make_event_envelope(
+        event_type=msg_type,
+        source="back_locomotive",
+        locomotive_id=locomotive_id,
+    )
+
     envelope = {
         "type": msg_type,
         "payload": payload,
         "timestamp": now_ms(),
         "sequenceId": state.next_sequence(),
+        "event": event.model_dump(),
     }
-    locomotive_id = ""
-    if isinstance(payload, dict):
-        locomotive_id = str(payload.get("locomotive_id") or payload.get("locomotiveId") or "")
-    if locomotive_id:
-        await publish_event({"locomotive_id": locomotive_id, "message": envelope}, key=locomotive_id)
+
+    await publish_event(envelope=envelope, key=locomotive_id)
 
     if not state.ws_clients:
         return

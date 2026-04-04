@@ -15,8 +15,18 @@ class WsEnvelope(BaseModel):
     payload: Any
     timestamp: int
     sequence_id: int = Field(alias="sequenceId")
+    event: "EventEnvelopeV1 | None" = None
 
     model_config = ConfigDict(populate_by_name=True)
+
+
+class EventEnvelopeV1(BaseModel):
+    event_id: str
+    event_type: str
+    source: str
+    locomotive_id: str
+    occurred_at: int
+    schema_version: str
 
 
 class LocomotiveStatus(CamelModel):

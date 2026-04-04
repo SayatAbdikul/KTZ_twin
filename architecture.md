@@ -27,6 +27,10 @@ front_locomotive  --WS-->  back_dispatcher  --WS-->  back_locomotive
 front_dispatcher  --WS-->  back_dispatcher
 
 front_locomotive  --HTTP--> back_locomotive   (legacy / partial)
+
+Optional stream path:
+
+back_locomotive --Kafka--> back_dispatcher
 ```
 
 Important: the codebase still contains two different architectural ideas:
@@ -37,8 +41,7 @@ Important: the codebase still contains two different architectural ideas:
   - dispatcher computes health and alerts from raw telemetry rules
 - the currently implemented runtime:
   - `back_locomotive` is still an in-memory simulator
-  - `back_dispatcher` connects to locomotive services over WebSocket
-  - Kafka is not implemented in the current source tree
+  - `back_dispatcher` connects to locomotive services over WebSocket and/or Kafka
 
 So this document separates "current implementation" from "target contracts".
 
@@ -161,6 +164,41 @@ Fields:
 - `payload`: message body
 - `timestamp`: server send time in epoch ms
 - `sequenceId`: monotonic per-process sequence counter
+
+### 4.1 Event Contract v1 (Producer/Consumer)
+
+For service-to-service streaming (and now also attached to WS envelopes for compatibility),
+the event metadata contract is:
+
+```json
+{
+  "event_id": "f4f2e5d2-c0cb-4f8f-a9e8-5ccf3d2b2d8b",
+  "event_type": "telemetry.frame",
+  "source": "back_locomotive",
+  "locomotive_id": "KTZ-2001",
+  "occurred_at": 1710000000000,
+  "schema_version": "1.0"
+}
+```
+
+Required fields:
+
+- `event_id`: UUID identifier for deduplication and tracing
+- `event_type`: logical event type (must match transport envelope `type`)
+- `source`: producer service name
+- `locomotive_id`: entity key used for ordering and routing
+- `occurred_at`: event production time in epoch ms
+- `schema_version`: contract version, currently `1.0`
+
+Validation rules implemented:
+
+- producer always emits `event` metadata with `schema_version=1.0`
+- consumer rejects frames without `event`
+- consumer rejects unsupported `schema_version`
+- consumer rejects `event_type` mismatch with transport `type`
+- consumer rejects `locomotive_id` mismatch for the current target stream
+
+These validation rules are applied in both dispatcher WS ingestion and dispatcher Kafka ingestion paths.
 
 ## 5. `back_locomotive` Contracts
 

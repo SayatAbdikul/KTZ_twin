@@ -35,9 +35,19 @@ export interface ChatMessage {
 
 export type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'error'
 
+export interface EventEnvelopeV1 {
+    event_id: string
+    event_type: string
+    source: string
+    locomotive_id: string
+    occurred_at: number
+    schema_version: '1.0'
+}
+
 export interface WsEnvelope<T = unknown> {
     type: string
     payload: T
     timestamp: number
     sequenceId: number
+    event?: EventEnvelopeV1
 }
