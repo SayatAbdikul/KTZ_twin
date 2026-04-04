@@ -9,14 +9,19 @@ const LEGEND_ITEMS = [
 
 export function DiagramLegend() {
   return (
-    <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 px-1 py-2">
+    <div className="flex flex-wrap items-center gap-2">
       {LEGEND_ITEMS.map(({ color, label }) => (
-        <div key={label} className="flex items-center gap-1.5">
+        <div
+          key={label}
+          className="flex items-center gap-2 rounded-full border border-sky-500/15 bg-slate-950/45 px-3 py-1.5"
+        >
           <span
             className="h-2.5 w-2.5 flex-shrink-0 rounded-full"
             style={{ backgroundColor: color }}
           />
-          <span className="text-xs text-slate-400">{label}</span>
+          <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-slate-300/80">
+            {label}
+          </span>
         </div>
       ))}
     </div>

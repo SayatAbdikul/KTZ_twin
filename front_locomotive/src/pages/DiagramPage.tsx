@@ -16,13 +16,10 @@ export function DiagramPage() {
     setSelectedZoneId((prev) => (prev === zoneId ? null : zoneId))
   }, [])
 
-  const handleZoneHover = useCallback(
-    (zoneId: string | null, e?: React.MouseEvent<SVGGElement>) => {
-      setHoveredZoneId(zoneId)
-      if (e) setMousePos({ x: e.clientX, y: e.clientY })
-    },
-    []
-  )
+  const handleZoneHover = useCallback((zoneId: string | null, position?: MousePosition) => {
+    setHoveredZoneId(zoneId)
+    setMousePos(position ?? null)
+  }, [])
 
   const handleMouseLeave = useCallback(() => {
     setHoveredZoneId(null)
@@ -39,25 +36,25 @@ export function DiagramPage() {
   }, [])
 
   return (
-    <PageContainer>
-      <div className="flex h-full flex-col gap-3">
-        {/* Header */}
-        <div className="flex shrink-0 items-center justify-between">
+    <PageContainer className="bg-[radial-gradient(circle_at_top,_rgba(14,116,144,0.14),_transparent_30%),linear-gradient(180deg,#020617_0%,#0f172a_55%,#020617_100%)]">
+      <div className="flex h-full flex-col gap-4">
+        <div className="flex shrink-0 flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-sm font-semibold text-slate-200">Locomotive Diagram</h1>
-            <p className="text-xs text-slate-500">
-              Hover over a subsystem zone to preview live data · Click to open details
+            <p className="font-mono text-[10px] uppercase tracking-[0.34em] text-sky-300/70">
+              Locomotive view
+            </p>
+            <h1 className="mt-2 text-lg font-semibold text-slate-100">M62 3D subsystem blueprint</h1>
+            <p className="mt-1 text-xs text-slate-400">
+              Real model view with subsystem overlays, live telemetry hover cards, and pinned detail state
             </p>
           </div>
           <DiagramLegend />
         </div>
 
-        {/* Main content: SVG left, detail panel right */}
-        <div className="flex min-h-0 flex-1 gap-3">
-          {/* SVG container */}
+        <div className="flex min-h-0 flex-1 flex-col gap-4 xl:grid xl:grid-cols-[minmax(0,1fr)_360px]">
           <div
             ref={containerRef}
-            className="relative min-w-0 flex-1 self-start rounded-xl border border-slate-800 bg-slate-900/60 p-4"
+            className="relative min-w-0 overflow-hidden rounded-[32px] border border-sky-500/15 bg-slate-950/55 p-3 shadow-[0_20px_80px_rgba(2,6,23,0.45)]"
           >
             <LocomotiveSvg
               selectedZoneId={selectedZoneId}
@@ -67,7 +64,6 @@ export function DiagramPage() {
               onMouseLeave={handleMouseLeave}
             />
 
-            {/* Hover tooltip */}
             {hoveredZoneId && (
               <ZoneTooltip
                 zoneId={hoveredZoneId}
@@ -77,8 +73,7 @@ export function DiagramPage() {
             )}
           </div>
 
-          {/* Detail panel */}
-          <div className="w-80 shrink-0">
+          <div className="min-h-0 xl:w-[360px] xl:shrink-0">
             <DetailPanel
               selectedZoneId={selectedZoneId}
               onClose={() => setSelectedZoneId(null)}
