@@ -1,0 +1,107 @@
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+from contextlib import asynccontextmanager
+from typing import Any
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.config import CORS_ORIGINS, LOCOMOTIVE_TARGETS
+from app.locomotive_client import connect_locomotive_forever, send_chat_to_locomotive
+from app.models import now_ms
+from app.routes import health, locomotives
+from app.state import LocomotiveRuntime, state
+from app.ws_server import broadcast_message, send_connection_snapshot
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s %(name)s - %(message)s")
+logger = logging.getLogger(__name__)
+
+
+async def _handle_dispatcher_command(payload: dict[str, Any]) -> None:
+    locomotive_id = str(payload.get("locomotiveId", "")).strip()
+    body = str(payload.get("body", "")).strip()
+    if not locomotive_id or not body:
+        return
+
+    event = {
+        "message_id": f"dispatcher-{now_ms()}",
+        "locomotive_id": locomotive_id,
+        "body": body,
+        "sender": "dispatcher",
+        "sent_at": now_ms(),
+    }
+    delivered = await send_chat_to_locomotive(locomotive_id, body)
+    event["delivered"] = delivered
+    state.chat_history[locomotive_id].append(event)
+    await broadcast_message("message.new", event)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    for target in LOCOMOTIVE_TARGETS:
+        state.locomotives[target.locomotive_id] = LocomotiveRuntime(target=target)
+
+    tasks = [
+        asyncio.create_task(connect_locomotive_forever(target), name=f"loco-{target.locomotive_id}")
+        for target in LOCOMOTIVE_TARGETS
+    ]
+    logger.info("Dispatcher started with %d locomotive targets", len(LOCOMOTIVE_TARGETS))
+
+    yield
+
+    for t in tasks:
+        t.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
+
+
+app = FastAPI(
+    title="KTZ Dispatcher Backend",
+    description="Realtime dispatcher backend that bridges multiple locomotive telemetry streams.",
+    version="1.0.0",
+    lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(health.router)
+app.include_router(locomotives.router)
+
+
+@app.get("/ping")
+def ping() -> dict:
+    return {"status": "ok"}
+
+
+@app.websocket("/ws")
+async def ws_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    state.ws_clients.add(websocket)
+    await send_connection_snapshot(websocket)
+
+    try:
+        while True:
+            raw = await websocket.receive_text()
+            try:
+                msg = json.loads(raw)
+                msg_type = msg.get("type", "")
+                payload = msg.get("payload", {})
+                if msg_type == "dispatcher.chat" and isinstance(payload, dict):
+                    await _handle_dispatcher_command(payload)
+                elif msg_type == "subscribe":
+                    # Dispatcher clients currently receive all events.
+                    pass
+            except json.JSONDecodeError:
+                continue
+    except WebSocketDisconnect:
+        pass
+    finally:
+        state.ws_clients.discard(websocket)
