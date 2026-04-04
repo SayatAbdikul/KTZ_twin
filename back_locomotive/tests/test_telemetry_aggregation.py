@@ -11,6 +11,7 @@ if str(BACK_LOCOMOTIVE_ROOT) not in sys.path:
     sys.path.insert(0, str(BACK_LOCOMOTIVE_ROOT))
 
 from app.config import START_VALUES
+from app.simulator import telemetry
 from app.simulator.telemetry import aggregate_samples_to_frame, generate_frame
 from app.state import state
 
@@ -30,6 +31,7 @@ class TelemetryAggregationTest(unittest.TestCase):
         for buffer in state.history_buffer.values():
             buffer.clear()
         state.current_frame = None
+        state.frame_counter = 0
 
     def test_aggregate_samples_to_frame_uses_average_and_last_value_metrics(self) -> None:
         samples = [
@@ -65,6 +67,23 @@ class TelemetryAggregationTest(unittest.TestCase):
         self.assertAlmostEqual(readings["pressure.oil"], 5.0, places=6)
         self.assertAlmostEqual(readings["motion.distance"], 2002.0, places=6)
         self.assertAlmostEqual(readings["fuel.level"], 77.0, places=6)
+
+    def test_generate_instance_frame_uses_single_fault_pattern_profile(self) -> None:
+        original_profile = telemetry.ACTIVE_FAULT_PATTERN_PROFILE
+        profile = telemetry.FAULT_PATTERN_PROFILES[0]
+        telemetry.ACTIVE_FAULT_PATTERN_PROFILE = profile
+
+        try:
+            frame = telemetry.generate_instance_frame(timestamp_ms=1_234)
+        finally:
+            telemetry.ACTIVE_FAULT_PATTERN_PROFILE = original_profile
+
+        readings = {reading.metric_id: reading.value for reading in frame.readings}
+
+        self.assertEqual(frame.locomotive_id, profile.locomotive_id)
+        self.assertEqual(frame.timestamp, 1_234)
+        self.assertAlmostEqual(readings["motion.speed"], profile.metrics["motion.speed"], places=6)
+        self.assertAlmostEqual(readings["motion.distance"], profile.base_distance_km, places=6)
 
 
 if __name__ == "__main__":

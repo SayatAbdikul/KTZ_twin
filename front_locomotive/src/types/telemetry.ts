@@ -28,6 +28,8 @@ export interface TelemetryFrame {
   locomotiveId: string
   frameId: string
   timestamp: number
+  latitude?: number
+  longitude?: number
   readings: MetricReading[]
 }
 

@@ -78,14 +78,27 @@ async def broadcast_message(msg_type: str, payload: object) -> None:
 
 async def task_broadcast_telemetry() -> None:
     """Generate raw telemetry at 10 Hz and publish one aggregated frame per second."""
-    from app.simulator.telemetry import generate_frame, generate_raw_sample, prime_raw_samples
+    from app.simulator.telemetry import (
+        ACTIVE_FAULT_PATTERN_PROFILE,
+        generate_instance_frame,
+        generate_raw_sample,
+        prime_raw_samples,
+    )
+
+    if ACTIVE_FAULT_PATTERN_PROFILE is not None:
+        while True:
+            frame = generate_instance_frame()
+            await broadcast_message("telemetry.frame", frame.model_dump(by_alias=True))
+            await asyncio.sleep(TELEMETRY_INTERVAL_S)
+        return
+
     prime_raw_samples()
     next_emit_at = time.monotonic() + TELEMETRY_INTERVAL_S
     while True:
         generate_raw_sample()
         now = time.monotonic()
         if now >= next_emit_at:
-            frame = generate_frame()
+            frame = generate_instance_frame()
             await broadcast_message("telemetry.frame", frame.model_dump(by_alias=True))
             next_emit_at = now + TELEMETRY_INTERVAL_S
         await asyncio.sleep(RAW_TELEMETRY_INTERVAL_S)
@@ -137,6 +150,11 @@ async def task_message_generator() -> None:
 
 async def task_publish_fault_pattern_fleet() -> None:
     """Publish 10 deterministic faulty locomotive streams to Kafka every second."""
+    from app.simulator.telemetry import ACTIVE_FAULT_PATTERN_PROFILE
+
+    if ACTIVE_FAULT_PATTERN_PROFILE is not None:
+        return
+
     if not KAFKA_ENABLED or not PATTERN_FLEET_ENABLED:
         return
 

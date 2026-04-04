@@ -16,16 +16,28 @@ compose() {
   docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"
 }
 
+run_dispatcher_migrations() {
+  echo "Applying dispatcher migrations..."
+  compose up -d timescaledb
+  compose build back_dispatcher
+  compose run --rm --no-deps back_dispatcher sh -lc \
+    'python -c "from app.db import wait_for_db; import sys; raise SystemExit(0 if wait_for_db(max_attempts=60, sleep_s=1.0) else 1)" && alembic -c app/alembic.ini upgrade head'
+}
+
 load_env() {
   if [[ ! -f "$ENV_FILE" ]]; then
     echo "Missing env file: $ENV_FILE" >&2
     exit 1
   fi
 
-  set -a
-  # shellcheck disable=SC1090
-  source "$ENV_FILE"
-  set +a
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -z "$line" ]] && continue
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+
+    local key="${line%%=*}"
+    local value="${line#*=}"
+    export "$key=$value"
+  done < "$ENV_FILE"
 }
 
 print_urls() {
@@ -34,8 +46,7 @@ Stack is up.
 
 Locomotive backend:  http://localhost:${LOCOMOTIVE_PORT}/ping
 Dispatcher backend:  http://localhost:${DISPATCHER_PORT}/ping
-Operator frontend:   http://localhost:${FRONT_LOCOMOTIVE_PORT}
-Dispatcher frontend: http://localhost:${FRONT_DISPATCHER_PORT}
+Frontend:            http://localhost:${FRONT_LOCOMOTIVE_PORT}
 EOF
 }
 
@@ -48,6 +59,7 @@ main() {
 
   case "$action" in
     up)
+      run_dispatcher_migrations
       compose up --build -d "$@"
       print_urls
       ;;
@@ -56,8 +68,12 @@ main() {
       ;;
     restart)
       compose down --remove-orphans
+      run_dispatcher_migrations
       compose up --build -d "$@"
       print_urls
+      ;;
+    migrate)
+      run_dispatcher_migrations
       ;;
     logs)
       compose logs -f "$@"
@@ -66,7 +82,7 @@ main() {
       compose ps
       ;;
     *)
-      echo "Usage: $0 [up|down|restart|logs|ps] [compose args...]" >&2
+      echo "Usage: $0 [up|down|restart|migrate|logs|ps] [compose args...]" >&2
       exit 1
       ;;
   esac

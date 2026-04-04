@@ -4,10 +4,15 @@ import { useNavigate } from 'react-router-dom'
 import { resetSessionState } from '@/app/resetSessionState'
 import { ROUTES } from '@/config/routes'
 import { useAuthStore } from '@/features/auth/useAuthStore'
-import { login, logoutSession } from '@/services/api/authApi'
+import { login } from '@/services/api/authApi'
+import type { UserRole } from '@/types/auth'
 import { cn } from '@/utils/cn'
 
-type LoginMode = 'train' | 'admin'
+type LoginMode = 'train' | 'operations'
+
+function defaultRouteForRole(role: UserRole) {
+  return role === 'dispatcher' ? ROUTES.DISPATCH : ROUTES.DASHBOARD
+}
 
 export function LoginPage() {
   const navigate = useNavigate()
@@ -29,15 +34,9 @@ export function LoginPage() {
         password,
       })
 
-      if (session.user.role === 'dispatcher') {
-        await logoutSession(session.accessToken)
-        setError('Dispatcher accounts should use the dispatcher console, not the locomotive operator app.')
-        return
-      }
-
       resetSessionState()
       setSession(session.accessToken, session.user, session.mustChangePassword)
-      navigate(ROUTES.DASHBOARD, { replace: true })
+      navigate(defaultRouteForRole(session.user.role), { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed')
     } finally {
@@ -54,11 +53,11 @@ export function LoginPage() {
               KTZ Digital Twin
             </div>
             <h1 className="mt-6 max-w-xl text-4xl font-semibold tracking-tight text-white">
-              Secure operator access for locomotive telemetry, alerts, and replay.
+              Unified access for train operators, dispatchers, and administrators.
             </h1>
             <p className="mt-4 max-w-2xl text-base leading-7 text-slate-300">
-              Sign in with an admin username or a train account assigned to a locomotive. Dispatcher accounts are
-              routed to the separate dispatcher console.
+              Train accounts stay scoped to their locomotive. Dispatcher and admin accounts use the same frontend and
+              unlock the fleet-wide console.
             </p>
           </div>
 
@@ -72,9 +71,9 @@ export function LoginPage() {
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
               <TrainFront size={18} className="text-blue-300" />
-              <div className="mt-3 text-sm font-semibold text-slate-100">Train login by locomotive</div>
+              <div className="mt-3 text-sm font-semibold text-slate-100">Role-based workspace</div>
               <p className="mt-1 text-sm text-slate-400">
-                Train accounts are restricted to a single locomotive ID and its replay history.
+                Train, dispatcher, and admin users land in the views allowed for their role.
               </p>
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
@@ -93,7 +92,7 @@ export function LoginPage() {
           <p className="mt-2 text-sm text-slate-400">Use your assigned username or locomotive ID and password.</p>
 
           <div className="mt-6 grid grid-cols-2 rounded-2xl border border-slate-800 bg-slate-900/60 p-1">
-            {(['train', 'admin'] as const).map((option) => (
+            {(['train', 'operations'] as const).map((option) => (
               <button
                 key={option}
                 type="button"
@@ -105,7 +104,7 @@ export function LoginPage() {
                     : 'text-slate-400 hover:text-slate-200'
                 )}
               >
-                {option}
+                {option === 'operations' ? 'Dispatcher / Admin' : 'Train'}
               </button>
             ))}
           </div>
@@ -118,7 +117,7 @@ export function LoginPage() {
               <input
                 value={identifier}
                 onChange={(event) => setIdentifier(event.target.value)}
-                placeholder={mode === 'train' ? 'KTZ-2001' : 'admin'}
+                placeholder={mode === 'train' ? 'KTZ-2001' : 'dispatcher'}
                 className="w-full rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-slate-100 outline-none transition-colors focus:border-blue-500"
               />
             </label>

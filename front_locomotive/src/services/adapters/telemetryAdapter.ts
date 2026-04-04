@@ -16,6 +16,8 @@ export function adaptTelemetryFrame(raw: unknown): TelemetryFrame {
     locomotiveId: (data['locomotive_id'] ?? data['locomotiveId'] ?? '') as string,
     frameId: (data['frame_id'] ?? data['frameId'] ?? '') as string,
     timestamp: (data['timestamp'] ?? Date.now()) as number,
+    latitude: typeof data['latitude'] === 'number' ? (data['latitude'] as number) : undefined,
+    longitude: typeof data['longitude'] === 'number' ? (data['longitude'] as number) : undefined,
     readings: ((data['readings'] ?? []) as Record<string, unknown>[]).map(adaptReading),
   }
 }

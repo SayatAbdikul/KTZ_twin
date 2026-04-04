@@ -1,6 +1,6 @@
 # KTZ Digital Twin
 
-KTZ Digital Twin is a hackathon project for locomotive telemetry visualization, operator awareness, dispatcher monitoring, and historical replay. The current implemented system uses a FastAPI-based locomotive simulator for live telemetry, a dispatcher service with Kafka and TimescaleDB for aggregation and replay, and two React frontends for operator and dispatcher workflows.
+KTZ Digital Twin is a hackathon project for locomotive telemetry visualization, operator awareness, dispatcher monitoring, and historical replay. The current implemented system uses a FastAPI-based locomotive simulator for live telemetry, a dispatcher service with Kafka and TimescaleDB for aggregation and replay, and a single React frontend with role-based train, dispatcher, and admin workflows.
 
 ## What Is In This Repo
 
@@ -8,8 +8,8 @@ KTZ Digital Twin is a hackathon project for locomotive telemetry visualization, 
 | --- | --- |
 | `back_locomotive/` | Live locomotive backend: telemetry simulator, health generation, alerts, messages, export routes, and operator-facing REST/WS APIs |
 | `back_dispatcher/` | Dispatcher backend: Kafka/WS ingest, TimescaleDB replay storage, replay APIs, dispatcher WS fan-out, and runtime health |
-| `front_locomotive/` | Main operator UI: dashboard, telemetry, diagram, alerts, messages, replay, and export actions |
-| `front_dispatcher/` | Dispatcher console for monitoring multiple locomotives and sending chat/directives |
+| `front_locomotive/` | Unified frontend: operator dashboard, dispatcher console, alerts, messages, replay, map, and admin user management |
+| `front_dispatcher/` | Legacy standalone dispatcher frontend, no longer started by the default Docker stack |
 | `docs/` | Supporting docs for Docker, seeding, health rules, stress testing, and design notes |
 | `scripts/` | Helper scripts, including the Docker microservices launcher |
 | `shared/` | Shared runtime assets such as `thresholds.json` mounted into both backends |
@@ -23,8 +23,7 @@ KTZ Digital Twin is a hackathon project for locomotive telemetry visualization, 
 
 | Area | Technologies |
 | --- | --- |
-| Operator frontend | React 19, TypeScript, Vite, Zustand, TanStack Query, ECharts, Tailwind CSS |
-| Dispatcher frontend | React 19, TypeScript, Vite, Zustand |
+| Frontend | React 19, TypeScript, Vite, Zustand, TanStack Query, ECharts, Tailwind CSS |
 | Locomotive backend | FastAPI, Python 3.12, in-memory simulator, WebSocket broadcasting, Kafka producer |
 | Dispatcher backend | FastAPI, Python 3.12, Kafka consumer, TimescaleDB/PostgreSQL, Alembic |
 | Streaming and storage | Kafka, TimescaleDB |
@@ -37,19 +36,17 @@ The repo contains older target-architecture notes, but the current implemented s
 ```text
 front_locomotive --REST/WS--> back_locomotive --Kafka--> back_dispatcher --TimescaleDB
 front_locomotive --Replay REST---------------> back_dispatcher
-front_dispatcher --WS-----------------------> back_dispatcher
+front_locomotive --Dispatcher WS-------------> back_dispatcher
 ```
 
 - `back_locomotive` is the live simulator and operator API surface.
 - `back_dispatcher` ingests locomotive events from Kafka and/or outbound locomotive WS connections, computes dispatcher-side runtime state, and persists replay history in TimescaleDB.
-- `front_locomotive` uses live REST/WS against the locomotive backend and replay HTTP against the dispatcher backend in the Docker stack.
-- `front_dispatcher` connects to the dispatcher backend over WebSocket.
+- `front_locomotive` is the single frontend entrypoint. It uses live REST/WS against the locomotive backend and replay/auth/dispatcher APIs against the dispatcher backend in the Docker stack.
 
 Deep-dive docs:
 - [architecture.md](./architecture.md)
 - [docs/MICROSERVICES_DOCKER.md](./docs/MICROSERVICES_DOCKER.md)
 - [back_dispatcher/README.md](./back_dispatcher/README.md)
-- [front_dispatcher/README.md](./front_dispatcher/README.md)
 - [map_gis/README.md](./map_gis/README.md)
 
 ## Quick Start
@@ -78,8 +75,7 @@ The current documented defaults come from `.env.microservices` and `docker-compo
 | --- | --- |
 | Locomotive backend | `http://localhost:3001` |
 | Dispatcher backend | `http://localhost:3010` |
-| Operator frontend | `http://localhost:5183` |
-| Dispatcher frontend | `http://localhost:5174` |
+| Frontend | `http://localhost:5183` |
 | Kafka | `localhost:9092` |
 | TimescaleDB | `localhost:5433` |
 
@@ -103,7 +99,6 @@ If you want to run pieces outside Docker, use the service-level docs instead of 
 
 - [front_locomotive/README.md](./front_locomotive/README.md)
 - [back_dispatcher/README.md](./back_dispatcher/README.md)
-- [front_dispatcher/README.md](./front_dispatcher/README.md)
 - [docs/MICROSERVICES_DOCKER.md](./docs/MICROSERVICES_DOCKER.md)
 
 Note: code-level fallback URLs do not always match the Docker stack defaults, so use the compose env values as the source of truth when running the full project.
@@ -190,9 +185,9 @@ Main incoming client action:
 
 ## Frontend Surfaces
 
-### Operator UI
+### Unified UI
 
-The operator frontend in [front_locomotive](./front_locomotive) currently includes:
+The frontend in [front_locomotive](./front_locomotive) currently includes:
 
 - Dashboard with health, contributing factors, alerts, live metrics, and export actions
 - Telemetry page with smoothing, live trends, zoom presets, and CSV export
@@ -200,15 +195,8 @@ The operator frontend in [front_locomotive](./front_locomotive) currently includ
 - Messages page
 - Diagram page
 - Replay page backed by dispatcher replay APIs and TimescaleDB data
-
-### Dispatcher UI
-
-The dispatcher frontend in [front_dispatcher](./front_dispatcher) focuses on:
-
-- multi-locomotive monitoring
-- connection and health visibility
-- telemetry snapshots
-- dispatcher chat
+- Dispatcher console for multi-locomotive monitoring and dispatcher chat
+- Admin user management for admin accounts
 
 ## Hackathon Evaluation Mapping
 
@@ -223,7 +211,6 @@ The dispatcher frontend in [front_dispatcher](./front_dispatcher) focuses on:
 
 - [front_locomotive/README.md](./front_locomotive/README.md)
 - [back_dispatcher/README.md](./back_dispatcher/README.md)
-- [front_dispatcher/README.md](./front_dispatcher/README.md)
 - [docs/MICROSERVICES_DOCKER.md](./docs/MICROSERVICES_DOCKER.md)
 - [docs/HEALTH_INDEX_RULES.md](./docs/HEALTH_INDEX_RULES.md)
 - [docs/STRESS_TESTING.md](./docs/STRESS_TESTING.md)

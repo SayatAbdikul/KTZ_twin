@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard,
   Train,
+  Map,
   Activity,
   AlertTriangle,
   MessageSquare,
@@ -30,11 +31,12 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { to: ROUTES.DASHBOARD, icon: LayoutDashboard, label: 'Dashboard' },
   { to: ROUTES.DIAGRAM, icon: Train, label: 'Diagram' },
+  { to: ROUTES.MAP, icon: Map, label: 'Map' },
   { to: ROUTES.TELEMETRY, icon: Activity, label: 'Telemetry' },
   { to: ROUTES.ALERTS, icon: AlertTriangle, label: 'Alerts' },
   { to: ROUTES.MESSAGES, icon: MessageSquare, label: 'Messages' },
   { to: ROUTES.REPLAY, icon: History, label: 'History' },
-  { to: ROUTES.DISPATCH, icon: Radio, label: 'Dispatch', roles: ['admin'] as const },
+  { to: ROUTES.DISPATCH, icon: Radio, label: 'Dispatch', roles: ['admin', 'dispatcher'] as const },
   { to: ROUTES.USERS, icon: Users, label: 'Users', roles: ['admin'] as const },
 ]
 

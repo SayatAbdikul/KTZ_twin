@@ -29,7 +29,7 @@ export function TopBar() {
   const selectLocomotive = useFleetStore((s) => s.selectLocomotive)
   const locomotiveOptions = getFleetLocomotiveOptions(locomotives)
   const selectedLocomotive = selectedLocomotiveId ? locomotives[selectedLocomotiveId] : null
-  const isTrainUser = user?.role === 'train'
+  const isTrainUser = user?.role === 'regular_train'
 
   useEffect(() => {
     const timer = setInterval(() => setTime(formatTimestamp(Date.now())), 1000)
@@ -78,7 +78,7 @@ export function TopBar() {
 
       <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-4">
         <div className="hidden rounded-md border border-slate-800 bg-slate-900 px-2.5 py-1 text-xs text-slate-300 sm:block">
-          {user?.role === 'train' ? user.locomotiveId : user?.username}
+          {user?.role === 'regular_train' ? user.locomotiveId : user?.username}
         </div>
         <ConnectionIndicator label="Backend" status={backendStatus} />
         <ConnectionIndicator label="Dispatcher" status={dispatcherStatus} />

@@ -230,6 +230,16 @@ def get_replay_time_range(locomotive_id: str) -> tuple[int | None, int | None]:
     )
 
 
+def get_known_locomotive_ids() -> list[str]:
+    ids: set[str] = set()
+    with session_scope() as session:
+        for model in (TelemetryPoint, HealthSnapshot, AlertEvent, IncomingMessage, DispatcherCommand):
+            rows = session.query(model.locomotive_id).distinct().all()
+            ids.update(str(row[0]).strip() for row in rows if row and row[0])
+
+    return sorted(ids)
+
+
 def get_replay_range(
     locomotive_id: str,
     from_ts_ms: int,

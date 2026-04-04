@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'dispatcher' | 'train'
+export type UserRole = 'admin' | 'dispatcher' | 'regular_train'
 
 export type UserStatus = 'active' | 'disabled'
 

@@ -19,3 +19,23 @@
     flex-direction: column;
   }
 }
+
+@layer components {
+  .rail-map-marker-wrap {
+    background: transparent;
+    border: 0;
+  }
+
+  .rail-map-marker {
+    display: block;
+    width: 18px;
+    height: 18px;
+    border-radius: 9999px;
+    border: 3px solid rgb(226 232 240 / 0.95);
+    background:
+      radial-gradient(circle at 30% 30%, rgb(191 219 254) 0%, rgb(59 130 246) 52%, rgb(30 64 175) 100%);
+    box-shadow:
+      0 0 0 8px rgb(59 130 246 / 0.18),
+      0 10px 24px rgb(15 23 42 / 0.5);
+  }
+}

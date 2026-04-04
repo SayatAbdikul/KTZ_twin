@@ -4,6 +4,7 @@ import { Providers } from './providers'
 import { AppShell } from '@/components/layout/AppShell'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { DiagramPage } from '@/pages/DiagramPage'
+import { MapPage } from '@/pages/MapPage'
 import { TelemetryPage } from '@/pages/TelemetryPage'
 import { AlertsPage } from '@/pages/AlertsPage'
 import { MessagesPage } from '@/pages/MessagesPage'
@@ -17,9 +18,13 @@ import { useWebSocketLifecycle } from './useWebSocketLifecycle'
 import { useMetricDefinitions } from '@/features/telemetry/useTelemetryQueries'
 import { useAuthStore } from '@/features/auth/useAuthStore'
 import { useFleetStore } from '@/features/fleet/useFleetStore'
-import { logoutSession, refreshSession } from '@/services/api/authApi'
+import { refreshSession } from '@/services/api/authApi'
 
 const BOOTSTRAP_REFRESH_TIMEOUT_MS = 9000
+
+function defaultRouteForRole(role: 'admin' | 'dispatcher' | 'regular_train') {
+  return role === 'dispatcher' ? ROUTES.DISPATCH : ROUTES.DASHBOARD
+}
 
 async function refreshSessionWithTimeout() {
     let timeoutId: number | undefined
@@ -44,15 +49,16 @@ const router = createBrowserRouter([
   {
     element: <ProtectedRoot />,
     children: [
-      { index: true, element: <DashboardPage /> },
+      { index: true, element: <DashboardRoute /> },
       { path: ROUTES.DIAGRAM, element: <DiagramPage /> },
+      { path: ROUTES.MAP, element: <MapPage /> },
       { path: ROUTES.TELEMETRY, element: <TelemetryPage /> },
       { path: ROUTES.ALERTS, element: <AlertsPage /> },
       { path: ROUTES.MESSAGES, element: <MessagesPage /> },
       { path: ROUTES.REPLAY, element: <ReplayPage /> },
       {
         path: ROUTES.DISPATCH,
-        element: <AdminOnlyRoute />,
+        element: <OperationsRoute />,
         children: [{ index: true, element: <DispatchConsolePage /> }],
       },
       {
@@ -76,6 +82,14 @@ function PublicOnlyRoute() {
   const accessToken = useAuthStore((state) => state.accessToken)
   const user = useAuthStore((state) => state.user)
   if (accessToken && user) {
+    return <Navigate to={defaultRouteForRole(user.role)} replace />
+  }
+  return <Outlet />
+}
+
+function OperationsRoute() {
+  const user = useAuthStore((state) => state.user)
+  if (user?.role !== 'admin' && user?.role !== 'dispatcher') {
     return <Navigate to={ROUTES.DASHBOARD} replace />
   }
   return <Outlet />
@@ -87,6 +101,17 @@ function AdminOnlyRoute() {
     return <Navigate to={ROUTES.DASHBOARD} replace />
   }
   return <Outlet />
+}
+
+function DashboardRoute() {
+  const user = useAuthStore((state) => state.user)
+  if (!user) {
+    return <Navigate to={ROUTES.LOGIN} replace />
+  }
+  if (user.role === 'dispatcher') {
+    return <Navigate to={ROUTES.DISPATCH} replace />
+  }
+  return <DashboardPage />
 }
 
 function ProtectedRoot() {
@@ -111,7 +136,7 @@ function AuthenticatedApp() {
   const selectLocomotive = useFleetStore((state) => state.selectLocomotive)
 
   useEffect(() => {
-    if (user?.role === 'train' && user.locomotiveId) {
+    if (user?.role === 'regular_train' && user.locomotiveId) {
       selectLocomotive(user.locomotiveId)
     }
   }, [selectLocomotive, user])
@@ -136,10 +161,6 @@ function BootstrappedRouter() {
     }
 
     if (accessToken && user) {
-      if (user.role === 'dispatcher') {
-        void logoutSession(accessToken)
-        clearSession()
-      }
       return
     }
 
@@ -148,11 +169,6 @@ function BootstrappedRouter() {
     void refreshSessionWithTimeout()
       .then((session) => {
         if (cancelled) return
-        if (session.user.role === 'dispatcher') {
-          void logoutSession(session.accessToken)
-          clearSession()
-          return
-        }
         setSession(session.accessToken, session.user, session.mustChangePassword)
       })
       .catch(() => {

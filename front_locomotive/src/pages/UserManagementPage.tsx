@@ -12,7 +12,7 @@ export function UserManagementPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
-  const [role, setRole] = useState<CreateRole>('train')
+  const [role, setRole] = useState<CreateRole>('regular_train')
   const [username, setUsername] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [locomotiveId, setLocomotiveId] = useState('KTZ-2001')
@@ -46,7 +46,7 @@ export function UserManagementPage() {
     return {
       admins: users.filter((user) => user.role === 'admin'),
       dispatchers: users.filter((user) => user.role === 'dispatcher'),
-      trains: users.filter((user) => user.role === 'train'),
+      trains: users.filter((user) => user.role === 'regular_train'),
     }
   }, [users])
 
@@ -59,9 +59,9 @@ export function UserManagementPage() {
     try {
       const result = await createUser(accessToken, {
         role,
-        username: role === 'train' ? undefined : username.trim(),
+        username: role === 'regular_train' ? undefined : username.trim(),
         displayName: displayName.trim(),
-        locomotiveId: role === 'train' ? locomotiveId.trim().toUpperCase() : undefined,
+        locomotiveId: role === 'regular_train' ? locomotiveId.trim().toUpperCase() : undefined,
       })
       setTemporaryPassword(result.temporaryPassword)
       setPasswordOwner(result.user.displayName ?? result.user.username ?? result.user.locomotiveId ?? 'New user')
@@ -102,7 +102,7 @@ export function UserManagementPage() {
   }
 
   function renderUserCard(user: AuthUser) {
-    const identity = user.role === 'train' ? user.locomotiveId : user.username
+    const identity = user.role === 'regular_train' ? user.locomotiveId : user.username
     return (
       <div
         key={user.id}
@@ -114,7 +114,7 @@ export function UserManagementPage() {
               {user.displayName ?? identity ?? 'Unnamed user'}
             </div>
             <div className="mt-1 text-sm text-slate-400">
-              {user.role === 'train' ? `Locomotive ${identity ?? 'unassigned'}` : identity ?? 'No username'}
+              {user.role === 'regular_train' ? `Locomotive ${identity ?? 'unassigned'}` : identity ?? 'No username'}
             </div>
             <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-400">
               <span className="rounded-full border border-slate-700 px-2 py-1 uppercase tracking-[0.18em]">
@@ -156,7 +156,7 @@ export function UserManagementPage() {
         <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">Admin</p>
         <h1 className="mt-2 text-2xl font-semibold text-white">User Management</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-          Create admin, dispatcher, and train accounts. New and reset accounts receive a temporary password and
+          Create admin, dispatcher, and regular train accounts. New and reset accounts receive a temporary password and
           must change it on first use.
         </p>
       </header>
@@ -175,13 +175,13 @@ export function UserManagementPage() {
                 onChange={(event) => setRole(event.target.value as CreateRole)}
                 className="w-full rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-slate-100 outline-none transition-colors focus:border-blue-500"
               >
-                <option value="train">Train</option>
+                <option value="regular_train">Regular Train</option>
                 <option value="dispatcher">Dispatcher</option>
                 <option value="admin">Admin</option>
               </select>
             </label>
 
-            {role === 'train' ? (
+            {role === 'regular_train' ? (
               <label className="block">
                 <span className="mb-2 block text-sm text-slate-300">Locomotive ID</span>
                 <input
@@ -227,7 +227,7 @@ export function UserManagementPage() {
               disabled={
                 creating ||
                 !displayName.trim() ||
-                (role === 'train' ? !locomotiveId.trim() : !username.trim())
+                (role === 'regular_train' ? !locomotiveId.trim() : !username.trim())
               }
               className="w-full rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500"
             >
@@ -270,12 +270,12 @@ export function UserManagementPage() {
               </div>
 
               <div className="space-y-3">
-                <h2 className="text-lg font-semibold text-white">Train Accounts</h2>
+                <h2 className="text-lg font-semibold text-white">Regular Train Accounts</h2>
                 <div className="space-y-3">
                   {groupedUsers.trains.map(renderUserCard)}
                   {groupedUsers.trains.length === 0 ? (
                     <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-400">
-                      No train accounts found.
+                      No regular train accounts found.
                     </div>
                   ) : null}
                 </div>

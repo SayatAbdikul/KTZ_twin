@@ -21,7 +21,7 @@ from app.auth import enforce_http_auth
 from app.broker import start_broker, stop_broker
 from app.config import CORS_ORIGINS
 from app.simulator.health import generate_health_index
-from app.simulator.telemetry import generate_frame
+from app.simulator.telemetry import generate_instance_frame
 from app.ws.broadcaster import (
     task_alert_generator,
     task_broadcast_health,
@@ -49,7 +49,7 @@ async def lifespan(app: FastAPI):
     await start_broker()
 
     # Generate first snapshot so REST endpoints are ready immediately
-    generate_frame()
+    generate_instance_frame()
     generate_health_index()
     logger.info("Initial telemetry frame and health index generated.")
 

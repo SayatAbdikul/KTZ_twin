@@ -203,6 +203,11 @@ FAULT_PATTERN_PROFILES: list[FaultPatternProfile] = [
     ),
 ]
 
+_FAULT_PATTERN_BY_LOCOMOTIVE_ID: dict[str, FaultPatternProfile] = {
+    profile.locomotive_id: profile for profile in FAULT_PATTERN_PROFILES
+}
+ACTIVE_FAULT_PATTERN_PROFILE = _FAULT_PATTERN_BY_LOCOMOTIVE_ID.get(LOCOMOTIVE_ID)
+
 
 def _clamp(value: float, lower: float, upper: float) -> float:
     return lower if value < lower else (upper if value > upper else value)
@@ -466,7 +471,13 @@ def _aggregated_values(samples: list[tuple[int, dict[str, float]]]) -> dict[str,
     return aggregated
 
 
-def _frame_from_values(values: dict[str, float], timestamp_ms: int) -> TelemetryFrame:
+def _frame_from_values(
+    values: dict[str, float],
+    timestamp_ms: int,
+    *,
+    locomotive_id: str = LOCOMOTIVE_ID,
+    frame_id: str | None = None,
+) -> TelemetryFrame:
     readings: list[MetricReading] = []
     for metric in METRIC_DEFINITIONS:
         metric_id = metric["metricId"]
@@ -483,8 +494,8 @@ def _frame_from_values(values: dict[str, float], timestamp_ms: int) -> Telemetry
             )
         )
     frame = TelemetryFrame(
-        locomotive_id=LOCOMOTIVE_ID,
-        frame_id=state.next_frame_id(),
+        locomotive_id=locomotive_id,
+        frame_id=frame_id if frame_id is not None else state.next_frame_id(),
         timestamp=timestamp_ms,
         readings=readings,
     )
@@ -524,18 +535,45 @@ def generate_frame() -> TelemetryFrame:
     return aggregate_samples_to_frame(_recent_samples())
 
 
-def generate_fault_pattern_frame(
-    profile: FaultPatternProfile,
-    tick: int,
-    timestamp_ms: int | None = None,
-) -> TelemetryFrame:
-    timestamp = now_ms() if timestamp_ms is None else timestamp_ms
+def _fault_pattern_values(profile: FaultPatternProfile, tick: int) -> dict[str, float]:
     values = dict(profile.metrics)
 
     speed_kmh = values["motion.speed"]
     values["motion.distance"] = profile.base_distance_km + tick * speed_kmh / 3600.0
     if profile.locomotive_id == "KTZ-FUL-008":
         values["fuel.level"] = max(0.0, profile.metrics["fuel.level"] - tick * 0.02)
+
+    return values
+
+
+def generate_instance_frame(timestamp_ms: int | None = None) -> TelemetryFrame:
+    """
+    Generate one frame for the current process instance.
+
+    If the configured locomotive id matches a deterministic fault-pattern profile,
+    this process behaves as that single locomotive. Otherwise it uses the normal
+    physics-based simulator.
+    """
+    if ACTIVE_FAULT_PATTERN_PROFILE is None:
+        return generate_frame()
+
+    timestamp = now_ms() if timestamp_ms is None else timestamp_ms
+    tick = state.frame_counter
+    values = _fault_pattern_values(ACTIVE_FAULT_PATTERN_PROFILE, tick)
+    return _frame_from_values(
+        values,
+        timestamp,
+        locomotive_id=ACTIVE_FAULT_PATTERN_PROFILE.locomotive_id,
+    )
+
+
+def generate_fault_pattern_frame(
+    profile: FaultPatternProfile,
+    tick: int,
+    timestamp_ms: int | None = None,
+) -> TelemetryFrame:
+    timestamp = now_ms() if timestamp_ms is None else timestamp_ms
+    values = _fault_pattern_values(profile, tick)
 
     readings: list[MetricReading] = []
     for metric in METRIC_DEFINITIONS:

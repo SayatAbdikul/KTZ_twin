@@ -6,8 +6,8 @@ and front_locomotive/src/config/app.config.ts.
 
 import os
 
-LOCOMOTIVE_ID = "KTZ-2001"
-PORT = 3001
+LOCOMOTIVE_ID = os.getenv("LOCOMOTIVE_ID", "KTZ-2001").strip() or "KTZ-2001"
+PORT = int(os.getenv("PORT", os.getenv("LOCOMOTIVE_PORT", "3001")))
 
 # Kafka producer
 KAFKA_ENABLED = os.getenv("KAFKA_ENABLED", "false").lower() == "true"
@@ -15,7 +15,7 @@ KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
 KAFKA_TOPIC_EVENTS = os.getenv("KAFKA_TOPIC_EVENTS", "ktz.locomotive.events")
 KAFKA_TOPIC_PARTITIONS = int(os.getenv("KAFKA_TOPIC_PARTITIONS", "100"))
 KAFKA_TOPIC_REPLICATION_FACTOR = int(os.getenv("KAFKA_TOPIC_REPLICATION_FACTOR", "1"))
-PATTERN_FLEET_ENABLED = os.getenv("PATTERN_FLEET_ENABLED", "true").lower() == "true"
+PATTERN_FLEET_ENABLED = os.getenv("PATTERN_FLEET_ENABLED", "false").lower() == "true"
 PATTERN_FLEET_INTERVAL_S = float(os.getenv("PATTERN_FLEET_INTERVAL_S", "1.0"))
 
 # Timing intervals (seconds)

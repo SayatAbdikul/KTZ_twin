@@ -1,0 +1,32 @@
+INFO:     Started server process [251749]
+INFO:     Waiting for application startup.
+2026-04-05 04:32:38,573  INFO      app.main — Initialising KTZ Locomotive Telemetry Server…
+2026-04-05 04:32:38,575  WARNING   aiokafka — Unable to request metadata from "localhost:9092": KafkaConnectionError: Connection at localhost:9092 closed
+2026-04-05 04:32:40,579  WARNING   aiokafka — Unable to request metadata from "localhost:9092": KafkaConnectionError: Connection at localhost:9092 closed
+2026-04-05 04:32:42,581  WARNING   aiokafka — Unable to request metadata from "localhost:9092": KafkaConnectionError: Connection at localhost:9092 closed
+2026-04-05 04:32:44,599  INFO      app.broker — Kafka topic ensured: topic=ktz.locomotive.events partitions=100 replication_factor=1
+2026-04-05 04:32:44,601  INFO      app.broker — Kafka topic partitioning ready: topic=ktz.locomotive.events current_partitions=100 target_partitions=100
+2026-04-05 04:32:44,649  INFO      app.broker — Kafka producer started: localhost:9092, topic=ktz.locomotive.events
+2026-04-05 04:32:44,654  INFO      app.main — Initial telemetry frame and health index generated.
+2026-04-05 04:32:44,654  INFO      app.main — 6 background tasks started.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:3109 (Press CTRL+C to quit)
+2026-04-05 04:32:44,657  WARNING   aiokafka.producer.sender — Got error produce response on topic-partition TopicPartition(topic='ktz.locomotive.events', partition=46), retrying. Error: <class 'aiokafka.errors.NotLeaderForPartitionError'>
+2026-04-05 04:32:44,757  WARNING   aiokafka.producer.sender — Got error produce response on topic-partition TopicPartition(topic='ktz.locomotive.events', partition=46), retrying. Error: <class 'aiokafka.errors.NotLeaderForPartitionError'>
+2026-04-05 04:32:44,859  WARNING   aiokafka.producer.sender — Got error produce response on topic-partition TopicPartition(topic='ktz.locomotive.events', partition=46), retrying. Error: <class 'aiokafka.errors.NotLeaderForPartitionError'>
+2026-04-05 04:32:44,960  WARNING   aiokafka.producer.sender — Got error produce response on topic-partition TopicPartition(topic='ktz.locomotive.events', partition=46), retrying. Error: <class 'aiokafka.errors.NotLeaderForPartitionError'>
+2026-04-05 04:32:45,061  WARNING   aiokafka.producer.sender — Got error produce response on topic-partition TopicPartition(topic='ktz.locomotive.events', partition=46), retrying. Error: <class 'aiokafka.errors.NotLeaderForPartitionError'>
+2026-04-05 04:32:45,163  WARNING   aiokafka.producer.sender — Got error produce response on topic-partition TopicPartition(topic='ktz.locomotive.events', partition=46), retrying. Error: <class 'aiokafka.errors.NotLeaderForPartitionError'>
+2026-04-05 04:32:45,265  WARNING   aiokafka.producer.sender — Got error produce response on topic-partition TopicPartition(topic='ktz.locomotive.events', partition=46), retrying. Error: <class 'aiokafka.errors.NotLeaderForPartitionError'>
+2026-04-05 04:34:01,527  INFO      app.broker — Kafka producer published 100 messages to topic=ktz.locomotive.events
+2026-04-05 04:35:17,683  INFO      app.broker — Kafka producer published 200 messages to topic=ktz.locomotive.events
+2026-04-05 04:36:34,693  INFO      app.broker — Kafka producer published 300 messages to topic=ktz.locomotive.events
+2026-04-05 04:37:50,977  INFO      app.broker — Kafka producer published 400 messages to topic=ktz.locomotive.events
+2026-04-05 04:39:05,296  INFO      app.broker — Kafka producer published 500 messages to topic=ktz.locomotive.events
+2026-04-05 04:40:22,277  INFO      app.broker — Kafka producer published 600 messages to topic=ktz.locomotive.events
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+2026-04-05 04:40:37,705  INFO      app.main — Shutting down background tasks…
+2026-04-05 04:40:37,705  INFO      app.main — Shutdown complete.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [251749]

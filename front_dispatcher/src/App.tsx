@@ -51,11 +51,11 @@ function LoginScreen() {
 
         try {
             const session = await login(identifier.trim(), password)
-            if (session.user.role === 'train') {
+            if (session.user.role === 'regular_train') {
                 await logoutSession(session.accessToken)
                 clearSession()
                 resetDispatcherState()
-                setError('Train accounts should use the locomotive operator app, not the dispatcher console.')
+                setError('Regular train accounts should use the locomotive operator app, not the dispatcher console.')
                 return
             }
             setSession(session.accessToken, session.user, session.mustChangePassword)
@@ -72,7 +72,7 @@ function LoginScreen() {
                 <p className="kicker">KTZ Digital Twin</p>
                 <h1>Dispatcher Console Login</h1>
                 <p className="auth-copy">
-                    Sign in with a dispatcher or admin username. Train accounts are restricted to the operator app.
+                    Sign in with a dispatcher or admin username. Regular train accounts are restricted to the operator app.
                 </p>
 
                 <form className="auth-form" onSubmit={handleSubmit}>
@@ -276,7 +276,7 @@ export function App() {
         }
 
         if (accessToken && user) {
-            if (user.role === 'train') {
+            if (user.role === 'regular_train') {
                 void logoutSession(accessToken)
                 clearSession()
                 resetDispatcherState()
@@ -289,7 +289,7 @@ export function App() {
         void refreshSessionWithTimeout()
             .then((session) => {
                 if (cancelled) return
-                if (session.user.role === 'train') {
+                if (session.user.role === 'regular_train') {
                     void logoutSession(session.accessToken)
                     clearSession()
                     resetDispatcherState()

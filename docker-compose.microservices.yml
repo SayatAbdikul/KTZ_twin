@@ -4,9 +4,9 @@ services:
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:${KAFKA_PORT}
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
@@ -16,7 +16,7 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
     ports:
-      - "${KAFKA_PORT}:9092"
+      - "${KAFKA_PORT}:29092"
 
   timescaledb:
     image: timescale/timescaledb:2.15.3-pg16
@@ -42,6 +42,7 @@ services:
     environment:
       LOCOMOTIVE_HOST: ${LOCOMOTIVE_HOST}
       LOCOMOTIVE_PORT: ${LOCOMOTIVE_PORT}
+      LOCOMOTIVE_ID: ${LOCOMOTIVE_ID}
       CORS_ORIGINS: ${CORS_ORIGINS}
       API_KEY: ${API_KEY}
       AUTH_TOKEN_SECRET: ${AUTH_TOKEN_SECRET}
@@ -51,6 +52,7 @@ services:
       KAFKA_TOPIC_EVENTS: ${KAFKA_TOPIC_EVENTS}
       KAFKA_TOPIC_PARTITIONS: ${KAFKA_TOPIC_PARTITIONS}
       KAFKA_TOPIC_REPLICATION_FACTOR: ${KAFKA_TOPIC_REPLICATION_FACTOR}
+      PATTERN_FLEET_ENABLED: ${PATTERN_FLEET_ENABLED}
     volumes:
       - ./shared:/runtime
     ports:
@@ -123,18 +125,6 @@ services:
       - back_dispatcher
     ports:
       - "${FRONT_LOCOMOTIVE_PORT}:80"
-    restart: unless-stopped
-
-  front_dispatcher:
-    build:
-      context: ./front_dispatcher
-      args:
-        VITE_WS_URL: ${FRONT_DISPATCHER_VITE_WS_URL}
-        VITE_AUTH_API_BASE_URL: ${FRONT_DISPATCHER_VITE_AUTH_API_BASE_URL}
-    depends_on:
-      - back_dispatcher
-    ports:
-      - "${FRONT_DISPATCHER_PORT}:80"
     restart: unless-stopped
 
 volumes:

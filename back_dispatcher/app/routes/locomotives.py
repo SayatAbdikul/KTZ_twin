@@ -6,6 +6,7 @@ from fastapi import APIRouter, Query, Request
 
 from app.auth import get_request_auth, require_locomotive_access
 from app.config import RECENT_TELEMETRY_MAX_MINUTES
+from app.locomotive_registry import build_locomotive_summaries
 from app.models import now_ms
 from app.repository import (
     get_recent_telemetry,
@@ -29,20 +30,7 @@ def _parse_metric_ids(raw: str | None) -> list[str] | None:
 @router.get("")
 def list_locomotives(request: Request) -> dict:
     auth = get_request_auth(request)
-    return {
-        "data": [
-            {
-                "locomotiveId": rt.target.locomotive_id,
-                "wsUrl": rt.target.ws_url,
-                "connected": rt.connected,
-                "lastSeenAt": rt.last_seen_at,
-                "reconnectAttempt": rt.reconnect_attempt,
-                "hasTelemetry": rt.latest_telemetry is not None,
-            }
-            for rt in state.locomotives.values()
-            if auth.can_access_all_locomotives or rt.target.locomotive_id == auth.locomotive_id
-        ]
-    }
+    return {"data": build_locomotive_summaries(auth)}
 
 
 @router.get("/{locomotive_id}/latest-telemetry")

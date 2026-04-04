@@ -7,6 +7,8 @@ export interface FleetLocomotiveSummary {
   locomotiveId: string
   connected: boolean
   wsUrl?: string
+  latitude?: number
+  longitude?: number
   lastSeenAt: number | null
   reconnectAttempt: number
   hasTelemetry: boolean
@@ -54,6 +56,8 @@ function createSummary(locomotiveId: string): FleetLocomotiveSummary {
     connected: false,
     lastSeenAt: null,
     reconnectAttempt: 0,
+    latitude: undefined,
+    longitude: undefined,
     hasTelemetry: false,
     latestTelemetryAt: null,
     latestHealthAt: null,
@@ -153,6 +157,8 @@ export const useFleetStore = create<FleetState>()(
               ...previous,
               hasTelemetry: true,
               latestTelemetryAt: frame.timestamp,
+              latitude: frame.latitude ?? previous.latitude,
+              longitude: frame.longitude ?? previous.longitude,
               speedKmh: getMetric(frame, 'motion.speed'),
               fuelLevel: getMetric(frame, 'fuel.level'),
               coolantTemp: getMetric(frame, 'thermal.coolant_temp'),
