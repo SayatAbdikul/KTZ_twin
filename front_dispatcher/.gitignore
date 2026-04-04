@@ -13,6 +13,7 @@ dist/
 # Local env and machine-specific config
 .env
 .env.*
+.env*
 *.local
 
 # Logs
@@ -22,6 +23,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+coverage
+!.env.example
 
 # Editor files
 .vscode/*
