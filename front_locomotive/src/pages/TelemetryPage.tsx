@@ -7,9 +7,11 @@ import { useSettingsStore } from '@/features/settings/useSettingsStore'
 import { DynamicMetricRenderer } from '@/components/metrics/DynamicMetricRenderer'
 import { LineChart } from '@/components/charts/LineChart'
 import { TimeRangeSelector, type TimeRangePreset } from '@/components/charts/TimeRangeSelector'
+import { ExportMenu } from '@/components/common/ExportMenu'
 import { SectionHeader } from '@/components/common/SectionHeader'
 import { ValueDisplay } from '@/components/common/ValueDisplay'
 import { PageContainer } from '@/components/layout/PageContainer'
+import { downloadCsv } from '@/utils/exportCsv'
 import { getMetricSeverity } from '@/utils/thresholds'
 import type { MetricDefinition, MetricGroup } from '@/types/telemetry'
 
@@ -93,6 +95,7 @@ function LiveTrendCard({
 
 export function TelemetryPage() {
   const [preset, setPreset] = useState<TimeRangePreset>('5m')
+  const [isExporting, setIsExporting] = useState(false)
   const metricDefinitions = useMetricCatalog()
   const windowMs = useMemo<number | 'all'>(
     () => (preset === 'all' ? 'all' : PRESET_WINDOW_MS[preset]),
@@ -106,11 +109,38 @@ export function TelemetryPage() {
     [metricDefinitions]
   )
 
+  async function handleTelemetryExport() {
+    setIsExporting(true)
+    try {
+      await downloadCsv({
+        path: '/api/export/telemetry/csv',
+        fallbackFilename: 'telemetry.csv',
+      })
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Failed to export telemetry CSV.')
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
   return (
     <PageContainer>
-      <div className="mb-4 flex items-center gap-2">
-        <Activity size={18} className="text-blue-400" />
-        <h1 className="text-base font-semibold text-slate-200">Telemetry</h1>
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2">
+          <Activity size={18} className="text-blue-400" />
+          <h1 className="text-base font-semibold text-slate-200">Telemetry</h1>
+        </div>
+        <ExportMenu
+          actions={[
+            {
+              id: 'telemetry-csv',
+              label: isExporting ? 'Exporting CSV...' : 'Export CSV',
+              description: 'Download the raw live telemetry history buffer as CSV.',
+              disabled: isExporting,
+              onSelect: handleTelemetryExport,
+            },
+          ]}
+        />
       </div>
 
       <section className="mb-6">

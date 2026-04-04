@@ -93,7 +93,7 @@ app.add_middleware(
 )
 app.middleware("http")(enforce_http_api_key)
 
-from app.routes import alerts, config_routes, connection, health, messages, replay, telemetry  # noqa: E402
+from app.routes import alerts, config_routes, connection, export, health, messages, replay, telemetry  # noqa: E402
 
 app.include_router(telemetry.router)
 app.include_router(health.router)
@@ -102,6 +102,7 @@ app.include_router(messages.router)
 app.include_router(connection.router)
 app.include_router(replay.router)
 app.include_router(config_routes.router)
+app.include_router(export.router)
 
 
 @app.websocket("/ws")
