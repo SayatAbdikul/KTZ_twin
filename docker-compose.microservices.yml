@@ -61,7 +61,7 @@ services:
   back_dispatcher:
     build:
       context: ./back_dispatcher
-    command: ["sh", "-lc", "alembic -c app/alembic.ini upgrade head && uvicorn app.main:app --host \"$DISPATCHER_HOST\" --port \"$DISPATCHER_PORT\""]
+    command: ["sh", "-lc", "uvicorn app.main:app --host \"$DISPATCHER_HOST\" --port \"$DISPATCHER_PORT\""]
     depends_on:
       back_locomotive:
         condition: service_started
