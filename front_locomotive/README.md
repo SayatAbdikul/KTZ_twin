@@ -1,73 +1,65 @@
-# React + TypeScript + Vite
+# front_locomotive
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Operator-facing React application for the KTZ Digital Twin project.
 
-Currently, two official plugins are available:
+This app renders the live locomotive cockpit, replay workspace, alerts, telemetry trends, health explainability, and export actions. For the full project overview and Docker-first startup flow, start with the root [README](../README.md).
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## What This App Covers
 
-## React Compiler
+- dashboard with overall health, subsystem status, contributing factors, alerts, live metrics, and export actions
+- telemetry page with smoothing, live trend zoom presets, and telemetry CSV export
+- alerts page with alert CSV export
+- messages/inbox view
+- locomotive diagram page
+- replay page backed by dispatcher replay APIs
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Runtime Configuration
 
-## Expanding the ESLint configuration
+Important build/runtime inputs:
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- `VITE_WS_URL`
+- `VITE_API_BASE_URL`
+- `VITE_REPLAY_API_BASE_URL`
+- `VITE_API_KEY`
+- `VITE_ENABLE_MOCKS`
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+In the Docker stack, these values are injected from `.env.microservices` through `docker-compose.microservices.yml`. That Docker configuration is the source of truth for the full system.
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## Local Run
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+Install dependencies:
+
+```bash
+npm ci
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Start the dev server:
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run dev
 ```
+
+Build for production:
+
+```bash
+npm run build
+```
+
+Lint:
+
+```bash
+npm run lint
+```
+
+## Notes
+
+- Live REST calls target the locomotive backend.
+- Replay HTTP calls target the dispatcher backend.
+- WebSocket/API-key wiring depends on the configured env values.
+- Mock mode is available through `VITE_ENABLE_MOCKS=true`.
+
+See also:
+
+- [../README.md](../README.md)
+- [../docs/MICROSERVICES_DOCKER.md](../docs/MICROSERVICES_DOCKER.md)
+- [../architecture.md](../architecture.md)
