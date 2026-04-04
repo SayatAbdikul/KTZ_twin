@@ -29,6 +29,7 @@ async def _forward_locomotive_message(locomotive_id: str, msg: dict[str, Any]) -
 
     runtime = state.locomotives[locomotive_id]
     runtime.last_seen_at = now_ms()
+    state.note_ingest(msg_type)
 
     if msg_type == "telemetry.frame" and isinstance(payload, dict):
         # Normalize to expected multi-locomotive frame shape.

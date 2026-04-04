@@ -105,6 +105,7 @@ def ping() -> dict:
 async def ws_endpoint(websocket: WebSocket):
     await websocket.accept()
     state.ws_clients.add(websocket)
+    state.note_ws_connected()
     state.ws_subscriptions[websocket] = None
     await send_connection_snapshot(websocket)
 
@@ -134,3 +135,4 @@ async def ws_endpoint(websocket: WebSocket):
     finally:
         state.ws_clients.discard(websocket)
         state.ws_subscriptions.pop(websocket, None)
+        state.note_ws_disconnected()

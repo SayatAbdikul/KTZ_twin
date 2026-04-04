@@ -22,7 +22,7 @@ from app.config import (
     METRIC_BY_ID,
     THRESHOLD_PENALTY,
 )
-from app.models import HealthIndex, SubsystemHealth, now_ms
+from app.models import HealthIndex, SubsystemHealth, SubsystemPenalty, now_ms
 from app.state import state
 
 
@@ -36,28 +36,30 @@ def _score_to_status(score: float) -> str:
     return "critical"
 
 
-def _threshold_penalty(metric_id: str, value: float) -> float:
-    """Return penalty points for a metric value breaching a threshold."""
+def _threshold_penalty(metric_id: str, value: float) -> tuple[float, str | None, float | None]:
+    """Return penalty points and threshold info for a metric value breaching a threshold."""
     metric = METRIC_BY_ID.get(metric_id)
     if not metric:
-        return 0.0
+        return 0.0, None, None
 
     crit_low = metric.get("criticalLow")
     crit_high = metric.get("criticalHigh")
     warn_low = metric.get("warningLow")
     warn_high = metric.get("warningHigh")
 
-    if (crit_low is not None and value <= crit_low) or (
-        crit_high is not None and value >= crit_high
-    ):
-        return THRESHOLD_PENALTY["critical"]
+    if crit_low is not None and value <= crit_low:
+        return THRESHOLD_PENALTY["critical"], "criticalLow", float(crit_low)
 
-    if (warn_low is not None and value <= warn_low) or (
-        warn_high is not None and value >= warn_high
-    ):
-        return THRESHOLD_PENALTY["warning"]
+    if crit_high is not None and value >= crit_high:
+        return THRESHOLD_PENALTY["critical"], "criticalHigh", float(crit_high)
 
-    return 0.0
+    if warn_low is not None and value <= warn_low:
+        return THRESHOLD_PENALTY["warning"], "warningLow", float(warn_low)
+
+    if warn_high is not None and value >= warn_high:
+        return THRESHOLD_PENALTY["warning"], "warningHigh", float(warn_high)
+
+    return 0.0, None, None
 
 
 def _active_alert_count(subsystem_id: str) -> int:
@@ -74,9 +76,11 @@ def generate_health_index() -> HealthIndex:
     """
     now = now_ms()
     subsystems: list[SubsystemHealth] = []
+    all_penalties: list[SubsystemPenalty] = []
 
     for sub in SUBSYSTEMS:
         sid = sub["subsystemId"]
+        penalties: list[SubsystemPenalty] = []
 
         # 1. Random drift
         drift = (random.random() - 0.48) * 0.5
@@ -86,7 +90,22 @@ def generate_health_index() -> HealthIndex:
         for metric_id in SUBSYSTEM_METRICS.get(sid, []):
             value = state.current_values.get(metric_id)
             if value is not None:
-                score -= _threshold_penalty(metric_id, value)
+                penalty_points, threshold_type, threshold_value = _threshold_penalty(metric_id, value)
+                if penalty_points <= 0 or threshold_type is None or threshold_value is None:
+                    continue
+
+                metric = METRIC_BY_ID.get(metric_id, {})
+                penalty = SubsystemPenalty(
+                    metric_id=metric_id,
+                    metric_label=str(metric.get("label") or metric_id),
+                    current_value=round(value, 2),
+                    threshold_type=threshold_type,
+                    threshold_value=threshold_value,
+                    penalty_points=penalty_points,
+                )
+                penalties.append(penalty)
+                all_penalties.append(penalty)
+                score -= penalty_points
 
         # 3. Clamp
         score = max(0.0, min(100.0, score))
@@ -100,13 +119,24 @@ def generate_health_index() -> HealthIndex:
                 status=_score_to_status(score),  # type: ignore[arg-type]
                 active_alert_count=_active_alert_count(sid),
                 last_updated=now,
+                penalties=penalties,
             )
         )
 
     overall = round(
         sum(s.health_score for s in subsystems) / len(subsystems), 1
     )
+    top_factors = sorted(
+        all_penalties,
+        key=lambda penalty: penalty.penalty_points,
+        reverse=True,
+    )[:5]
 
-    health = HealthIndex(overall=overall, timestamp=now, subsystems=subsystems)
+    health = HealthIndex(
+        overall=overall,
+        timestamp=now,
+        subsystems=subsystems,
+        top_factors=top_factors,
+    )
     state.health_index = health
     return health

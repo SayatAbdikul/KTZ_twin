@@ -266,6 +266,40 @@ The project already has a working React 19 dashboard (6 pages, 5 stores, WebSock
 4. **Modify: `src/services/websocket/wsClient.ts`** — append `?apiKey=...` to WS URL
 5. **Modify: `src/config/app.config.ts`** — add `API_KEY` from `VITE_API_KEY` env
 
+### 4.4 Dispatcher Fan-Out Backpressure
+
+**Why**: Dispatcher websocket broadcast is currently synchronous per client. One slow frontend can delay all others, and high-rate telemetry tests show rising lag plus websocket delivery failures. UI telemetry should be latest-wins, not guaranteed-per-sample.
+
+**Backend changes**:
+
+1. **Modify: `back_dispatcher/app/state.py`**
+   - Replace plain websocket-only tracking with per-client runtime state
+   - Store outbound queue, sender task, subscription, and drop/failure counters per client
+
+2. **Modify: `back_dispatcher/app/main.py`**
+   - On websocket accept, create per-client sender task
+   - On disconnect, cancel sender task and clean up client runtime
+
+3. **Modify: `back_dispatcher/app/ws_server.py`**
+   - Change `broadcast_message()` so it enqueues per-client work instead of `await ws.send_text(...)` inline
+   - Telemetry policy: latest-wins / coalesced delivery (`telemetry.frame` replaces older queued telemetry for the same client)
+   - Health policy: either coalesce like telemetry or emit at a lower bounded rate
+   - Alerts/messages/status events: keep ordered, non-lossy queueing
+   - If a client queue exceeds limits, drop stale telemetry first; disconnect client only as last resort
+
+4. **Modify: `back_dispatcher/app/routes/health.py` and `back_dispatcher/app/state.py`**
+   - Expose per-client queue depth, telemetry drops, and disconnect reasons in runtime stats
+
+5. **Modify: `back_dispatcher/app/health_engine.py`**
+   - Remove implicit 1-sample = 1-second duration assumption
+   - Compute durations from actual timestamps so alert timing is frequency-agnostic
+
+**Success criteria**:
+- Slow websocket clients do not materially increase lag for fast clients
+- High-frequency telemetry to UI is best-effort and latest-state oriented
+- `alert.new`, `alert.resolved`, `message.new`, and command/status events remain reliable
+- Stress profile `100 locomotives @ 0.1 s, 5 subscribers` completes with no broadcast delivery failures and materially lower end-to-end lag
+
 ---
 
 ## PHASE 5 — Export (targets 10% + 30% criteria)

@@ -81,6 +81,15 @@ class MetricHistory(CamelModel):
 # Health
 # ---------------------------------------------------------------------------
 
+class SubsystemPenalty(CamelModel):
+    metric_id: str
+    metric_label: str
+    current_value: float
+    threshold_type: Literal["warningLow", "warningHigh", "criticalLow", "criticalHigh"]
+    threshold_value: float
+    penalty_points: float
+
+
 class SubsystemHealth(CamelModel):
     subsystem_id: str
     label: str
@@ -88,12 +97,14 @@ class SubsystemHealth(CamelModel):
     status: Literal["normal", "degraded", "warning", "critical", "unknown"]
     active_alert_count: int
     last_updated: int
+    penalties: list[SubsystemPenalty] = Field(default_factory=list)
 
 
 class HealthIndex(CamelModel):
     overall: float
     timestamp: int
     subsystems: list[SubsystemHealth]
+    top_factors: list[SubsystemPenalty] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------

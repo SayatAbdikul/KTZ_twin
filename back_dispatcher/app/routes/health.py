@@ -19,4 +19,5 @@ def service_health() -> dict:
         "locomotivesTotal": total,
         "dispatcherClients": len(state.ws_clients),
         "database": "connected" if database_ok else "disconnected",
+        "runtimeStats": state.stats_snapshot(),
     }

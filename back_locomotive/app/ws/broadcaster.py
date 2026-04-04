@@ -10,8 +10,10 @@ from __future__ import annotations
 import asyncio
 import json
 import random
+import time
 
 from app.config import (
+    RAW_TELEMETRY_INTERVAL_S,
     TELEMETRY_INTERVAL_S,
     HEALTH_INTERVAL_S,
     HEARTBEAT_INTERVAL_S,
@@ -72,12 +74,18 @@ async def broadcast_message(msg_type: str, payload: object) -> None:
 # ---------------------------------------------------------------------------
 
 async def task_broadcast_telemetry() -> None:
-    """Push a telemetry frame to all clients every 1 second."""
-    from app.simulator.telemetry import generate_frame
+    """Generate raw telemetry at 10 Hz and publish one aggregated frame per second."""
+    from app.simulator.telemetry import generate_frame, generate_raw_sample, prime_raw_samples
+    prime_raw_samples()
+    next_emit_at = time.monotonic() + TELEMETRY_INTERVAL_S
     while True:
-        frame = generate_frame()
-        await broadcast_message("telemetry.frame", frame.model_dump(by_alias=True))
-        await asyncio.sleep(TELEMETRY_INTERVAL_S)
+        generate_raw_sample()
+        now = time.monotonic()
+        if now >= next_emit_at:
+            frame = generate_frame()
+            await broadcast_message("telemetry.frame", frame.model_dump(by_alias=True))
+            next_emit_at = now + TELEMETRY_INTERVAL_S
+        await asyncio.sleep(RAW_TELEMETRY_INTERVAL_S)
 
 
 async def task_broadcast_health() -> None:

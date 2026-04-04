@@ -37,9 +37,6 @@ async def _send_envelope(ws: WebSocket, msg_type: str, payload: object) -> None:
 
 
 async def broadcast_message(msg_type: str, payload: object, locomotive_id: str | None = None) -> None:
-    if not state.ws_clients:
-        return
-
     envelope = {
         "type": msg_type,
         "payload": payload,
@@ -56,15 +53,19 @@ async def broadcast_message(msg_type: str, payload: object, locomotive_id: str |
     }
     wire = json.dumps(envelope)
 
+    attempted = 0
     dead: list[WebSocket] = []
     for ws in list(state.ws_clients):
         subscription = state.ws_subscriptions.get(ws)
         if locomotive_id and subscription not in (None, "*", locomotive_id):
             continue
+        attempted += 1
         try:
             await ws.send_text(wire)
         except Exception:
             dead.append(ws)
+
+    state.note_broadcast(msg_type, attempted_deliveries=attempted, failed_deliveries=len(dead))
 
     for ws in dead:
         state.ws_clients.discard(ws)
