@@ -12,11 +12,10 @@ def list_locomotives() -> dict:
     return {
         "data": [
             {
-                "locomotiveId": rt.target.locomotive_id,
-                "wsUrl": rt.target.ws_url,
+                "locomotiveId": rt.locomotive_id,
+                "locomotiveType": rt.locomotive_type,
                 "connected": rt.connected,
                 "lastSeenAt": rt.last_seen_at,
-                "reconnectAttempt": rt.reconnect_attempt,
                 "hasTelemetry": rt.latest_telemetry is not None,
             }
             for rt in state.locomotives.values()

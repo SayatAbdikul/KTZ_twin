@@ -9,11 +9,11 @@ from typing import Any
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.config import CORS_ORIGINS, LOCOMOTIVE_TARGETS
-from app.locomotive_client import connect_locomotive_forever, send_chat_to_locomotive
+from app.config import CORS_ORIGINS
+from app.locomotive_client import consume_telemetry_forever, track_locomotive_freshness
 from app.models import now_ms
 from app.routes import health, locomotives
-from app.state import LocomotiveRuntime, state
+from app.state import state
 from app.ws_server import broadcast_message, send_connection_snapshot
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s %(name)s - %(message)s")
@@ -33,34 +33,29 @@ async def _handle_dispatcher_command(payload: dict[str, Any]) -> None:
         "sender": "dispatcher",
         "sent_at": now_ms(),
     }
-    delivered = await send_chat_to_locomotive(locomotive_id, body)
-    event["delivered"] = delivered
     state.chat_history[locomotive_id].append(event)
     await broadcast_message("message.new", event)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    for target in LOCOMOTIVE_TARGETS:
-        state.locomotives[target.locomotive_id] = LocomotiveRuntime(target=target)
-
     tasks = [
-        asyncio.create_task(connect_locomotive_forever(target), name=f"loco-{target.locomotive_id}")
-        for target in LOCOMOTIVE_TARGETS
+        asyncio.create_task(consume_telemetry_forever(), name="kafka-consumer"),
+        asyncio.create_task(track_locomotive_freshness(), name="locomotive-freshness"),
     ]
-    logger.info("Dispatcher started with %d locomotive targets", len(LOCOMOTIVE_TARGETS))
-
-    yield
-
-    for t in tasks:
-        t.cancel()
-    await asyncio.gather(*tasks, return_exceptions=True)
+    logger.info("Dispatcher started with Kafka telemetry consumer")
+    try:
+        yield
+    finally:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
 
 
 app = FastAPI(
     title="KTZ Dispatcher Backend",
-    description="Realtime dispatcher backend that bridges multiple locomotive telemetry streams.",
-    version="1.0.0",
+    description="Realtime dispatcher backend that consumes locomotive telemetry from Kafka and serves dispatcher clients over WebSocket.",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
@@ -96,9 +91,6 @@ async def ws_endpoint(websocket: WebSocket):
                 payload = msg.get("payload", {})
                 if msg_type == "dispatcher.chat" and isinstance(payload, dict):
                     await _handle_dispatcher_command(payload)
-                elif msg_type == "subscribe":
-                    # Dispatcher clients currently receive all events.
-                    pass
             except json.JSONDecodeError:
                 continue
     except WebSocketDisconnect:

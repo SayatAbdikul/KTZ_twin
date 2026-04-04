@@ -1,44 +1,39 @@
-"""
-Constants, metric definitions, and simulator configuration.
-All values ported from front_locomotive/src/config/metrics.config.ts
-and front_locomotive/src/config/app.config.ts.
-"""
+from __future__ import annotations
 
-LOCOMOTIVE_ID = "KTZ-2001"
-PORT = 3001
+import os
 
-# Timing intervals (seconds)
-TELEMETRY_INTERVAL_S = 1.0
-HEALTH_INTERVAL_S = 5.0
-HEARTBEAT_INTERVAL_S = 10.0
-ALERT_CHECK_BASE_S = 20.0   # random between 20-40s
-MESSAGE_CHECK_BASE_S = 60.0  # random between 60-120s
 
-# History buffer: 1 hour at 1Hz
-HISTORY_BUFFER_SIZE = 3600
+def _split_csv_env(name: str, default: str) -> list[str]:
+    raw = os.getenv(name, default)
+    return [part.strip() for part in raw.split(",") if part.strip()]
 
-# Simulator random-walk parameters
-# delta = (random() - DRIFT_BIAS) * range * DRIFT_SCALE
-DRIFT_BIAS = 0.48   # slight upward tendency
-DRIFT_SCALE = 0.01  # 1% of range per step
 
-# CORS origins
-CORS_ORIGINS = [
-    "http://localhost:5173",  # Vite dev
-    "http://localhost:4173",  # Vite preview
-]
+APP_HOST = os.getenv("LOCOMOTIVE_HOST", "0.0.0.0")
+APP_PORT = int(os.getenv("LOCOMOTIVE_PORT", "3001"))
+CORS_ORIGINS = _split_csv_env("CORS_ORIGINS", "*")
 
-# ---------------------------------------------------------------------------
-# Metric definitions (14 total) — matches front_locomotive metrics.config.ts
-# ---------------------------------------------------------------------------
+TELEMETRY_CSV_PATH = os.getenv("TELEMETRY_CSV_PATH", "./synthetic_output_core/telemetry.csv")
+REPLAY_SPEED = float(os.getenv("REPLAY_SPEED", "1.0"))
+LOOP_REPLAY = os.getenv("LOOP_REPLAY", "true").strip().lower() in {"1", "true", "yes", "on"}
+FRONTEND_LOCOMOTIVE_ID = os.getenv("FRONTEND_LOCOMOTIVE_ID", "").strip() or None
+
+KAFKA_ENABLED = os.getenv("KAFKA_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
+KAFKA_BOOTSTRAP_SERVERS = _split_csv_env("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
+KAFKA_TOPIC_TELEMETRY = os.getenv("KAFKA_TOPIC_TELEMETRY", "locomotive.telemetry.raw")
+KAFKA_CLIENT_ID = os.getenv("KAFKA_CLIENT_ID", "back-locomotive")
+
+HEARTBEAT_INTERVAL_S = float(os.getenv("HEARTBEAT_INTERVAL_S", "10"))
+HISTORY_BUFFER_SIZE = int(os.getenv("HISTORY_BUFFER_SIZE", "3600"))
+TE33A_TANK_CAPACITY_L = float(os.getenv("TE33A_TANK_CAPACITY_L", "6000"))
+
+
 METRIC_DEFINITIONS = [
-    # Motion
     {
         "metricId": "motion.speed",
         "label": "Speed",
         "unit": "km/h",
         "group": "motion",
-        "precision": 0,
+        "precision": 1,
         "min": 0,
         "max": 200,
         "warningHigh": 140,
@@ -47,28 +42,18 @@ METRIC_DEFINITIONS = [
         "displayOrder": 1,
     },
     {
-        "metricId": "motion.acceleration",
-        "label": "Acceleration",
-        "unit": "m/s²",
+        "metricId": "motion.adhesion",
+        "label": "Adhesion Coefficient",
+        "unit": "",
         "group": "motion",
         "precision": 2,
-        "min": -5,
-        "max": 5,
-        "sparklineEnabled": False,
+        "min": 0,
+        "max": 1,
+        "warningLow": 0.18,
+        "criticalLow": 0.12,
+        "sparklineEnabled": True,
         "displayOrder": 2,
     },
-    {
-        "metricId": "motion.distance",
-        "label": "Distance",
-        "unit": "km",
-        "group": "motion",
-        "precision": 1,
-        "min": 0,
-        "max": 999999,
-        "sparklineEnabled": False,
-        "displayOrder": 3,
-    },
-    # Fuel
     {
         "metricId": "fuel.level",
         "label": "Fuel Level",
@@ -83,18 +68,29 @@ METRIC_DEFINITIONS = [
         "displayOrder": 1,
     },
     {
+        "metricId": "fuel.level_l",
+        "label": "Fuel Level",
+        "unit": "L",
+        "group": "fuel",
+        "precision": 0,
+        "min": 0,
+        "max": TE33A_TANK_CAPACITY_L,
+        "sparklineEnabled": True,
+        "displayOrder": 2,
+    },
+    {
         "metricId": "fuel.consumption_rate",
-        "label": "Consumption Rate",
+        "label": "Fuel Rate",
         "unit": "L/h",
         "group": "fuel",
         "precision": 1,
         "min": 0,
-        "max": 500,
-        "warningHigh": 400,
+        "max": 400,
+        "warningHigh": 280,
+        "criticalHigh": 320,
         "sparklineEnabled": True,
-        "displayOrder": 2,
+        "displayOrder": 3,
     },
-    # Thermal
     {
         "metricId": "thermal.coolant_temp",
         "label": "Coolant Temperature",
@@ -102,63 +98,74 @@ METRIC_DEFINITIONS = [
         "group": "thermal",
         "precision": 1,
         "min": 0,
-        "max": 150,
-        "warningLow": 10,
+        "max": 140,
         "warningHigh": 95,
         "criticalHigh": 105,
         "sparklineEnabled": True,
         "displayOrder": 1,
     },
     {
-        "metricId": "thermal.oil_temp",
-        "label": "Oil Temperature",
+        "metricId": "thermal.traction_motor_temp",
+        "label": "Traction Motor Temperature",
         "unit": "°C",
         "group": "thermal",
         "precision": 1,
         "min": 0,
         "max": 160,
-        "warningHigh": 110,
-        "criticalHigh": 130,
+        "warningHigh": 105,
+        "criticalHigh": 120,
         "sparklineEnabled": True,
         "displayOrder": 2,
     },
     {
-        "metricId": "thermal.exhaust_temp",
-        "label": "Exhaust Temperature",
+        "metricId": "thermal.bearing_temp",
+        "label": "Bearing Temperature",
         "unit": "°C",
         "group": "thermal",
-        "precision": 0,
-        "min": 0,
-        "max": 700,
-        "warningHigh": 550,
-        "criticalHigh": 650,
-        "sparklineEnabled": False,
-        "displayOrder": 3,
-    },
-    # Pressure
-    {
-        "metricId": "pressure.brake_main",
-        "label": "Brake Main Reservoir",
-        "unit": "bar",
-        "group": "pressure",
         "precision": 1,
         "min": 0,
-        "max": 10,
-        "warningLow": 7,
-        "criticalLow": 5,
+        "max": 120,
+        "warningHigh": 85,
+        "criticalHigh": 95,
+        "sparklineEnabled": True,
+        "displayOrder": 3,
+    },
+    {
+        "metricId": "thermal.transformer_temp",
+        "label": "Transformer Temperature",
+        "unit": "°C",
+        "group": "thermal",
+        "precision": 1,
+        "min": 0,
+        "max": 160,
+        "warningHigh": 120,
+        "criticalHigh": 135,
+        "sparklineEnabled": True,
+        "displayOrder": 4,
+    },
+    {
+        "metricId": "pressure.brake_pipe",
+        "label": "Brake Pipe Pressure",
+        "unit": "bar",
+        "group": "pressure",
+        "precision": 2,
+        "min": 0,
+        "max": 6,
+        "warningLow": 4.3,
+        "criticalLow": 3.8,
         "sparklineEnabled": True,
         "displayOrder": 1,
     },
     {
-        "metricId": "pressure.brake_pipe",
-        "label": "Brake Pipe",
+        "metricId": "pressure.brake_cylinder",
+        "label": "Brake Cylinder Pressure",
         "unit": "bar",
         "group": "pressure",
-        "precision": 1,
+        "precision": 2,
         "min": 0,
         "max": 6,
-        "warningLow": 4.5,
-        "criticalLow": 4.0,
+        "warningHigh": 4.6,
+        "criticalHigh": 5.0,
         "sparklineEnabled": True,
         "displayOrder": 2,
     },
@@ -167,29 +174,13 @@ METRIC_DEFINITIONS = [
         "label": "Oil Pressure",
         "unit": "bar",
         "group": "pressure",
-        "precision": 1,
+        "precision": 2,
         "min": 0,
         "max": 8,
         "warningLow": 3,
         "criticalLow": 2,
-        "sparklineEnabled": False,
-        "displayOrder": 3,
-    },
-    # Electrical
-    {
-        "metricId": "electrical.traction_voltage",
-        "label": "Traction Voltage",
-        "unit": "V",
-        "group": "electrical",
-        "precision": 0,
-        "min": 0,
-        "max": 3000,
-        "warningLow": 2600,
-        "criticalLow": 2400,
-        "warningHigh": 2900,
-        "criticalHigh": 3000,
         "sparklineEnabled": True,
-        "displayOrder": 1,
+        "displayOrder": 3,
     },
     {
         "metricId": "electrical.traction_current",
@@ -199,8 +190,21 @@ METRIC_DEFINITIONS = [
         "precision": 0,
         "min": 0,
         "max": 2000,
-        "warningHigh": 1600,
-        "criticalHigh": 1800,
+        "warningHigh": 900,
+        "criticalHigh": 1100,
+        "sparklineEnabled": True,
+        "displayOrder": 1,
+    },
+    {
+        "metricId": "electrical.catenary_voltage",
+        "label": "Catenary Voltage",
+        "unit": "kV",
+        "group": "electrical",
+        "precision": 2,
+        "min": 0,
+        "max": 30,
+        "warningLow": 23,
+        "criticalLow": 20,
         "sparklineEnabled": True,
         "displayOrder": 2,
     },
@@ -214,73 +218,9 @@ METRIC_DEFINITIONS = [
         "max": 120,
         "warningLow": 100,
         "criticalLow": 90,
-        "sparklineEnabled": False,
+        "sparklineEnabled": True,
         "displayOrder": 3,
     },
 ]
 
-# Lookup by metricId for fast threshold checks
-METRIC_BY_ID: dict = {m["metricId"]: m for m in METRIC_DEFINITIONS}
-
-# ---------------------------------------------------------------------------
-# Subsystems and which metrics affect each one
-# ---------------------------------------------------------------------------
-SUBSYSTEMS = [
-    {"subsystemId": "engine",    "label": "Engine"},
-    {"subsystemId": "brakes",    "label": "Brakes"},
-    {"subsystemId": "electrical","label": "Electrical"},
-    {"subsystemId": "fuel",      "label": "Fuel System"},
-    {"subsystemId": "cooling",   "label": "Cooling"},
-    {"subsystemId": "pneumatic", "label": "Pneumatics"},
-]
-
-SUBSYSTEM_METRICS: dict[str, list[str]] = {
-    "engine":     ["thermal.coolant_temp", "thermal.oil_temp", "thermal.exhaust_temp", "pressure.oil"],
-    "brakes":     ["pressure.brake_main", "pressure.brake_pipe"],
-    "electrical": ["electrical.traction_voltage", "electrical.traction_current", "electrical.battery_voltage"],
-    "fuel":       ["fuel.level", "fuel.consumption_rate"],
-    "cooling":    ["thermal.coolant_temp"],
-    "pneumatic":  ["pressure.brake_main", "pressure.brake_pipe"],
-}
-
-# Starting metric values (matching front_locomotive MSW fixtures)
-START_VALUES: dict[str, float] = {
-    "motion.speed":               80.0,
-    "motion.acceleration":         0.2,
-    "motion.distance":          1250.5,
-    "fuel.level":                 72.4,
-    "fuel.consumption_rate":     180.0,
-    "thermal.coolant_temp":       88.0,
-    "thermal.oil_temp":           95.0,
-    "thermal.exhaust_temp":      420.0,
-    "pressure.brake_main":         8.5,
-    "pressure.brake_pipe":         5.0,
-    "pressure.oil":                4.5,
-    "electrical.traction_voltage": 2750.0,
-    "electrical.traction_current": 850.0,
-    "electrical.battery_voltage":  108.0,
-}
-
-# Starting subsystem health scores
-START_SCORES: dict[str, float] = {
-    "engine":     92.0,
-    "brakes":     87.0,
-    "electrical": 95.0,
-    "fuel":       84.0,
-    "cooling":    91.0,
-    "pneumatic":  88.0,
-}
-
-# Health score thresholds for status labels
-HEALTH_STATUS_THRESHOLDS = {
-    "normal":   80,
-    "degraded": 60,
-    "warning":  40,
-    # below 40 → critical
-}
-
-# Penalty applied to subsystem score per metric threshold breach
-THRESHOLD_PENALTY = {
-    "warning":  5.0,
-    "critical": 15.0,
-}
+METRIC_BY_ID = {metric["metricId"]: metric for metric in METRIC_DEFINITIONS}

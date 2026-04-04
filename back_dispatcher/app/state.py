@@ -3,20 +3,17 @@ from __future__ import annotations
 import asyncio
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Any
 from fastapi import WebSocket
-
-from app.config import LocomotiveTarget
 
 
 @dataclass
 class LocomotiveRuntime:
-    target: LocomotiveTarget
+    locomotive_id: str
+    locomotive_type: str | None = None
     connected: bool = False
-    reconnect_attempt: int = 0
     last_seen_at: int | None = None
     latest_telemetry: dict | None = None
-    ws: Any | None = None
+    latest_frame: dict | None = None
 
 
 class DispatcherState:
@@ -25,6 +22,7 @@ class DispatcherState:
         self.sequence_id = 0
         self.locomotives: dict[str, LocomotiveRuntime] = {}
         self.chat_history: dict[str, list[dict]] = defaultdict(list)
+        self.consumer_connected = False
         self._lock = asyncio.Lock()
 
     async def next_sequence(self) -> int:

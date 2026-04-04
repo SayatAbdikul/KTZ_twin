@@ -21,10 +21,9 @@ class WsEnvelope(BaseModel):
 
 class LocomotiveStatus(CamelModel):
     locomotive_id: str
-    ws_url: str
+    locomotive_type: str | None = None
     connected: bool
     last_seen_at: int | None = None
-    reconnect_attempt: int = 0
 
 
 def now_ms() -> int:

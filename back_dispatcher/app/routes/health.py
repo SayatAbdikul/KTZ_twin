@@ -13,6 +13,7 @@ def service_health() -> dict:
     total = len(state.locomotives)
     return {
         "status": "ok",
+        "consumerConnected": state.consumer_connected,
         "locomotivesConnected": connected,
         "locomotivesTotal": total,
         "dispatcherClients": len(state.ws_clients),

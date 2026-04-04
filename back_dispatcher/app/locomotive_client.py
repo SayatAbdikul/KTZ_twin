@@ -5,111 +5,84 @@ import json
 import logging
 from typing import Any
 
-import websockets
-
-from app.config import PING_INTERVAL_S, RECONNECT_BASE_S, RECONNECT_MAX_S, LocomotiveTarget
+from app.config import (
+    KAFKA_BOOTSTRAP_SERVERS,
+    KAFKA_CLIENT_ID,
+    KAFKA_ENABLED,
+    KAFKA_GROUP_ID,
+    KAFKA_TOPIC_TELEMETRY,
+    LOCOMOTIVE_STALE_AFTER_S,
+)
 from app.models import now_ms
-from app.state import state
+from app.state import LocomotiveRuntime, state
+from app.telemetry_mapper import frontend_frame_from_raw, normalize_raw_telemetry
 from app.ws_server import broadcast_message
 
 logger = logging.getLogger(__name__)
 
+try:
+    from aiokafka import AIOKafkaConsumer
+except ImportError:  # pragma: no cover - handled at runtime
+    AIOKafkaConsumer = None  # type: ignore[assignment]
 
-async def _forward_locomotive_message(locomotive_id: str, msg: dict[str, Any]) -> None:
-    msg_type = str(msg.get("type", ""))
-    payload = msg.get("payload", {})
 
-    runtime = state.locomotives[locomotive_id]
-    runtime.last_seen_at = now_ms()
+async def consume_telemetry_forever() -> None:
+    if not KAFKA_ENABLED:
+        logger.info("Kafka consumer disabled by configuration.")
+        while True:
+            await asyncio.sleep(60)
 
-    if msg_type == "telemetry.frame" and isinstance(payload, dict):
-        # Normalize to expected multi-locomotive frame shape.
-        payload.setdefault("locomotive_id", locomotive_id)
-        runtime.latest_telemetry = payload
-        await broadcast_message("telemetry.frame", payload)
-        return
+    if AIOKafkaConsumer is None:
+        logger.warning("Kafka enabled but aiokafka is not installed; dispatcher consumer idle.")
+        while True:
+            await asyncio.sleep(60)
 
-    if msg_type == "message.new" and isinstance(payload, dict):
-        payload.setdefault("locomotive_id", locomotive_id)
-        state.chat_history[locomotive_id].append(payload)
-        await broadcast_message("message.new", payload)
-        return
-
-    # Pass through unknown events with source metadata.
-    await broadcast_message(
-        "locomotive.event",
-        {
-            "locomotiveId": locomotive_id,
-            "originalType": msg_type,
-            "payload": payload,
-        },
+    consumer = AIOKafkaConsumer(
+        KAFKA_TOPIC_TELEMETRY,
+        bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
+        group_id=KAFKA_GROUP_ID,
+        client_id=KAFKA_CLIENT_ID,
+        enable_auto_commit=True,
+        auto_offset_reset="latest",
+        value_deserializer=lambda payload: json.loads(payload.decode("utf-8")),
     )
 
+    await consumer.start()
+    state.consumer_connected = True
+    logger.info("Dispatcher Kafka consumer connected to %s", ",".join(KAFKA_BOOTSTRAP_SERVERS))
 
-async def send_chat_to_locomotive(locomotive_id: str, body: str) -> bool:
-    runtime = state.locomotives.get(locomotive_id)
-    if runtime is None or runtime.ws is None or not runtime.connected:
-        return False
-
-    wire = {
-        "type": "dispatcher.chat",
-        "payload": {
-            "locomotiveId": locomotive_id,
-            "body": body,
-            "timestamp": now_ms(),
-        },
-    }
     try:
-        await runtime.ws.send(json.dumps(wire))
-        return True
-    except Exception:
-        return False
+        async for message in consumer:
+            payload = message.value
+            if not isinstance(payload, dict) or payload.get("event_type") != "telemetry.raw":
+                continue
+
+            telemetry = payload.get("telemetry")
+            if not isinstance(telemetry, dict):
+                continue
+
+            raw = normalize_raw_telemetry(telemetry)
+            locomotive_id = str(raw.get("locomotive_id", "unknown"))
+            runtime = state.locomotives.get(locomotive_id)
+            if runtime is None:
+                runtime = LocomotiveRuntime(locomotive_id=locomotive_id)
+                state.locomotives[locomotive_id] = runtime
+
+            runtime.connected = True
+            runtime.last_seen_at = now_ms()
+            runtime.locomotive_type = str(raw.get("locomotive_type") or "") or None
+            runtime.latest_telemetry = raw
+            runtime.latest_frame = frontend_frame_from_raw(raw, frame_id=f"frame-{runtime.last_seen_at}")
+
+            await broadcast_message("telemetry.frame", runtime.latest_frame)
+    finally:
+        state.consumer_connected = False
+        await consumer.stop()
 
 
-async def connect_locomotive_forever(target: LocomotiveTarget) -> None:
-    runtime = state.locomotives[target.locomotive_id]
-
+async def track_locomotive_freshness() -> None:
     while True:
-        try:
-            async with websockets.connect(target.ws_url, ping_interval=PING_INTERVAL_S) as ws:
-                runtime.connected = True
-                runtime.ws = ws
-                runtime.reconnect_attempt = 0
-                runtime.last_seen_at = now_ms()
-
-                await broadcast_message(
-                    "dispatcher.locomotive_status",
-                    {
-                        "locomotiveId": target.locomotive_id,
-                        "connected": True,
-                        "wsUrl": target.ws_url,
-                        "lastSeenAt": runtime.last_seen_at,
-                    },
-                )
-
-                await ws.send(json.dumps({"type": "subscribe", "payload": {"channels": ["telemetry", "messages"]}}))
-
-                async for raw in ws:
-                    try:
-                        msg = json.loads(raw)
-                        if isinstance(msg, dict):
-                            await _forward_locomotive_message(target.locomotive_id, msg)
-                    except json.JSONDecodeError:
-                        logger.warning("Malformed WS frame from %s", target.locomotive_id)
-
-        except Exception as exc:
-            runtime.connected = False
-            runtime.ws = None
-            runtime.reconnect_attempt += 1
-            await broadcast_message(
-                "dispatcher.locomotive_status",
-                {
-                    "locomotiveId": target.locomotive_id,
-                    "connected": False,
-                    "wsUrl": target.ws_url,
-                    "reconnectAttempt": runtime.reconnect_attempt,
-                    "error": str(exc),
-                },
-            )
-            delay = min(RECONNECT_BASE_S * (2 ** runtime.reconnect_attempt), RECONNECT_MAX_S)
-            await asyncio.sleep(delay)
+        await asyncio.sleep(1)
+        stale_before = now_ms() - int(LOCOMOTIVE_STALE_AFTER_S * 1000)
+        for runtime in state.locomotives.values():
+            runtime.connected = runtime.last_seen_at is not None and runtime.last_seen_at >= stale_before
