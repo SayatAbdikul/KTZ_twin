@@ -20,8 +20,13 @@ interface DispatcherState {
     setSelectedLocomotive: (locomotiveId: string) => void
     upsertTelemetry: (frame: TelemetryFrame) => void
     upsertHealth: (locomotiveId: string, health: HealthIndex) => void
+    setChatHistory: (locomotiveId: string, messages: ChatMessage[]) => void
     addChatMessage: (message: ChatMessage) => void
     reset: () => void
+}
+
+function sortMessages(messages: ChatMessage[]): ChatMessage[] {
+    return [...messages].sort((a, b) => a.sentAt - b.sentAt)
 }
 
 function getMetric(frame: TelemetryFrame, metricId: string): number {
@@ -111,13 +116,28 @@ export const useDispatcherStore = create<DispatcherState>((set) => ({
             }
         }),
 
-    addChatMessage: (message) =>
+    setChatHistory: (locomotiveId, messages) =>
         set((state) => {
-            const old = state.chats[message.locomotiveId] ?? []
+            const byId = new Map<string, ChatMessage>()
+            for (const message of messages) {
+                byId.set(message.id, message)
+            }
             return {
                 chats: {
                     ...state.chats,
-                    [message.locomotiveId]: [...old, message],
+                    [locomotiveId]: sortMessages([...byId.values()]),
+                },
+            }
+        }),
+
+    addChatMessage: (message) =>
+        set((state) => {
+            const old = state.chats[message.locomotiveId] ?? []
+            const withoutExisting = old.filter((item) => item.id !== message.id)
+            return {
+                chats: {
+                    ...state.chats,
+                    [message.locomotiveId]: sortMessages([...withoutExisting, message]),
                 },
             }
         }),

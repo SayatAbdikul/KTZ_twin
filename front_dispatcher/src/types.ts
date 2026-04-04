@@ -46,9 +46,10 @@ export interface LocomotiveSnapshot {
 export interface ChatMessage {
     id: string
     locomotiveId: string
-    sender: 'dispatcher' | 'locomotive'
+    sender: 'dispatcher' | 'regular_train'
     body: string
     sentAt: number
+    delivered?: boolean
 }
 
 export type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'error'

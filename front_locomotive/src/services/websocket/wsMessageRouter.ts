@@ -102,8 +102,17 @@ export function routeWsMessage(raw: string): void {
       break
     }
     case 'message.new':
-      useDispatchConsoleStore.getState().addChatMessage(adaptDispatchChatMessage(msg.payload, msg.event?.locomotive_id))
-      useMessageStore.getState().addMessage(adaptMessage(msg.payload, msg.event?.locomotive_id))
+      {
+        const payload = msg.payload as Record<string, unknown>
+        useDispatchConsoleStore.getState().addChatMessage(adaptDispatchChatMessage(payload, msg.event?.locomotive_id))
+        if (
+          payload['subject'] !== undefined ||
+          payload['priority'] !== undefined ||
+          payload['type'] !== undefined
+        ) {
+          useMessageStore.getState().addMessage(adaptMessage(payload, msg.event?.locomotive_id))
+        }
+      }
       break
     case 'connection.heartbeat': {
       const p = msg.payload as { serverTime: number }

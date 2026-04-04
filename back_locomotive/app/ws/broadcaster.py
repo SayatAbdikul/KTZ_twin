@@ -33,7 +33,7 @@ from app.broker import publish_event
 # Core broadcast helper
 # ---------------------------------------------------------------------------
 
-async def broadcast_message(msg_type: str, payload: object) -> None:
+async def broadcast_message(msg_type: str, payload: object, *, publish_upstream: bool = True) -> None:
     """Send a WS message to all connected clients. Remove dead clients silently."""
     locomotive_id = LOCOMOTIVE_ID
     if isinstance(payload, dict):
@@ -53,7 +53,7 @@ async def broadcast_message(msg_type: str, payload: object) -> None:
         "event": event.model_dump(),
     }
 
-    if not (KAFKA_ENABLED and PATTERN_FLEET_ENABLED and locomotive_id == LOCOMOTIVE_ID):
+    if publish_upstream and not (KAFKA_ENABLED and PATTERN_FLEET_ENABLED and locomotive_id == LOCOMOTIVE_ID):
         await publish_event(envelope=envelope, key=locomotive_id)
 
     if not state.ws_clients:

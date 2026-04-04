@@ -31,14 +31,21 @@ async def _handle_dispatcher_command(payload: dict[str, Any]) -> None:
     if not locomotive_id or not body:
         return
 
+    sent_at = int(payload.get("sent_at") or payload.get("sentAt") or payload.get("timestamp") or now_ms())
+    message_id = str(payload.get("message_id") or payload.get("messageId") or f"dispatcher-{sent_at}")
     event = {
-        "message_id": f"dispatcher-{now_ms()}",
+        "message_id": message_id,
         "locomotive_id": locomotive_id,
         "body": body,
         "sender": "dispatcher",
-        "sent_at": now_ms(),
+        "sent_at": sent_at,
     }
-    delivered = await send_chat_to_locomotive(locomotive_id, body)
+    delivered = await send_chat_to_locomotive(
+        locomotive_id,
+        body,
+        message_id=message_id,
+        sent_at=sent_at,
+    )
     event["delivered"] = delivered
     state.chat_history[locomotive_id].append(event)
     try:

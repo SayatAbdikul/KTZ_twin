@@ -22,7 +22,8 @@ logger = logging.getLogger(__name__)
 
 
 async def websocket_endpoint(websocket: WebSocket) -> None:
-    if not await authorize_websocket(websocket):
+    auth_context = await authorize_websocket(websocket)
+    if auth_context is None:
         return
 
     await websocket.accept()
@@ -57,6 +58,48 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 if msg_type == "subscribe":
                     # Channels accepted, all clients receive everything (no filtering)
                     pass
+                elif msg_type == "dispatcher.chat" and isinstance(msg.get("payload"), dict):
+                    payload = msg["payload"]
+                    if not (auth_context.is_service or auth_context.is_admin):
+                        continue
+
+                    sent_at = int(payload.get("sent_at") or payload.get("sentAt") or payload.get("timestamp") or now_ms())
+                    event = {
+                        "message_id": str(payload.get("message_id") or payload.get("messageId") or f"dispatcher-{sent_at}"),
+                        "locomotive_id": LOCOMOTIVE_ID,
+                        "body": str(payload.get("body") or "").strip(),
+                        "sender": "dispatcher",
+                        "sent_at": sent_at,
+                    }
+                    if not event["body"]:
+                        continue
+
+                    await broadcast_message(
+                        "message.new",
+                        event,
+                        publish_upstream=not auth_context.is_service,
+                    )
+                elif msg_type == "train.chat" and isinstance(msg.get("payload"), dict):
+                    if auth_context.role != "regular_train":
+                        continue
+
+                    payload = msg["payload"]
+                    body = str(payload.get("body") or "").strip()
+                    if not body:
+                        continue
+
+                    sent_at = int(payload.get("sent_at") or payload.get("sentAt") or payload.get("timestamp") or now_ms())
+                    await broadcast_message(
+                        "message.new",
+                        {
+                            "message_id": str(payload.get("message_id") or payload.get("messageId") or f"train-{sent_at}"),
+                            "locomotive_id": LOCOMOTIVE_ID,
+                            "body": body,
+                            "sender": "regular_train",
+                            "sender_name": auth_context.display_name or auth_context.locomotive_id or LOCOMOTIVE_ID,
+                            "sent_at": sent_at,
+                        },
+                    )
                 elif msg_type == "heartbeat.ack":
                     pass
                 # Ignore unknown message types silently

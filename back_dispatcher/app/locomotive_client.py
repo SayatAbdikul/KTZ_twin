@@ -164,7 +164,13 @@ async def _forward_locomotive_message(
     )
 
 
-async def send_chat_to_locomotive(locomotive_id: str, body: str) -> bool:
+async def send_chat_to_locomotive(
+    locomotive_id: str,
+    body: str,
+    *,
+    message_id: str,
+    sent_at: int,
+) -> bool:
     runtime = state.locomotives.get(locomotive_id)
     if runtime is None or runtime.ws is None or not runtime.connected:
         return False
@@ -173,8 +179,9 @@ async def send_chat_to_locomotive(locomotive_id: str, body: str) -> bool:
         "type": "dispatcher.chat",
         "payload": {
             "locomotiveId": locomotive_id,
+            "messageId": message_id,
             "body": body,
-            "timestamp": now_ms(),
+            "sentAt": sent_at,
         },
     }
     try:

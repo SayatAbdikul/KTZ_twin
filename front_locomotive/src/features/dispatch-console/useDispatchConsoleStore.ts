@@ -4,7 +4,7 @@ import { devtools } from 'zustand/middleware'
 export interface DispatchChatMessage {
   id: string
   locomotiveId: string
-  sender: 'dispatcher' | 'locomotive'
+  sender: 'dispatcher' | 'regular_train'
   body: string
   sentAt: number
   delivered?: boolean
@@ -12,6 +12,14 @@ export interface DispatchChatMessage {
 
 function sortMessages(messages: DispatchChatMessage[]) {
   return [...messages].sort((a, b) => a.sentAt - b.sentAt)
+}
+
+function dedupeMessages(messages: DispatchChatMessage[]) {
+  const byId = new Map<string, DispatchChatMessage>()
+  for (const message of messages) {
+    byId.set(message.id, message)
+  }
+  return [...byId.values()]
 }
 
 interface DispatchConsoleState {
@@ -29,7 +37,7 @@ export const useDispatchConsoleStore = create<DispatchConsoleState>()(
         set((state) => ({
           chatsByLocomotive: {
             ...state.chatsByLocomotive,
-            [locomotiveId]: sortMessages(messages),
+            [locomotiveId]: sortMessages(dedupeMessages(messages)),
           },
         })),
 
@@ -51,11 +59,11 @@ export const useDispatchConsoleStore = create<DispatchConsoleState>()(
 
 export function adaptDispatchChatMessage(raw: unknown, eventLocomotiveId?: string): DispatchChatMessage {
   const payload = raw as Record<string, unknown>
-  const sender = String(payload['sender'] ?? 'locomotive')
+  const sender = String(payload['sender'] ?? 'regular_train')
   return {
     id: String(payload['message_id'] ?? payload['messageId'] ?? crypto.randomUUID()),
     locomotiveId: String(payload['locomotive_id'] ?? payload['locomotiveId'] ?? eventLocomotiveId ?? ''),
-    sender: sender === 'dispatcher' ? 'dispatcher' : 'locomotive',
+    sender: sender === 'dispatcher' ? 'dispatcher' : 'regular_train',
     body: String(payload['body'] ?? payload['subject'] ?? 'Incoming locomotive message'),
     sentAt: Number(payload['sent_at'] ?? payload['sentAt'] ?? Date.now()),
     delivered: typeof payload['delivered'] === 'boolean' ? (payload['delivered'] as boolean) : undefined,

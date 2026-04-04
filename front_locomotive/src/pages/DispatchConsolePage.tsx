@@ -59,15 +59,16 @@ export function DispatchConsolePage() {
     const body = draft.trim()
     if (!body) return
 
+    const messageId = crypto.randomUUID()
     addChatMessage({
-      id: crypto.randomUUID(),
+      id: messageId,
       locomotiveId: selectedLocomotiveId,
       sender: 'dispatcher',
       body,
       sentAt: Date.now(),
       delivered: true,
     })
-    sendDispatcherChat(selectedLocomotiveId, body)
+    sendDispatcherChat(selectedLocomotiveId, body, messageId)
     setDraft('')
   }
 
@@ -209,7 +210,7 @@ export function DispatchConsolePage() {
                   >
                     <p>{message.body}</p>
                     <div className="mt-2 text-[11px] uppercase tracking-[0.16em] text-slate-400">
-                      {message.sender} · {relativeTime(message.sentAt)}
+                      {message.sender === 'dispatcher' ? 'Dispatcher' : 'Train'} · {relativeTime(message.sentAt)}
                     </div>
                   </div>
                 ))

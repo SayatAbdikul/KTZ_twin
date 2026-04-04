@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { fetchChatHistory } from '../services/chatApi'
 import { sendChat } from '../services/wsClient'
 import { useDispatcherStore } from '../store/useDispatcherStore'
 import { formatClock } from '../utils/format'
@@ -7,6 +8,7 @@ export function ChatPanel() {
     const [text, setText] = useState('')
     const selected = useDispatcherStore((s) => s.selectedLocomotiveId)
     const chats = useDispatcherStore((s) => s.chats)
+    const setChatHistory = useDispatcherStore((s) => s.setChatHistory)
     const addChatMessage = useDispatcherStore((s) => s.addChatMessage)
 
     const messages = useMemo(() => {
@@ -14,13 +16,35 @@ export function ChatPanel() {
         return chats[selected] ?? []
     }, [selected, chats])
 
+    useEffect(() => {
+        if (!selected) return
+
+        let cancelled = false
+        void fetchChatHistory(selected)
+            .then((messages) => {
+                if (!cancelled) {
+                    setChatHistory(selected, messages)
+                }
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    setChatHistory(selected, [])
+                }
+            })
+
+        return () => {
+            cancelled = true
+        }
+    }, [selected, setChatHistory])
+
     function onSend() {
         if (!selected) return
         const body = text.trim()
         if (!body) return
 
+        const messageId = crypto.randomUUID()
         const localMessage = {
-            id: crypto.randomUUID(),
+            id: messageId,
             locomotiveId: selected,
             sender: 'dispatcher' as const,
             body,
@@ -28,7 +52,7 @@ export function ChatPanel() {
         }
 
         addChatMessage(localMessage)
-        sendChat(selected, body)
+        sendChat(selected, body, messageId)
         setText('')
     }
 
@@ -48,7 +72,9 @@ export function ChatPanel() {
                 {messages.map((msg) => (
                     <div key={msg.id} className={`bubble ${msg.sender === 'dispatcher' ? 'out' : 'in'}`}>
                         <p>{msg.body}</p>
-                        <small>{formatClock(msg.sentAt)}</small>
+                        <small>
+                            {msg.sender === 'dispatcher' ? 'Dispatcher' : 'Train'} · {formatClock(msg.sentAt)}
+                        </small>
                     </div>
                 ))}
             </div>

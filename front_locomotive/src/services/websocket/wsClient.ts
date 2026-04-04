@@ -85,16 +85,25 @@ export function disconnectWebSocket(): void {
     socket = null
 }
 
-export function sendDispatcherChat(locomotiveId: string, body: string): void {
+function sendChatMessage(type: 'dispatcher.chat' | 'train.chat', locomotiveId: string, body: string, messageId: string): void {
     if (socket?.readyState !== WebSocket.OPEN) return
     socket.send(
         JSON.stringify({
-            type: 'dispatcher.chat',
+            type,
             payload: {
                 locomotiveId,
+                messageId,
                 body,
-                timestamp: Date.now(),
+                sentAt: Date.now(),
             },
         })
     )
+}
+
+export function sendDispatcherChat(locomotiveId: string, body: string, messageId: string): void {
+    sendChatMessage('dispatcher.chat', locomotiveId, body, messageId)
+}
+
+export function sendTrainChat(locomotiveId: string, body: string, messageId: string): void {
+    sendChatMessage('train.chat', locomotiveId, body, messageId)
 }

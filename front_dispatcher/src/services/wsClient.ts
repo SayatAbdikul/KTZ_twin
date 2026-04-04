@@ -102,12 +102,14 @@ export function connectWs(): void {
             if (msg.type === 'message.new') {
                 const payload = msg.payload as Record<string, unknown>
                 const locomotiveId = String(payload['locomotive_id'] ?? payload['locomotiveId'] ?? 'KTZ-2001')
+                const sender = String(payload['sender'] ?? 'regular_train')
                 const incoming: ChatMessage = {
                     id: String(payload['message_id'] ?? crypto.randomUUID()),
                     locomotiveId,
-                    sender: 'locomotive',
+                    sender: sender === 'dispatcher' ? 'dispatcher' : 'regular_train',
                     body: String(payload['body'] ?? payload['subject'] ?? 'Incoming operation message'),
                     sentAt: Number(payload['sent_at'] ?? msg.timestamp ?? Date.now()),
+                    delivered: typeof payload['delivered'] === 'boolean' ? (payload['delivered'] as boolean) : undefined,
                 }
                 useDispatcherStore.getState().addChatMessage(incoming)
             }
@@ -140,13 +142,14 @@ export function disconnectWs(): void {
     socket = null
 }
 
-export function sendChat(locomotiveId: string, body: string): void {
+export function sendChat(locomotiveId: string, body: string, messageId: string): void {
     const message = {
         type: 'dispatcher.chat',
         payload: {
             locomotiveId,
+            messageId,
             body,
-            timestamp: Date.now(),
+            sentAt: Date.now(),
         },
     }
 
