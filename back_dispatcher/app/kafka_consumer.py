@@ -70,6 +70,7 @@ async def consume_kafka_forever() -> None:
                         "type": envelope.type,
                         "payload": envelope.payload,
                     },
+                    event_id=envelope.event.event_id,
                 )
 
                 processed_count += 1

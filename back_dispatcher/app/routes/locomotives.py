@@ -1,13 +1,28 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import APIRouter, Query
 
 from app.config import RECENT_TELEMETRY_MAX_MINUTES
 from app.models import now_ms
-from app.repository import get_recent_telemetry
+from app.repository import (
+    get_recent_telemetry,
+    get_replay_range,
+    get_replay_snapshot,
+    get_replay_time_range,
+)
 from app.state import state
 
 router = APIRouter(prefix="/api/locomotives", tags=["locomotives"])
+
+
+def _parse_metric_ids(raw: str | None) -> list[str] | None:
+    if raw is None:
+        return None
+
+    metric_ids = [token.strip() for token in raw.split(",") if token.strip()]
+    return metric_ids or None
 
 
 @router.get("")
@@ -61,4 +76,62 @@ def recent_telemetry(
             "to": to_ts,
             "byMetric": by_metric,
         }
+    }
+
+
+@router.get("/{locomotive_id}/replay/time-range")
+def replay_time_range(locomotive_id: str) -> dict:
+    earliest, latest = get_replay_time_range(locomotive_id)
+    return {
+        "data": {
+            "locomotiveId": locomotive_id,
+            "earliest": earliest,
+            "latest": latest,
+        },
+        "timestamp": now_ms(),
+    }
+
+
+@router.get("/{locomotive_id}/replay/range")
+def replay_range(
+    locomotive_id: str,
+    from_ts: int = Query(..., alias="from"),
+    to_ts: int = Query(..., alias="to"),
+    metric_ids: str | None = Query(default=None, alias="metricIds"),
+    resolution: Literal["raw", "1s", "10s", "1m", "5m"] = Query(default="raw"),
+) -> dict:
+    normalized_from = min(from_ts, to_ts)
+    normalized_to = max(from_ts, to_ts)
+    selected_metrics = _parse_metric_ids(metric_ids)
+    by_metric = get_replay_range(
+        locomotive_id=locomotive_id,
+        from_ts_ms=normalized_from,
+        to_ts_ms=normalized_to,
+        metric_ids=selected_metrics,
+        resolution=resolution,
+    )
+
+    return {
+        "data": {
+            "locomotiveId": locomotive_id,
+            "from": normalized_from,
+            "to": normalized_to,
+            "resolution": resolution,
+            "byMetric": by_metric,
+        },
+        "timestamp": now_ms(),
+    }
+
+
+@router.get("/{locomotive_id}/replay/snapshot")
+def replay_snapshot(
+    locomotive_id: str,
+    timestamp: int = Query(..., ge=0),
+) -> dict:
+    return {
+        "data": get_replay_snapshot(
+            locomotive_id=locomotive_id,
+            timestamp_ms=timestamp,
+        ),
+        "timestamp": now_ms(),
     }
