@@ -37,14 +37,14 @@ async def send_connection_snapshot(ws: WebSocket) -> None:
     payload = {
         "locomotives": [
             {
-                "locomotiveId": rt.locomotive_id,
-                "locomotiveType": rt.locomotive_type,
+                "locomotiveId": rt.target.locomotive_id,
+                "wsUrl": rt.target.ws_url,
                 "connected": rt.connected,
                 "lastSeenAt": rt.last_seen_at,
+                "reconnectAttempt": rt.reconnect_attempt,
             }
             for rt in state.locomotives.values()
-        ],
-        "consumerConnected": state.consumer_connected,
+        ]
     }
     await ws.send_text(
         json.dumps(

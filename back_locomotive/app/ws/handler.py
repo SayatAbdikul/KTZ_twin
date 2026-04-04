@@ -1,3 +1,10 @@
+"""
+WebSocket endpoint at /ws.
+
+Accepts all clients, adds them to state.ws_clients, sends an immediate
+connection.status message, then listens for subscribe/heartbeat-ack messages.
+"""
+
 from __future__ import annotations
 
 import json
@@ -7,82 +14,50 @@ from fastapi import WebSocket, WebSocketDisconnect
 
 from app.models import now_ms
 from app.state import state
+from app.ws.broadcaster import broadcast_message
 
 logger = logging.getLogger(__name__)
 
 
-def _default_subscription() -> str | None:
-    return state.default_frontend_locomotive_id
-
-
 async def websocket_endpoint(websocket: WebSocket) -> None:
     await websocket.accept()
-    state.ws_clients[websocket] = _default_subscription()
+    state.ws_clients.add(websocket)
     logger.info("WS client connected. Total: %d", len(state.ws_clients))
 
+    # Immediately inform new client that dispatcher is connected
+    import json as _json
     await websocket.send_text(
-        json.dumps(
+        _json.dumps(
             {
                 "type": "connection.status",
-                "payload": {
-                    "dispatcherStatus": "connected",
-                    "locomotiveId": state.ws_clients.get(websocket),
-                    "availableLocomotiveIds": state.subscribed_locomotive_ids(),
-                },
+                "payload": {"dispatcherStatus": "connected"},
                 "timestamp": now_ms(),
-                "sequenceId": await state.next_sequence(),
+                "sequenceId": state.next_sequence(),
             }
         )
     )
-
-    subscribed_locomotive_id = state.ws_clients.get(websocket)
-    if subscribed_locomotive_id:
-        frame = state.current_frames.get(subscribed_locomotive_id)
-        if frame is not None:
-            await websocket.send_text(
-                json.dumps(
-                    {
-                        "type": "telemetry.frame",
-                        "payload": frame.model_dump(by_alias=True),
-                        "timestamp": now_ms(),
-                        "sequenceId": await state.next_sequence(),
-                    }
-                )
-            )
 
     try:
         while True:
             raw = await websocket.receive_text()
             try:
-                message = json.loads(raw)
+                msg = json.loads(raw)
+                msg_type = msg.get("type", "")
+
+                if msg_type == "subscribe":
+                    # Channels accepted, all clients receive everything (no filtering)
+                    pass
+                elif msg_type == "heartbeat.ack":
+                    pass
+                # Ignore unknown message types silently
+
             except json.JSONDecodeError:
-                continue
-
-            if message.get("type") != "subscribe":
-                continue
-
-            payload = message.get("payload", {})
-            locomotive_id = payload.get("locomotiveId") or payload.get("locomotive_id") or _default_subscription()
-            if locomotive_id == "all":
-                locomotive_id = "*"
-            state.ws_clients[websocket] = locomotive_id
-
-            if locomotive_id and locomotive_id != "*":
-                frame = state.current_frames.get(locomotive_id)
-                if frame is not None:
-                    await websocket.send_text(
-                        json.dumps(
-                            {
-                                "type": "telemetry.frame",
-                                "payload": frame.model_dump(by_alias=True),
-                                "timestamp": now_ms(),
-                                "sequenceId": await state.next_sequence(),
-                            }
-                        )
-                    )
+                pass
 
     except WebSocketDisconnect:
         pass
+    except Exception as exc:
+        logger.debug("WS client error: %s", exc)
     finally:
-        state.ws_clients.pop(websocket, None)
+        state.ws_clients.discard(websocket)
         logger.info("WS client disconnected. Total: %d", len(state.ws_clients))
