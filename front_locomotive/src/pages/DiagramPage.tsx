@@ -1,7 +1,4 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { useInitialHealth } from '@/features/health/useHealthQueries'
-import { useInitialAlerts } from '@/features/alerts/useAlertQueries'
-import { useMetricDefinitions } from '@/features/telemetry/useTelemetryQueries'
 import { PageContainer } from '@/components/layout/PageContainer'
 import { LocomotiveSvg } from '@/components/diagram/LocomotiveSvg'
 import { ZoneTooltip } from '@/components/diagram/ZoneTooltip'
@@ -10,10 +7,6 @@ import { DiagramLegend } from '@/components/diagram/DiagramLegend'
 import type { MousePosition } from '@/types/diagram'
 
 export function DiagramPage() {
-  useInitialHealth()
-  useInitialAlerts()
-  useMetricDefinitions()
-
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null)
   const [hoveredZoneId, setHoveredZoneId] = useState<string | null>(null)
   const [mousePos, setMousePos] = useState<MousePosition | null>(null)

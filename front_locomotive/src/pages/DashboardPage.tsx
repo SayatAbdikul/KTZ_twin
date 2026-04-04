@@ -1,28 +1,24 @@
-import { useHealthStore } from '@/features/health/useHealthStore'
-import { useInitialHealth } from '@/features/health/useHealthQueries'
-import { useInitialAlerts } from '@/features/alerts/useAlertQueries'
-import { useInitialMessages } from '@/features/dispatcher-messages/useMessageQueries'
-import { useMetricDefinitions } from '@/features/telemetry/useTelemetryQueries'
-import { HealthGauge } from '@/components/metrics/HealthGauge'
-import { SubsystemBar } from '@/components/metrics/SubsystemBar'
-import { DynamicMetricRenderer } from '@/components/metrics/DynamicMetricRenderer'
-import { AlertFeed } from '@/components/alerts/AlertFeed'
-import { DispatcherInbox } from '@/components/messaging/DispatcherInbox'
-import { SectionHeader } from '@/components/common/SectionHeader'
-import { METRIC_DEFINITIONS, METRIC_GROUPS } from '@/config/metrics.config'
-import { ROUTES } from '@/config/routes'
-import type { MetricGroup } from '@/types/telemetry'
+import { useHealthStore } from "@/features/health/useHealthStore";
+import { HealthGauge } from "@/components/metrics/HealthGauge";
+import { SubsystemBar } from "@/components/metrics/SubsystemBar";
+import { DynamicMetricRenderer } from "@/components/metrics/DynamicMetricRenderer";
+import { AlertFeed } from "@/components/alerts/AlertFeed";
+import { DispatcherInbox } from "@/components/messaging/DispatcherInbox";
+import { SectionHeader } from "@/components/common/SectionHeader";
+import { METRIC_DEFINITIONS, METRIC_GROUPS } from "@/config/metrics.config";
+import { ROUTES } from "@/config/routes";
+import type { MetricGroup } from "@/types/telemetry";
 
 // Groups shown in the main metrics area
-const DASHBOARD_GROUPS: MetricGroup[] = ['motion', 'fuel', 'thermal', 'electrical']
+const DASHBOARD_GROUPS: MetricGroup[] = [
+  "motion",
+  "fuel",
+  "thermal",
+  "electrical",
+];
 
 export function DashboardPage() {
-  useInitialHealth()
-  useInitialAlerts()
-  useInitialMessages()
-  useMetricDefinitions()
-
-  const healthIndex = useHealthStore((s) => s.healthIndex)
+  const healthIndex = useHealthStore((s) => s.healthIndex);
 
   return (
     <div className="grid h-full grid-cols-[1fr_340px] grid-rows-[auto_1fr] gap-4 p-4">
@@ -33,8 +29,8 @@ export function DashboardPage() {
           {healthIndex ? (
             <HealthGauge score={healthIndex.overall} size={180} />
           ) : (
-            <div className="flex h-[180px] w-[180px] items-center justify-center text-slate-600">
-              Loading...
+            <div className="flex h-[180px] w-[180px] items-center justify-center text-center text-sm text-slate-600">
+              Health index is not provided by the locomotive replay service.
             </div>
           )}
           <p className="mt-1 text-xs text-slate-500">Overall Health Index</p>
@@ -52,7 +48,10 @@ export function DashboardPage() {
           ) : (
             <div className="space-y-2">
               {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="h-6 animate-pulse rounded bg-slate-800" />
+                <div
+                  key={i}
+                  className="h-6 animate-pulse rounded bg-slate-800"
+                />
               ))}
             </div>
           )}
@@ -68,8 +67,8 @@ export function DashboardPage() {
       <div className="overflow-y-auto rounded-xl border border-slate-800 bg-slate-900/60 p-4">
         {DASHBOARD_GROUPS.map((group) => {
           const defs = METRIC_DEFINITIONS.filter((d) => d.group === group).sort(
-            (a, b) => a.displayOrder - b.displayOrder
-          )
+            (a, b) => a.displayOrder - b.displayOrder,
+          );
           return (
             <div key={group} className="mb-5">
               <SectionHeader
@@ -82,7 +81,7 @@ export function DashboardPage() {
                 ))}
               </div>
             </div>
-          )
+          );
         })}
       </div>
 
@@ -91,5 +90,5 @@ export function DashboardPage() {
         <DispatcherInbox maxVisible={4} />
       </div>
     </div>
-  )
+  );
 }

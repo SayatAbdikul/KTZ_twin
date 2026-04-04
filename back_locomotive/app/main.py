@@ -55,15 +55,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from app.routes import alerts, connection, health, messages, replay, telemetry  # noqa: E402
-
-app.include_router(telemetry.router)
-app.include_router(health.router)
-app.include_router(alerts.router)
-app.include_router(messages.router)
-app.include_router(connection.router)
-app.include_router(replay.router)
-
 
 @app.websocket("/ws")
 async def ws_endpoint(websocket: WebSocket):
