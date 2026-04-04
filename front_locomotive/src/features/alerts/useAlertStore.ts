@@ -27,46 +27,87 @@ function computeSummary(alerts: Alert[]): AlertSummary {
 }
 
 interface AlertState {
-  activeAlerts: Alert[]
-  summary: AlertSummary
+  alertsByLocomotive: Record<string, Alert[]>
+  summaryByLocomotive: Record<string, AlertSummary>
 
-  setAlerts: (alerts: Alert[]) => void
+  setAlerts: (locomotiveId: string, alerts: Alert[]) => void
   addAlert: (alert: Alert) => void
   updateAlert: (alert: Alert) => void
-  resolveAlert: (alertId: string, resolvedAt: number) => void
+  resolveAlert: (locomotiveId: string, alertId: string, resolvedAt: number) => void
 }
 
 export const useAlertStore = create<AlertState>()(
   devtools(
     (set) => ({
-      activeAlerts: [],
-      summary: { criticalCount: 0, warningCount: 0, infoCount: 0, totalActive: 0 },
+      alertsByLocomotive: {},
+      summaryByLocomotive: {},
 
-      setAlerts: (alerts) => {
+      setAlerts: (locomotiveId, alerts) => {
         const sorted = sortAlerts(alerts)
-        set({ activeAlerts: sorted, summary: computeSummary(sorted) })
+        set((state) => ({
+          alertsByLocomotive: {
+            ...state.alertsByLocomotive,
+            [locomotiveId]: sorted,
+          },
+          summaryByLocomotive: {
+            ...state.summaryByLocomotive,
+            [locomotiveId]: computeSummary(sorted),
+          },
+        }))
       },
 
       addAlert: (alert) =>
         set((s) => {
-          const withoutExisting = s.activeAlerts.filter((a) => a.alertId !== alert.alertId)
+          const previous = s.alertsByLocomotive[alert.locomotiveId] ?? []
+          const withoutExisting = previous.filter((a) => a.alertId !== alert.alertId)
           const updated = sortAlerts([...withoutExisting, alert])
-          return { activeAlerts: updated, summary: computeSummary(updated) }
+          return {
+            alertsByLocomotive: {
+              ...s.alertsByLocomotive,
+              [alert.locomotiveId]: updated,
+            },
+            summaryByLocomotive: {
+              ...s.summaryByLocomotive,
+              [alert.locomotiveId]: computeSummary(updated),
+            },
+          }
         }),
 
       updateAlert: (alert) =>
         set((s) => {
-          const updated = s.activeAlerts.map((a) => (a.alertId === alert.alertId ? alert : a))
+          const previous = s.alertsByLocomotive[alert.locomotiveId] ?? []
+          const updated = previous.some((a) => a.alertId === alert.alertId)
+            ? previous.map((a) => (a.alertId === alert.alertId ? alert : a))
+            : [...previous, alert]
           const sorted = sortAlerts(updated)
-          return { activeAlerts: sorted, summary: computeSummary(sorted) }
+          return {
+            alertsByLocomotive: {
+              ...s.alertsByLocomotive,
+              [alert.locomotiveId]: sorted,
+            },
+            summaryByLocomotive: {
+              ...s.summaryByLocomotive,
+              [alert.locomotiveId]: computeSummary(sorted),
+            },
+          }
         }),
 
-      resolveAlert: (alertId, resolvedAt) =>
+      resolveAlert: (locomotiveId, alertId, resolvedAt) =>
         set((s) => {
-          const updated = s.activeAlerts.map((a) =>
+          const previous = s.alertsByLocomotive[locomotiveId] ?? []
+          const updated = previous.map((a) =>
             a.alertId === alertId ? { ...a, status: 'resolved' as const, resolvedAt } : a
           )
-          return { activeAlerts: updated, summary: computeSummary(updated) }
+          return {
+            alertsByLocomotive: {
+              ...s.alertsByLocomotive,
+              [locomotiveId]: updated,
+            },
+            summaryByLocomotive: {
+              ...s.summaryByLocomotive,
+              [locomotiveId]: computeSummary(updated),
+            },
+          }
         }),
     }),
     { name: 'alert-store' }

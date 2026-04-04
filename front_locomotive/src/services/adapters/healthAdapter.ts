@@ -23,9 +23,10 @@ function adaptSubsystem(raw: Record<string, unknown>): SubsystemHealth {
   }
 }
 
-export function adaptHealthIndex(raw: unknown): HealthIndex {
+export function adaptHealthIndex(raw: unknown, eventLocomotiveId?: string): HealthIndex {
   const d = raw as Record<string, unknown>
   return {
+    locomotiveId: String(d['locomotive_id'] ?? d['locomotiveId'] ?? eventLocomotiveId ?? ''),
     overall: (d['overall'] ?? 100) as number,
     timestamp: (d['timestamp'] ?? Date.now()) as number,
     subsystems: ((d['subsystems'] ?? []) as Record<string, unknown>[]).map(adaptSubsystem),

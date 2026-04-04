@@ -114,7 +114,7 @@ function scoreToStatus(score: number): SubsystemHealth['status'] {
   return 'critical'
 }
 
-export function generateHealthIndex(): HealthIndex {
+export function generateHealthIndex(locomotiveId = 'KTZ-2001'): HealthIndex {
   const now = Date.now()
   const allPenalties: SubsystemPenalty[] = []
 
@@ -140,6 +140,7 @@ export function generateHealthIndex(): HealthIndex {
     subsystems.reduce((sum, s) => sum + s.healthScore, 0) / subsystems.length
 
   return {
+    locomotiveId,
     overall: Math.round(overall * 10) / 10,
     timestamp: now,
     subsystems,

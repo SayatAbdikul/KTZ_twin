@@ -17,7 +17,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.auth import enforce_http_api_key
+from app.auth import enforce_http_auth
 from app.broker import start_broker, stop_broker
 from app.config import CORS_ORIGINS
 from app.simulator.health import generate_health_index
@@ -27,6 +27,7 @@ from app.ws.broadcaster import (
     task_broadcast_health,
     task_broadcast_heartbeat,
     task_broadcast_telemetry,
+    task_publish_fault_pattern_fleet,
     task_message_generator,
 )
 from app.ws.handler import websocket_endpoint
@@ -59,8 +60,9 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(task_broadcast_heartbeat(), name="heartbeat"),
         asyncio.create_task(task_alert_generator(),     name="alerts"),
         asyncio.create_task(task_message_generator(),   name="messages"),
+        asyncio.create_task(task_publish_fault_pattern_fleet(), name="pattern-fleet"),
     ]
-    logger.info("5 background tasks started.")
+    logger.info("%d background tasks started.", len(tasks))
 
     yield  # ← server is running
 
@@ -91,10 +93,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.middleware("http")(enforce_http_api_key)
+app.middleware("http")(enforce_http_auth)
 
-from app.routes import alerts, config_routes, connection, export, health, messages, replay, telemetry  # noqa: E402
+from app.routes import alerts, auth, config_routes, connection, health, messages, replay, telemetry  # noqa: E402
 
+app.include_router(auth.router)
 app.include_router(telemetry.router)
 app.include_router(health.router)
 app.include_router(alerts.router)

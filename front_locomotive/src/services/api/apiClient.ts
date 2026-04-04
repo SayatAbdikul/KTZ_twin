@@ -1,4 +1,5 @@
 import { APP_CONFIG } from '@/config/app.config'
+import { useAuthStore } from '@/features/auth/useAuthStore'
 import type { ApiResponse } from '@/types/api'
 
 class ApiError extends Error {
@@ -15,8 +16,9 @@ class ApiError extends Error {
 function buildHeaders(headers: HeadersInit | undefined): Headers {
   const merged = new Headers(headers ?? {})
   merged.set('Content-Type', 'application/json')
-  if (APP_CONFIG.API_KEY) {
-    merged.set('X-API-Key', APP_CONFIG.API_KEY)
+  const token = useAuthStore.getState().token
+  if (token) {
+    merged.set('Authorization', `Bearer ${token}`)
   }
   return merged
 }

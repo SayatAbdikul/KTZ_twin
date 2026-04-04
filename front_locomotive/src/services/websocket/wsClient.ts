@@ -1,4 +1,5 @@
 import { APP_CONFIG } from '@/config/app.config'
+import { useAuthStore } from '@/features/auth/useAuthStore'
 import { useConnectionStore } from '@/features/connection/useConnectionStore'
 import { routeWsMessage } from './wsMessageRouter'
 
@@ -8,8 +9,9 @@ let destroyed = false
 
 function buildWsUrl(): string {
     const url = new URL(APP_CONFIG.WS_URL)
-    if (APP_CONFIG.API_KEY) {
-        url.searchParams.set('apiKey', APP_CONFIG.API_KEY)
+    const token = useAuthStore.getState().token
+    if (token) {
+        url.searchParams.set('token', token)
     }
     return url.toString()
 }
@@ -35,7 +37,7 @@ export function connectWebSocket(): void {
                 type: 'subscribe',
                 payload: {
                     channels: ['telemetry', 'health', 'alerts', 'messages'],
-                    locomotiveId: APP_CONFIG.LOCOMOTIVE_ID,
+                    locomotiveId: 'all',
                 },
             })
         )
@@ -74,4 +76,18 @@ export function disconnectWebSocket(): void {
     if (reconnectTimer) clearTimeout(reconnectTimer)
     socket?.close()
     socket = null
+}
+
+export function sendDispatcherChat(locomotiveId: string, body: string): void {
+    if (socket?.readyState !== WebSocket.OPEN) return
+    socket.send(
+        JSON.stringify({
+            type: 'dispatcher.chat',
+            payload: {
+                locomotiveId,
+                body,
+                timestamp: Date.now(),
+            },
+        })
+    )
 }

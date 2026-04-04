@@ -5,6 +5,7 @@ import logging
 from fastapi import WebSocket
 from uuid import uuid4
 
+from app.auth import get_request_auth
 from app.models import now_ms
 from app.state import DispatcherClientRuntime, state
 
@@ -67,6 +68,7 @@ async def send_message(websocket: WebSocket, msg_type: str, payload: object, loc
 
 
 async def send_connection_snapshot(ws: WebSocket) -> None:
+    auth = get_request_auth(ws)
     payload = {
         "locomotives": [
             {
@@ -77,6 +79,7 @@ async def send_connection_snapshot(ws: WebSocket) -> None:
                 "reconnectAttempt": rt.reconnect_attempt,
             }
             for rt in state.locomotives.values()
+            if auth.is_admin or rt.target.locomotive_id == auth.train_id
         ]
     }
     await send_message(ws, "dispatcher.snapshot", payload)

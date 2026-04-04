@@ -8,6 +8,38 @@ import { useSettingsStore } from '@/features/settings/useSettingsStore'
 type SparklinePoint = { timestamp: number; value: number }
 const NON_SMOOTHING_QUALITIES = new Set<MetricReading['quality']>(['stale', 'bad'])
 
+export interface TelemetryLocomotiveSnapshot {
+  currentReadings: Map<string, MetricReading>
+  smoothedReadings: Map<string, MetricReading>
+  sparklineBuffers: Map<string, SparklinePoint[]>
+  smoothedSparklineBuffers: Map<string, SparklinePoint[]>
+  trendBuffers: Map<string, SparklinePoint[]>
+  smoothedTrendBuffers: Map<string, SparklinePoint[]>
+  smoothingBaselines: Map<string, number>
+}
+
+export const EMPTY_TELEMETRY_SNAPSHOT: TelemetryLocomotiveSnapshot = {
+  currentReadings: new Map(),
+  smoothedReadings: new Map(),
+  sparklineBuffers: new Map(),
+  smoothedSparklineBuffers: new Map(),
+  trendBuffers: new Map(),
+  smoothedTrendBuffers: new Map(),
+  smoothingBaselines: new Map(),
+}
+
+function createEmptyTelemetrySnapshot(): TelemetryLocomotiveSnapshot {
+  return {
+    currentReadings: new Map(),
+    smoothedReadings: new Map(),
+    sparklineBuffers: new Map(),
+    smoothedSparklineBuffers: new Map(),
+    trendBuffers: new Map(),
+    smoothedTrendBuffers: new Map(),
+    smoothingBaselines: new Map(),
+  }
+}
+
 function appendPoint(
   buffers: Map<string, SparklinePoint[]>,
   metricId: string,
@@ -21,41 +53,30 @@ function appendPoint(
 }
 
 interface TelemetryState {
-  currentReadings: Map<string, MetricReading>
-  smoothedReadings: Map<string, MetricReading>
+  byLocomotive: Record<string, TelemetryLocomotiveSnapshot>
   metricDefinitions: MetricDefinition[]
-  sparklineBuffers: Map<string, SparklinePoint[]>
-  smoothedSparklineBuffers: Map<string, SparklinePoint[]>
-  trendBuffers: Map<string, SparklinePoint[]>
-  smoothedTrendBuffers: Map<string, SparklinePoint[]>
-  smoothingBaselines: Map<string, number>
 
   applyFrame: (frame: TelemetryFrame) => void
   setDefinitions: (defs: MetricDefinition[]) => void
-  getReading: (metricId: string) => MetricReading | undefined
+  getReading: (locomotiveId: string, metricId: string) => MetricReading | undefined
 }
 
 export const useTelemetryStore = create<TelemetryState>()(
   devtools(
     (set, get) => ({
-      currentReadings: new Map(),
-      smoothedReadings: new Map(),
+      byLocomotive: {},
       metricDefinitions: [],
-      sparklineBuffers: new Map(),
-      smoothedSparklineBuffers: new Map(),
-      trendBuffers: new Map(),
-      smoothedTrendBuffers: new Map(),
-      smoothingBaselines: new Map(),
 
       applyFrame: (frame) =>
         set((state) => {
-          const currentReadings = new Map(state.currentReadings)
-          const smoothedReadings = new Map(state.smoothedReadings)
-          const sparklineBuffers = new Map(state.sparklineBuffers)
-          const smoothedSparklineBuffers = new Map(state.smoothedSparklineBuffers)
-          const trendBuffers = new Map(state.trendBuffers)
-          const smoothedTrendBuffers = new Map(state.smoothedTrendBuffers)
-          const smoothingBaselines = new Map(state.smoothingBaselines)
+          const previous = state.byLocomotive[frame.locomotiveId] ?? createEmptyTelemetrySnapshot()
+          const currentReadings = new Map(previous.currentReadings)
+          const smoothedReadings = new Map(previous.smoothedReadings)
+          const sparklineBuffers = new Map(previous.sparklineBuffers)
+          const smoothedSparklineBuffers = new Map(previous.smoothedSparklineBuffers)
+          const trendBuffers = new Map(previous.trendBuffers)
+          const smoothedTrendBuffers = new Map(previous.smoothedTrendBuffers)
+          const smoothingBaselines = new Map(previous.smoothingBaselines)
           const { smoothingAlpha } = useSettingsStore.getState()
 
           for (const reading of frame.readings) {
@@ -112,19 +133,24 @@ export const useTelemetryStore = create<TelemetryState>()(
           }
 
           return {
-            currentReadings,
-            smoothedReadings,
-            sparklineBuffers,
-            smoothedSparklineBuffers,
-            trendBuffers,
-            smoothedTrendBuffers,
-            smoothingBaselines,
+            byLocomotive: {
+              ...state.byLocomotive,
+              [frame.locomotiveId]: {
+                currentReadings,
+                smoothedReadings,
+                sparklineBuffers,
+                smoothedSparklineBuffers,
+                trendBuffers,
+                smoothedTrendBuffers,
+                smoothingBaselines,
+              },
+            },
           }
         }),
 
       setDefinitions: (defs) => set({ metricDefinitions: defs }),
 
-      getReading: (metricId) => get().currentReadings.get(metricId),
+      getReading: (locomotiveId, metricId) => get().byLocomotive[locomotiveId]?.currentReadings.get(metricId),
     }),
     { name: 'telemetry-store' }
   )

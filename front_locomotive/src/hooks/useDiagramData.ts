@@ -1,4 +1,5 @@
 import { useHealthStore } from '@/features/health/useHealthStore'
+import { useFleetStore } from '@/features/fleet/useFleetStore'
 import { useTelemetryStore } from '@/features/telemetry/useTelemetryStore'
 import { useMetricCatalog } from '@/features/telemetry/metricCatalog'
 import { useAlertStore } from '@/features/alerts/useAlertStore'
@@ -32,11 +33,17 @@ const EMPTY: DiagramData = {
  * references, all filtering happens in the render body (not inside selectors).
  */
 export function useDiagramData(zone: DiagramZone | null): DiagramData {
-  // Stable store selectors — no filtering inside the selector
-  const healthIndex = useHealthStore((s) => s.healthIndex)
-  const allReadings = useTelemetryStore((s) => s.currentReadings)
-  const allBuffers = useTelemetryStore((s) => s.sparklineBuffers)
-  const allAlerts = useAlertStore((s) => s.activeAlerts)
+  const selectedLocomotiveId = useFleetStore((s) => s.selectedLocomotiveId)
+  const healthIndex = useHealthStore((s) =>
+    selectedLocomotiveId ? s.byLocomotive[selectedLocomotiveId] ?? null : null
+  )
+  const telemetry = useTelemetryStore((s) =>
+    selectedLocomotiveId ? s.byLocomotive[selectedLocomotiveId] : undefined
+  )
+  const alertsByLocomotive = useAlertStore((s) => s.alertsByLocomotive)
+  const allAlerts = selectedLocomotiveId
+    ? alertsByLocomotive[selectedLocomotiveId] ?? EMPTY.alerts
+    : EMPTY.alerts
   const metricDefinitions = useMetricCatalog()
 
   if (!zone) return EMPTY
@@ -55,9 +62,9 @@ export function useDiagramData(zone: DiagramZone | null): DiagramData {
 
   return {
     subsystem,
-    readings: allReadings,
+    readings: telemetry?.currentReadings ?? EMPTY.readings,
     definitions,
-    sparklineBuffers: allBuffers,
+    sparklineBuffers: telemetry?.sparklineBuffers ?? EMPTY.sparklineBuffers,
     alerts,
     alertCount: alerts.length,
   }

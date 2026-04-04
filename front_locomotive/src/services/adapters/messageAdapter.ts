@@ -1,9 +1,10 @@
 import type { DispatcherMessage } from '@/types/messages'
 
-export function adaptMessage(raw: unknown): DispatcherMessage {
+export function adaptMessage(raw: unknown, eventLocomotiveId?: string): DispatcherMessage {
   const d = raw as Record<string, unknown>
   return {
     messageId: (d['message_id'] ?? d['messageId']) as string,
+    locomotiveId: String(d['locomotive_id'] ?? d['locomotiveId'] ?? eventLocomotiveId ?? ''),
     priority: (d['priority'] ?? 'normal') as DispatcherMessage['priority'],
     type: (d['type'] ?? 'informational') as DispatcherMessage['type'],
     subject: (d['subject'] ?? '') as string,

@@ -9,7 +9,15 @@ export function useInitialAlerts() {
     queryKey: ['alerts-initial'],
     queryFn: async () => {
       const res = await endpoints.alerts.list({ status: 'active' })
-      setAlerts(res.data)
+      const grouped = new Map<string, typeof res.data>()
+      for (const alert of res.data) {
+        const locomotiveId = alert.locomotiveId || 'KTZ-2001'
+        const existing = grouped.get(locomotiveId) ?? []
+        grouped.set(locomotiveId, [...existing, { ...alert, locomotiveId }])
+      }
+      for (const [locomotiveId, alerts] of grouped) {
+        setAlerts(locomotiveId, alerts)
+      }
       return res.data
     },
     staleTime: 10000,

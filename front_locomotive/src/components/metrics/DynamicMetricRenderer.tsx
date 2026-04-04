@@ -1,4 +1,5 @@
 import { useTelemetryStore } from '@/features/telemetry/useTelemetryStore'
+import { useFleetStore } from '@/features/fleet/useFleetStore'
 import { useSettingsStore } from '@/features/settings/useSettingsStore'
 import { MetricCard } from '@/components/common/MetricCard'
 import { Sparkline } from '@/components/charts/Sparkline'
@@ -13,13 +14,15 @@ interface DynamicMetricRendererProps {
 }
 
 export function DynamicMetricRenderer({ definition }: DynamicMetricRendererProps) {
+  const selectedLocomotiveId = useFleetStore((s) => s.selectedLocomotiveId)
   const smoothingEnabled = useSettingsStore((s) => s.smoothingEnabled)
-  const rawReading = useTelemetryStore((s) => s.currentReadings.get(definition.metricId))
-  const smoothedReading = useTelemetryStore((s) => s.smoothedReadings.get(definition.metricId))
-  const rawBuffer = useTelemetryStore((s) => s.sparklineBuffers.get(definition.metricId))
-  const smoothedBuffer = useTelemetryStore((s) =>
-    s.smoothedSparklineBuffers.get(definition.metricId)
+  const telemetry = useTelemetryStore((s) =>
+    selectedLocomotiveId ? s.byLocomotive[selectedLocomotiveId] : undefined
   )
+  const rawReading = telemetry?.currentReadings.get(definition.metricId)
+  const smoothedReading = telemetry?.smoothedReadings.get(definition.metricId)
+  const rawBuffer = telemetry?.sparklineBuffers.get(definition.metricId)
+  const smoothedBuffer = telemetry?.smoothedSparklineBuffers.get(definition.metricId)
 
   const reading = smoothingEnabled ? smoothedReading ?? rawReading : rawReading
   const buffer =

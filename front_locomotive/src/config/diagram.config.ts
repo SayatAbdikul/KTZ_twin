@@ -13,7 +13,7 @@ import type { DiagramZone } from '@/types/diagram'
  *  |_______|______________________________________________layer_|
  *  [=============== Brakes strip ===========================]
  *  [Traction-front]                        [Traction-rear]
- *         (O)(O)                                  (O)(O)(O)
+ *      (O)(O)(O)                              (O)(O)(O)
  */
 export const DIAGRAM_ZONES: DiagramZone[] = [
   {
@@ -88,9 +88,9 @@ export const DIAGRAM_ZONES: DiagramZone[] = [
     // Compound path: two bogie positions
     shape: {
       type: 'path',
-      d: 'M150,220 h130 v15 h-130 Z M566,220 h214 v15 h-214 Z',
+      d: 'M148,218 h160 v18 h-160 Z M572,218 h160 v18 h-160 Z',
     },
-    labelPosition: { x: 215, y: 230 },
+    labelPosition: { x: 228, y: 231 },
   },
 ]
 

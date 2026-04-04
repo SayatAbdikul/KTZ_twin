@@ -20,13 +20,36 @@ from app.repository import (
     save_incoming_message,
     save_telemetry_frame,
 )
-from app.state import state
+from app.state import LocomotiveRuntime, state
 from app.ws_server import broadcast_message
 
 logger = logging.getLogger(__name__)
 
 _frames_since_prune = 0
 _PRUNE_EVERY_FRAMES = 60
+
+
+async def _ensure_runtime(locomotive_id: str) -> None:
+    if locomotive_id in state.locomotives:
+        return
+
+    state.locomotives[locomotive_id] = LocomotiveRuntime(
+        target=LocomotiveTarget(
+            locomotive_id=locomotive_id,
+            ws_url=f"kafka://{locomotive_id}",
+        ),
+        connected=True,
+        last_seen_at=now_ms(),
+    )
+    await broadcast_message(
+        "dispatcher.locomotive_status",
+        {
+            "locomotiveId": locomotive_id,
+            "connected": True,
+            "wsUrl": f"kafka://{locomotive_id}",
+            "lastSeenAt": state.locomotives[locomotive_id].last_seen_at,
+        },
+    )
 
 
 def _with_api_key(url: str) -> str:
@@ -54,7 +77,9 @@ async def _forward_locomotive_message(
         logger.debug("Skipping duplicate dispatcher ingest event %s for locomotive %s", event_id, locomotive_id)
         return
 
+    await _ensure_runtime(locomotive_id)
     runtime = state.locomotives[locomotive_id]
+    runtime.connected = True
     runtime.last_seen_at = now_ms()
     state.note_ingest(msg_type)
 

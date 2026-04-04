@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Activity } from 'lucide-react'
 import { METRIC_GROUPS } from '@/config/metrics.config'
 import { useTelemetryStore } from '@/features/telemetry/useTelemetryStore'
+import { useFleetStore } from '@/features/fleet/useFleetStore'
 import { useMetricCatalog } from '@/features/telemetry/metricCatalog'
 import { useSettingsStore } from '@/features/settings/useSettingsStore'
 import { DynamicMetricRenderer } from '@/components/metrics/DynamicMetricRenderer'
@@ -37,18 +38,22 @@ function LiveTrendCard({
   definition: MetricDefinition
   windowMs: number | 'all'
 }) {
+  const selectedLocomotiveId = useFleetStore((s) => s.selectedLocomotiveId)
   const smoothingEnabled = useSettingsStore((s) => s.smoothingEnabled)
-  const currentReadings = useTelemetryStore((s) => s.currentReadings)
-  const smoothedReadings = useTelemetryStore((s) => s.smoothedReadings)
-  const trendBuffers = useTelemetryStore((s) => s.trendBuffers)
-  const smoothedTrendBuffers = useTelemetryStore((s) => s.smoothedTrendBuffers)
+  const telemetry = useTelemetryStore((s) =>
+    selectedLocomotiveId ? s.byLocomotive[selectedLocomotiveId] : undefined
+  )
+  const currentReadings = telemetry?.currentReadings
+  const smoothedReadings = telemetry?.smoothedReadings
+  const trendBuffers = telemetry?.trendBuffers
+  const smoothedTrendBuffers = telemetry?.smoothedTrendBuffers
 
   const reading = smoothingEnabled
-    ? smoothedReadings.get(definition.metricId) ?? currentReadings.get(definition.metricId)
-    : currentReadings.get(definition.metricId)
+    ? smoothedReadings?.get(definition.metricId) ?? currentReadings?.get(definition.metricId)
+    : currentReadings?.get(definition.metricId)
   const data = smoothingEnabled
-    ? smoothedTrendBuffers.get(definition.metricId) ?? trendBuffers.get(definition.metricId) ?? EMPTY_BUFFER
-    : trendBuffers.get(definition.metricId) ?? EMPTY_BUFFER
+    ? smoothedTrendBuffers?.get(definition.metricId) ?? trendBuffers?.get(definition.metricId) ?? EMPTY_BUFFER
+    : trendBuffers?.get(definition.metricId) ?? EMPTY_BUFFER
 
   const severity = reading ? getMetricSeverity(reading.value, definition) : 'normal'
   const color =

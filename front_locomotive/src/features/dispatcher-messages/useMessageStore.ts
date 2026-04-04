@@ -11,48 +11,87 @@ function computeSummary(messages: DispatcherMessage[]): MessageSummary {
 }
 
 interface MessageState {
-  messages: DispatcherMessage[]
-  summary: MessageSummary
+  messagesByLocomotive: Record<string, DispatcherMessage[]>
+  summaryByLocomotive: Record<string, MessageSummary>
 
-  setMessages: (msgs: DispatcherMessage[]) => void
+  setMessages: (locomotiveId: string, msgs: DispatcherMessage[]) => void
   addMessage: (msg: DispatcherMessage) => void
-  markRead: (messageId: string) => void
-  markAcknowledged: (messageId: string) => void
+  markRead: (locomotiveId: string, messageId: string) => void
+  markAcknowledged: (locomotiveId: string, messageId: string) => void
 }
 
 export const useMessageStore = create<MessageState>()(
   devtools(
     (set) => ({
-      messages: [],
-      summary: { totalUnread: 0, urgentUnread: 0 },
+      messagesByLocomotive: {},
+      summaryByLocomotive: {},
 
-      setMessages: (msgs) => {
+      setMessages: (locomotiveId, msgs) => {
         const sorted = [...msgs].sort((a, b) => b.sentAt - a.sentAt)
-        set({ messages: sorted, summary: computeSummary(sorted) })
+        set((state) => ({
+          messagesByLocomotive: {
+            ...state.messagesByLocomotive,
+            [locomotiveId]: sorted,
+          },
+          summaryByLocomotive: {
+            ...state.summaryByLocomotive,
+            [locomotiveId]: computeSummary(sorted),
+          },
+        }))
       },
 
       addMessage: (msg) =>
         set((s) => {
-          const updated = [msg, ...s.messages]
-          return { messages: updated, summary: computeSummary(updated) }
+          const previous = s.messagesByLocomotive[msg.locomotiveId] ?? []
+          const updated = [msg, ...previous]
+          return {
+            messagesByLocomotive: {
+              ...s.messagesByLocomotive,
+              [msg.locomotiveId]: updated,
+            },
+            summaryByLocomotive: {
+              ...s.summaryByLocomotive,
+              [msg.locomotiveId]: computeSummary(updated),
+            },
+          }
         }),
 
-      markRead: (messageId) =>
+      markRead: (locomotiveId, messageId) =>
         set((s) => {
-          const updated = s.messages.map((m) =>
+          const previous = s.messagesByLocomotive[locomotiveId] ?? []
+          const updated = previous.map((m) =>
             m.messageId === messageId ? { ...m, readAt: Date.now() } : m
           )
-          return { messages: updated, summary: computeSummary(updated) }
+          return {
+            messagesByLocomotive: {
+              ...s.messagesByLocomotive,
+              [locomotiveId]: updated,
+            },
+            summaryByLocomotive: {
+              ...s.summaryByLocomotive,
+              [locomotiveId]: computeSummary(updated),
+            },
+          }
         }),
 
-      markAcknowledged: (messageId) =>
+      markAcknowledged: (locomotiveId, messageId) =>
         set((s) => {
-          const updated = s.messages.map((m) =>
+          const previous = s.messagesByLocomotive[locomotiveId] ?? []
+          const updated = previous.map((m) =>
             m.messageId === messageId
               ? { ...m, acknowledgedAt: Date.now(), readAt: m.readAt ?? Date.now() }
               : m
           )
-          return { messages: updated, summary: computeSummary(updated) }
+          return {
+            messagesByLocomotive: {
+              ...s.messagesByLocomotive,
+              [locomotiveId]: updated,
+            },
+            summaryByLocomotive: {
+              ...s.summaryByLocomotive,
+              [locomotiveId]: computeSummary(updated),
+            },
+          }
         }),
     }),
     { name: 'message-store' }

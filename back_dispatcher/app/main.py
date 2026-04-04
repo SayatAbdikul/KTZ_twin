@@ -9,14 +9,14 @@ from typing import Any
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.auth import authorize_websocket, enforce_http_api_key
+from app.auth import authorize_websocket, enforce_http_auth
 from app.config import CORS_ORIGINS, INGEST_MODE, LOCOMOTIVE_TARGETS
 from app.kafka_consumer import consume_kafka_forever
 from app.db import init_db_schema, wait_for_db
 from app.locomotive_client import connect_locomotive_forever, send_chat_to_locomotive
 from app.models import now_ms
 from app.repository import save_dispatcher_command
-from app.routes import health, locomotives
+from app.routes import auth, health, locomotives
 from app.state import LocomotiveRuntime, state
 from app.ws_server import broadcast_message, send_connection_snapshot, send_locomotive_snapshot
 
@@ -92,8 +92,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.middleware("http")(enforce_http_api_key)
+app.middleware("http")(enforce_http_auth)
 
+app.include_router(auth.router)
 app.include_router(health.router)
 app.include_router(locomotives.router)
 
@@ -105,11 +106,14 @@ def ping() -> dict:
 
 @app.websocket("/ws")
 async def ws_endpoint(websocket: WebSocket):
-    if not await authorize_websocket(websocket):
+    auth_context = await authorize_websocket(websocket)
+    if auth_context is None:
         return
 
     await websocket.accept()
     state.register_client(websocket)
+    if auth_context.role == "train" and auth_context.train_id:
+        state.set_subscription(websocket, auth_context.train_id)
     await send_connection_snapshot(websocket)
 
     try:
@@ -120,13 +124,25 @@ async def ws_endpoint(websocket: WebSocket):
                 msg_type = msg.get("type", "")
                 payload = msg.get("payload", {})
                 if msg_type == "dispatcher.chat" and isinstance(payload, dict):
-                    await _handle_dispatcher_command(payload)
+                    if auth_context.is_admin:
+                        await _handle_dispatcher_command(payload)
                 elif msg_type == "subscribe":
                     requested = None
                     if isinstance(payload, dict):
                         requested = payload.get("locomotiveId") or payload.get("locomotive_id")
+
+                    if auth_context.role == "train":
+                        locomotive_id = auth_context.train_id
+                        state.set_subscription(websocket, locomotive_id)
+                        if locomotive_id:
+                            await send_locomotive_snapshot(websocket, locomotive_id)
+                        continue
+
                     if requested in ("all", "*", "", None):
                         state.set_subscription(websocket, "*" if requested else None)
+                        if requested in ("all", "*"):
+                            for locomotive_id in state.locomotives.keys():
+                                await send_locomotive_snapshot(websocket, locomotive_id)
                     else:
                         locomotive_id = str(requested).strip()
                         state.set_subscription(websocket, locomotive_id)

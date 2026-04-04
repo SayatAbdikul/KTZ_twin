@@ -5,6 +5,7 @@ let messageCounter = 10
 export const INITIAL_MESSAGES: DispatcherMessage[] = [
   {
     messageId: 'msg-001',
+    locomotiveId: 'KTZ-2001',
     priority: 'high',
     type: 'recommendation',
     subject: 'Speed Restriction — Section KZ-7 to KZ-12',
@@ -14,6 +15,7 @@ export const INITIAL_MESSAGES: DispatcherMessage[] = [
   },
   {
     messageId: 'msg-002',
+    locomotiveId: 'KTZ-2001',
     priority: 'normal',
     type: 'informational',
     subject: 'Scheduled Maintenance Reminder',
@@ -24,6 +26,7 @@ export const INITIAL_MESSAGES: DispatcherMessage[] = [
   },
   {
     messageId: 'msg-003',
+    locomotiveId: 'KTZ-2002',
     priority: 'urgent',
     type: 'directive',
     subject: 'URGENT: Track Obstruction at KM 342',
@@ -33,7 +36,7 @@ export const INITIAL_MESSAGES: DispatcherMessage[] = [
   },
 ]
 
-export function generateDispatcherMessage(): DispatcherMessage {
+export function generateDispatcherMessage(locomotiveId = 'KTZ-2001'): DispatcherMessage {
   messageCounter++
   const templates: Pick<DispatcherMessage, 'priority' | 'type' | 'subject' | 'body'>[] = [
     {
@@ -58,6 +61,7 @@ export function generateDispatcherMessage(): DispatcherMessage {
   const template = templates[messageCounter % templates.length]
   return {
     messageId: `msg-${messageCounter}`,
+    locomotiveId,
     senderName: 'Dispatcher',
     sentAt: Date.now(),
     ...template,

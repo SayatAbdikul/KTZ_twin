@@ -3,6 +3,7 @@ export type AlertStatus = 'active' | 'acknowledged' | 'resolved'
 
 export interface Alert {
   alertId: string
+  locomotiveId: string
   severity: AlertSeverity
   status: AlertStatus
   source: string

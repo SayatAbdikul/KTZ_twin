@@ -3,17 +3,21 @@ import { devtools } from 'zustand/middleware'
 import type { HealthIndex } from '@/types/health'
 
 interface HealthState {
-  healthIndex: HealthIndex | null
-  lastUpdated: number | null
+  byLocomotive: Record<string, HealthIndex>
   applyUpdate: (index: HealthIndex) => void
 }
 
 export const useHealthStore = create<HealthState>()(
   devtools(
     (set) => ({
-      healthIndex: null,
-      lastUpdated: null,
-      applyUpdate: (index) => set({ healthIndex: index, lastUpdated: Date.now() }),
+      byLocomotive: {},
+      applyUpdate: (index) =>
+        set((state) => ({
+          byLocomotive: {
+            ...state.byLocomotive,
+            [index.locomotiveId]: index,
+          },
+        })),
     }),
     { name: 'health-store' }
   )

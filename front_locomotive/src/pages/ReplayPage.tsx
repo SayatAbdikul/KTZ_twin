@@ -2,7 +2,7 @@ import { useEffect, useMemo } from 'react'
 import { History } from 'lucide-react'
 import { PageContainer } from '@/components/layout/PageContainer'
 import { TimeRangeSelector } from '@/components/charts/TimeRangeSelector'
-import { APP_CONFIG } from '@/config/app.config'
+import { useFleetStore } from '@/features/fleet/useFleetStore'
 import { PlaybackControls } from '@/components/replay/PlaybackControls'
 import { TimelineScrubber } from '@/components/replay/TimelineScrubber'
 import { ReplayMetricSelector } from '@/components/replay/ReplayMetricSelector'
@@ -27,6 +27,7 @@ function formatRangeLabel(earliest: number | null, latest: number | null): strin
 }
 
 export function ReplayPage() {
+  const selectedLocomotiveId = useFleetStore((s) => s.selectedLocomotiveId)
   const metricDefinitions = useMetricCatalog()
   const timeRange = useReplayStore((state) => state.timeRange)
   const currentTimestamp = useReplayStore((state) => state.currentTimestamp)
@@ -49,18 +50,19 @@ export function ReplayPage() {
   const tickPlayback = useReplayStore((state) => state.tickPlayback)
 
   useEffect(() => {
-    void initialize(APP_CONFIG.LOCOMOTIVE_ID)
-  }, [initialize])
+    if (!selectedLocomotiveId) return
+    void initialize(selectedLocomotiveId)
+  }, [initialize, selectedLocomotiveId])
 
   useEffect(() => {
-    if (!isPlaying) return
+    if (!isPlaying || !selectedLocomotiveId) return
 
     const timer = window.setInterval(() => {
-      void tickPlayback(APP_CONFIG.LOCOMOTIVE_ID)
+      void tickPlayback(selectedLocomotiveId)
     }, 1000)
 
     return () => window.clearInterval(timer)
-  }, [isPlaying, tickPlayback])
+  }, [isPlaying, selectedLocomotiveId, tickPlayback])
 
   const selectedDefinitions = useMemo(
     () =>
@@ -73,11 +75,12 @@ export function ReplayPage() {
   const hasReplayData = timeRange?.earliest !== null && timeRange?.latest !== null
 
   function handleMetricToggle(metricId: string) {
+    if (!selectedLocomotiveId) return
     const nextMetricIds = selectedMetricIds.includes(metricId)
       ? selectedMetricIds.filter((id) => id !== metricId)
       : [...selectedMetricIds, metricId]
 
-    void setSelectedMetricIds(APP_CONFIG.LOCOMOTIVE_ID, nextMetricIds)
+    void setSelectedMetricIds(selectedLocomotiveId, nextMetricIds)
   }
 
   return (
@@ -88,7 +91,9 @@ export function ReplayPage() {
           <div>
             <h1 className="text-base font-semibold text-slate-200">History & Replay</h1>
             <p className="text-sm text-slate-500">
-              Available range: {formatRangeLabel(timeRange?.earliest ?? null, timeRange?.latest ?? null)}
+              {selectedLocomotiveId
+                ? `${selectedLocomotiveId} · ${formatRangeLabel(timeRange?.earliest ?? null, timeRange?.latest ?? null)}`
+                : 'Select a locomotive to inspect replay history'}
             </p>
           </div>
         </div>
@@ -96,7 +101,8 @@ export function ReplayPage() {
         <TimeRangeSelector
           value={visibleWindow}
           onChange={(preset) => {
-            void setVisibleWindow(APP_CONFIG.LOCOMOTIVE_ID, preset)
+            if (!selectedLocomotiveId) return
+            void setVisibleWindow(selectedLocomotiveId, preset)
           }}
         />
       </div>
@@ -113,23 +119,26 @@ export function ReplayPage() {
             currentTimestamp={currentTimestamp}
             isPlaying={isPlaying}
             playbackSpeed={playbackSpeed}
-            disabled={!hasReplayData || isLoading}
+            disabled={!selectedLocomotiveId || !hasReplayData || isLoading}
             onTogglePlayback={togglePlayback}
             onPlaybackSpeedChange={setPlaybackSpeed}
             onSkipBackward={() => {
-              void skipBy(APP_CONFIG.LOCOMOTIVE_ID, -REPLAY_SKIP_INTERVAL_MS)
+              if (!selectedLocomotiveId) return
+              void skipBy(selectedLocomotiveId, -REPLAY_SKIP_INTERVAL_MS)
             }}
             onSkipForward={() => {
-              void skipBy(APP_CONFIG.LOCOMOTIVE_ID, REPLAY_SKIP_INTERVAL_MS)
+              if (!selectedLocomotiveId) return
+              void skipBy(selectedLocomotiveId, REPLAY_SKIP_INTERVAL_MS)
             }}
           />
 
           <TimelineScrubber
             timeRange={timeRange}
             currentTimestamp={currentTimestamp}
-            disabled={!hasReplayData || isLoading}
+            disabled={!selectedLocomotiveId || !hasReplayData || isLoading}
             onSeek={(timestamp) => {
-              void seekTo(APP_CONFIG.LOCOMOTIVE_ID, timestamp)
+              if (!selectedLocomotiveId) return
+              void seekTo(selectedLocomotiveId, timestamp)
             }}
           />
 

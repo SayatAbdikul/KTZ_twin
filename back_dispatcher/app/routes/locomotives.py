@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from typing import Literal
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 
+from app.auth import get_request_auth, require_locomotive_access
 from app.config import RECENT_TELEMETRY_MAX_MINUTES
 from app.models import now_ms
 from app.repository import (
@@ -26,7 +27,8 @@ def _parse_metric_ids(raw: str | None) -> list[str] | None:
 
 
 @router.get("")
-def list_locomotives() -> dict:
+def list_locomotives(request: Request) -> dict:
+    auth = get_request_auth(request)
     return {
         "data": [
             {
@@ -38,12 +40,14 @@ def list_locomotives() -> dict:
                 "hasTelemetry": rt.latest_telemetry is not None,
             }
             for rt in state.locomotives.values()
+            if auth.is_admin or rt.target.locomotive_id == auth.train_id
         ]
     }
 
 
 @router.get("/{locomotive_id}/latest-telemetry")
-def latest_telemetry(locomotive_id: str) -> dict:
+def latest_telemetry(locomotive_id: str, request: Request) -> dict:
+    require_locomotive_access(get_request_auth(request), locomotive_id)
     rt = state.locomotives.get(locomotive_id)
     if not rt:
         return {"data": None, "error": {"code": "NOT_FOUND", "message": "Locomotive not configured"}}
@@ -51,16 +55,19 @@ def latest_telemetry(locomotive_id: str) -> dict:
 
 
 @router.get("/{locomotive_id}/chat")
-def get_chat(locomotive_id: str) -> dict:
+def get_chat(locomotive_id: str, request: Request) -> dict:
+    require_locomotive_access(get_request_auth(request), locomotive_id)
     return {"data": state.chat_history.get(locomotive_id, [])}
 
 
 @router.get("/{locomotive_id}/telemetry/recent")
 def recent_telemetry(
     locomotive_id: str,
+    request: Request,
     minutes: int = Query(default=5, ge=1, le=RECENT_TELEMETRY_MAX_MINUTES),
     metric_id: str | None = Query(default=None, alias="metricId"),
 ) -> dict:
+    require_locomotive_access(get_request_auth(request), locomotive_id)
     if locomotive_id not in state.locomotives:
         return {"data": None, "error": {"code": "NOT_FOUND", "message": "Locomotive not configured"}}
 
@@ -80,7 +87,8 @@ def recent_telemetry(
 
 
 @router.get("/{locomotive_id}/replay/time-range")
-def replay_time_range(locomotive_id: str) -> dict:
+def replay_time_range(locomotive_id: str, request: Request) -> dict:
+    require_locomotive_access(get_request_auth(request), locomotive_id)
     earliest, latest = get_replay_time_range(locomotive_id)
     return {
         "data": {
@@ -95,11 +103,13 @@ def replay_time_range(locomotive_id: str) -> dict:
 @router.get("/{locomotive_id}/replay/range")
 def replay_range(
     locomotive_id: str,
+    request: Request,
     from_ts: int = Query(..., alias="from"),
     to_ts: int = Query(..., alias="to"),
     metric_ids: str | None = Query(default=None, alias="metricIds"),
     resolution: Literal["raw", "1s", "10s", "1m", "5m"] = Query(default="raw"),
 ) -> dict:
+    require_locomotive_access(get_request_auth(request), locomotive_id)
     normalized_from = min(from_ts, to_ts)
     normalized_to = max(from_ts, to_ts)
     selected_metrics = _parse_metric_ids(metric_ids)
@@ -126,8 +136,10 @@ def replay_range(
 @router.get("/{locomotive_id}/replay/snapshot")
 def replay_snapshot(
     locomotive_id: str,
+    request: Request,
     timestamp: int = Query(..., ge=0),
 ) -> dict:
+    require_locomotive_access(get_request_auth(request), locomotive_id)
     return {
         "data": get_replay_snapshot(
             locomotive_id=locomotive_id,

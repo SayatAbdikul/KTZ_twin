@@ -1,9 +1,10 @@
 import type { Alert } from '@/types/alerts'
 
-export function adaptAlert(raw: unknown): Alert {
+export function adaptAlert(raw: unknown, eventLocomotiveId?: string): Alert {
   const d = raw as Record<string, unknown>
   return {
     alertId: (d['alert_id'] ?? d['alertId']) as string,
+    locomotiveId: String(d['locomotive_id'] ?? d['locomotiveId'] ?? eventLocomotiveId ?? ''),
     severity: d['severity'] as Alert['severity'],
     status: (d['status'] ?? 'active') as Alert['status'],
     source: (d['source'] ?? '') as string,

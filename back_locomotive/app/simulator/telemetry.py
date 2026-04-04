@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import math
 import random
+from dataclasses import dataclass
 
 from app.config import LOCOMOTIVE_ID, METRIC_DEFINITIONS, RAW_TELEMETRY_INTERVAL_S, TELEMETRY_INTERVAL_S
 from app.models import MetricReading, TelemetryFrame, now_ms
@@ -33,6 +34,174 @@ _ALPHA_COOL = 2.0 / (20 + 1)
 
 _METRIC_MAP: dict[str, dict] = {metric["metricId"]: metric for metric in METRIC_DEFINITIONS}
 _LAST_VALUE_METRICS = {"motion.distance", "fuel.level"}
+
+
+@dataclass(frozen=True)
+class FaultPatternProfile:
+    locomotive_id: str
+    name: str
+    description: str
+    base_distance_km: float
+    metrics: dict[str, float]
+
+
+_PATTERN_BASE_VALUES: dict[str, float] = {
+    "motion.speed": 52.0,
+    "motion.acceleration": 0.0,
+    "motion.distance": 0.0,
+    "fuel.level": 58.0,
+    "fuel.consumption_rate": 140.0,
+    "thermal.coolant_temp": 86.0,
+    "thermal.oil_temp": 94.0,
+    "thermal.exhaust_temp": 420.0,
+    "pressure.brake_main": 8.2,
+    "pressure.brake_pipe": 5.1,
+    "pressure.oil": 3.8,
+    "electrical.traction_voltage": 2710.0,
+    "electrical.traction_current": 420.0,
+    "electrical.battery_voltage": 107.0,
+}
+
+FAULT_PATTERN_PROFILES: list[FaultPatternProfile] = [
+    FaultPatternProfile(
+        locomotive_id="KTZ-BRK-001",
+        name="Broken Stop",
+        description="Hard brake demand is present but speed does not decay.",
+        base_distance_km=1301.0,
+        metrics={
+            **_PATTERN_BASE_VALUES,
+            "motion.speed": 84.0,
+            "pressure.brake_main": 6.4,
+            "pressure.brake_pipe": 4.0,
+            "electrical.traction_current": 280.0,
+        },
+    ),
+    FaultPatternProfile(
+        locomotive_id="KTZ-PNE-002",
+        name="Pneumatic Pressure Loss",
+        description="Brake pipe and main reservoir pressure stay below safe braking support.",
+        base_distance_km=1308.0,
+        metrics={
+            **_PATTERN_BASE_VALUES,
+            "motion.speed": 76.0,
+            "pressure.brake_main": 6.2,
+            "pressure.brake_pipe": 3.9,
+            "electrical.traction_current": 250.0,
+        },
+    ),
+    FaultPatternProfile(
+        locomotive_id="KTZ-OIL-003",
+        name="Oil Starvation",
+        description="Lubrication pressure remains critically low while the locomotive is moving.",
+        base_distance_km=1315.0,
+        metrics={
+            **_PATTERN_BASE_VALUES,
+            "motion.speed": 58.0,
+            "pressure.oil": 1.6,
+            "thermal.oil_temp": 118.0,
+            "electrical.traction_current": 520.0,
+        },
+    ),
+    FaultPatternProfile(
+        locomotive_id="KTZ-THM-004",
+        name="Thermal Runaway",
+        description="Cooling, oil, and exhaust temperatures stay above the critical band.",
+        base_distance_km=1322.0,
+        metrics={
+            **_PATTERN_BASE_VALUES,
+            "motion.speed": 67.0,
+            "thermal.coolant_temp": 109.0,
+            "thermal.oil_temp": 138.0,
+            "thermal.exhaust_temp": 668.0,
+            "electrical.traction_current": 860.0,
+            "electrical.traction_voltage": 2570.0,
+        },
+    ),
+    FaultPatternProfile(
+        locomotive_id="KTZ-DRV-005",
+        name="High Current Low Acceleration",
+        description="Traction current remains high while acceleration is nearly flat.",
+        base_distance_km=1329.0,
+        metrics={
+            **_PATTERN_BASE_VALUES,
+            "motion.speed": 43.0,
+            "motion.acceleration": 0.01,
+            "electrical.traction_current": 980.0,
+            "electrical.traction_voltage": 2660.0,
+            "fuel.consumption_rate": 198.0,
+        },
+    ),
+    FaultPatternProfile(
+        locomotive_id="KTZ-VLT-006",
+        name="Voltage Dip Under Load",
+        description="Traction voltage sags persistently while current stays elevated.",
+        base_distance_km=1336.0,
+        metrics={
+            **_PATTERN_BASE_VALUES,
+            "motion.speed": 61.0,
+            "motion.acceleration": 0.03,
+            "electrical.traction_voltage": 2460.0,
+            "electrical.traction_current": 820.0,
+            "pressure.oil": 3.0,
+        },
+    ),
+    FaultPatternProfile(
+        locomotive_id="KTZ-AMP-007",
+        name="Traction Overcurrent",
+        description="Traction current stays beyond the warning threshold for the full run.",
+        base_distance_km=1343.0,
+        metrics={
+            **_PATTERN_BASE_VALUES,
+            "motion.speed": 73.0,
+            "motion.acceleration": 0.08,
+            "electrical.traction_current": 1710.0,
+            "electrical.traction_voltage": 2620.0,
+            "fuel.consumption_rate": 236.0,
+        },
+    ),
+    FaultPatternProfile(
+        locomotive_id="KTZ-FUL-008",
+        name="Fuel Starvation",
+        description="Fuel reserve begins below the critical reserve threshold and keeps falling.",
+        base_distance_km=1350.0,
+        metrics={
+            **_PATTERN_BASE_VALUES,
+            "motion.speed": 39.0,
+            "fuel.level": 7.8,
+            "fuel.consumption_rate": 185.0,
+            "electrical.traction_current": 460.0,
+        },
+    ),
+    FaultPatternProfile(
+        locomotive_id="KTZ-BRN-009",
+        name="Inefficient Burn",
+        description="Fuel burn is excessive for the sustained low-speed profile.",
+        base_distance_km=1357.0,
+        metrics={
+            **_PATTERN_BASE_VALUES,
+            "motion.speed": 12.0,
+            "fuel.level": 23.0,
+            "fuel.consumption_rate": 182.0,
+            "electrical.traction_current": 320.0,
+            "thermal.coolant_temp": 97.0,
+        },
+    ),
+    FaultPatternProfile(
+        locomotive_id="KTZ-MIX-010",
+        name="Compound Brake and Oil Fault",
+        description="Weak braking combines with low oil pressure and a modest voltage sag.",
+        base_distance_km=1364.0,
+        metrics={
+            **_PATTERN_BASE_VALUES,
+            "motion.speed": 66.0,
+            "pressure.brake_main": 6.7,
+            "pressure.brake_pipe": 4.2,
+            "pressure.oil": 1.9,
+            "electrical.traction_voltage": 2550.0,
+            "electrical.traction_current": 760.0,
+        },
+    ),
+]
 
 
 def _clamp(value: float, lower: float, upper: float) -> float:
@@ -353,3 +522,48 @@ def generate_frame() -> TelemetryFrame:
     if not state.raw_samples:
         prime_raw_samples()
     return aggregate_samples_to_frame(_recent_samples())
+
+
+def generate_fault_pattern_frame(
+    profile: FaultPatternProfile,
+    tick: int,
+    timestamp_ms: int | None = None,
+) -> TelemetryFrame:
+    timestamp = now_ms() if timestamp_ms is None else timestamp_ms
+    values = dict(profile.metrics)
+
+    speed_kmh = values["motion.speed"]
+    values["motion.distance"] = profile.base_distance_km + tick * speed_kmh / 3600.0
+    if profile.locomotive_id == "KTZ-FUL-008":
+        values["fuel.level"] = max(0.0, profile.metrics["fuel.level"] - tick * 0.02)
+
+    readings: list[MetricReading] = []
+    for metric in METRIC_DEFINITIONS:
+        metric_id = metric["metricId"]
+        value = values[metric_id]
+        readings.append(
+            MetricReading(
+                metric_id=metric_id,
+                value=round(value, metric.get("precision", 2)),
+                unit=metric["unit"],
+                timestamp=timestamp,
+                quality=_quality(value, metric),
+            )
+        )
+
+    return TelemetryFrame(
+        locomotive_id=profile.locomotive_id,
+        frame_id=f"{profile.locomotive_id}-pattern-{tick}",
+        timestamp=timestamp,
+        readings=readings,
+    )
+
+
+def generate_fault_pattern_frames(
+    tick: int,
+    timestamp_ms: int | None = None,
+) -> list[TelemetryFrame]:
+    return [
+        generate_fault_pattern_frame(profile=profile, tick=tick, timestamp_ms=timestamp_ms)
+        for profile in FAULT_PATTERN_PROFILES
+    ]

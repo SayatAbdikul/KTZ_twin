@@ -2,7 +2,7 @@ import type { Alert } from '@/types/alerts'
 
 let alertCounter = 100
 
-const ALERT_TEMPLATES: Omit<Alert, 'alertId' | 'triggeredAt' | 'status'>[] = [
+const ALERT_TEMPLATES: Omit<Alert, 'alertId' | 'triggeredAt' | 'status' | 'locomotiveId'>[] = [
   {
     severity: 'critical',
     source: 'engine',
@@ -47,6 +47,7 @@ const ALERT_TEMPLATES: Omit<Alert, 'alertId' | 'triggeredAt' | 'status'>[] = [
 export const INITIAL_ALERTS: Alert[] = [
   {
     alertId: 'alert-001',
+    locomotiveId: 'KTZ-2001',
     severity: 'warning',
     status: 'active',
     source: 'fuel',
@@ -58,6 +59,7 @@ export const INITIAL_ALERTS: Alert[] = [
   },
   {
     alertId: 'alert-002',
+    locomotiveId: 'KTZ-2001',
     severity: 'info',
     status: 'acknowledged',
     source: 'electrical',
@@ -70,12 +72,13 @@ export const INITIAL_ALERTS: Alert[] = [
   },
 ]
 
-export function generateRandomAlert(): Alert {
+export function generateRandomAlert(locomotiveId = 'KTZ-2001'): Alert {
   alertCounter++
   const template = ALERT_TEMPLATES[Math.floor(Math.random() * ALERT_TEMPLATES.length)]
   return {
     ...template,
     alertId: `alert-${alertCounter}`,
+    locomotiveId,
     status: 'active',
     triggeredAt: Date.now(),
   }

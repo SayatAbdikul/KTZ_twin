@@ -15,6 +15,8 @@ KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
 KAFKA_TOPIC_EVENTS = os.getenv("KAFKA_TOPIC_EVENTS", "ktz.locomotive.events")
 KAFKA_TOPIC_PARTITIONS = int(os.getenv("KAFKA_TOPIC_PARTITIONS", "100"))
 KAFKA_TOPIC_REPLICATION_FACTOR = int(os.getenv("KAFKA_TOPIC_REPLICATION_FACTOR", "1"))
+PATTERN_FLEET_ENABLED = os.getenv("PATTERN_FLEET_ENABLED", "true").lower() == "true"
+PATTERN_FLEET_INTERVAL_S = float(os.getenv("PATTERN_FLEET_INTERVAL_S", "1.0"))
 
 # Timing intervals (seconds)
 RAW_TELEMETRY_INTERVAL_S = float(os.getenv("RAW_TELEMETRY_INTERVAL_S", "0.1"))

@@ -1,4 +1,5 @@
 import { APP_CONFIG } from '@/config/app.config'
+import { useAuthStore } from '@/features/auth/useAuthStore'
 
 interface DownloadCsvOptions {
   path: string
@@ -44,8 +45,9 @@ export async function downloadCsv({
   const headers = new Headers()
   headers.set('Accept', 'text/csv')
 
-  if (APP_CONFIG.API_KEY) {
-    headers.set('X-API-Key', APP_CONFIG.API_KEY)
+  const token = useAuthStore.getState().token
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`)
   }
 
   const response = await fetch(buildUrl(baseUrl, path, params), {

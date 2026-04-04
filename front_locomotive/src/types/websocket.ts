@@ -1,4 +1,6 @@
 export type WsMessageType =
+  | 'dispatcher.snapshot'
+  | 'dispatcher.locomotive_status'
   | 'telemetry.frame'
   | 'health.update'
   | 'alert.new'

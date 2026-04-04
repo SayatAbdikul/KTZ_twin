@@ -20,10 +20,12 @@ from app.config import (
     ALERT_CHECK_BASE_S,
     MESSAGE_CHECK_BASE_S,
     LOCOMOTIVE_ID,
+    KAFKA_ENABLED,
+    PATTERN_FLEET_ENABLED,
+    PATTERN_FLEET_INTERVAL_S,
 )
 from app.models import make_event_envelope, now_ms
 from app.state import state
-from app.broker import publish_event
 from app.broker import publish_event
 
 
@@ -51,7 +53,8 @@ async def broadcast_message(msg_type: str, payload: object) -> None:
         "event": event.model_dump(),
     }
 
-    await publish_event(envelope=envelope, key=locomotive_id)
+    if not (KAFKA_ENABLED and PATTERN_FLEET_ENABLED and locomotive_id == LOCOMOTIVE_ID):
+        await publish_event(envelope=envelope, key=locomotive_id)
 
     if not state.ws_clients:
         return
@@ -130,3 +133,72 @@ async def task_message_generator() -> None:
             await broadcast_message(
                 "message.new", msg.model_dump(by_alias=True, exclude_none=True)
             )
+
+
+async def task_publish_fault_pattern_fleet() -> None:
+    """Publish 10 deterministic faulty locomotive streams to Kafka every second."""
+    if not KAFKA_ENABLED or not PATTERN_FLEET_ENABLED:
+        return
+
+    from app.simulator.telemetry import FAULT_PATTERN_PROFILES, generate_fault_pattern_frames
+
+    startup_timestamp = now_ms()
+    startup_messages = []
+    for profile in FAULT_PATTERN_PROFILES:
+        event = make_event_envelope(
+            event_type="message.new",
+            source="back_locomotive.pattern_fleet",
+            locomotive_id=profile.locomotive_id,
+            occurred_at=startup_timestamp,
+        )
+        startup_messages.append(
+            publish_event(
+                envelope={
+                    "type": "message.new",
+                    "payload": {
+                        "message_id": f"{profile.locomotive_id}-pattern",
+                        "locomotive_id": profile.locomotive_id,
+                        "priority": "high",
+                        "type": "assessment",
+                        "subject": profile.name,
+                        "body": profile.description,
+                        "sender_name": "Pattern Fleet Simulator",
+                        "sender": "Pattern Fleet Simulator",
+                        "sent_at": startup_timestamp,
+                    },
+                    "timestamp": startup_timestamp,
+                    "sequenceId": state.next_sequence(),
+                    "event": event.model_dump(),
+                },
+                key=profile.locomotive_id,
+            )
+        )
+    await asyncio.gather(*startup_messages)
+
+    tick = 0
+    while True:
+        timestamp = now_ms()
+        frames = generate_fault_pattern_frames(tick=tick, timestamp_ms=timestamp)
+        publishes = []
+        for frame in frames:
+            event = make_event_envelope(
+                event_type="telemetry.frame",
+                source="back_locomotive.pattern_fleet",
+                locomotive_id=frame.locomotive_id,
+                occurred_at=timestamp,
+            )
+            publishes.append(
+                publish_event(
+                    envelope={
+                        "type": "telemetry.frame",
+                        "payload": frame.model_dump(by_alias=True),
+                        "timestamp": timestamp,
+                        "sequenceId": state.next_sequence(),
+                        "event": event.model_dump(),
+                    },
+                    key=frame.locomotive_id,
+                )
+            )
+        await asyncio.gather(*publishes)
+        tick += 1
+        await asyncio.sleep(PATTERN_FLEET_INTERVAL_S)

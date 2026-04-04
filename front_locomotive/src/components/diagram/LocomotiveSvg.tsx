@@ -1,4 +1,5 @@
 import { useHealthStore } from '@/features/health/useHealthStore'
+import { useFleetStore } from '@/features/fleet/useFleetStore'
 import { DIAGRAM_ZONES } from '@/config/diagram.config'
 import { SvgZone } from './SvgZone'
 import type { SubsystemStatus } from '@/types/health'
@@ -27,8 +28,15 @@ export function LocomotiveSvg({
   onZoneClick,
   onMouseLeave,
 }: LocomotiveSvgProps) {
-  const healthIndex = useHealthStore((s) => s.healthIndex)
+  const selectedLocomotiveId = useFleetStore((s) => s.selectedLocomotiveId)
+  const healthIndex = useHealthStore((s) =>
+    selectedLocomotiveId ? s.byLocomotive[selectedLocomotiveId] ?? null : null
+  )
   const subsystems = healthIndex?.subsystems
+  const frontWheelXs = [178, 228, 278]
+  const rearWheelXs = [602, 652, 702]
+  const wheelY = 247
+  const wheelRadius = 15
 
   return (
     <svg
@@ -86,39 +94,40 @@ export function LocomotiveSvg({
 
         {/* Underframe */}
         <rect x="148" y="212" width="634" height="10" fill="#0f1120" stroke="#252d40" strokeWidth="1" />
+        <line x1="160" y1="221" x2="770" y2="221" stroke="#1e293b" strokeWidth="1" />
 
         {/* Front bogie frame */}
-        <rect x="155" y="222" width="118" height="8" rx="2" fill="#151928" stroke="#2d3a52" strokeWidth="1" />
+        <rect x="152" y="220" width="152" height="10" rx="3" fill="#151928" stroke="#2d3a52" strokeWidth="1" />
         {/* Rear bogie frame */}
-        <rect x="571" y="222" width="200" height="8" rx="2" fill="#151928" stroke="#2d3a52" strokeWidth="1" />
+        <rect x="576" y="220" width="152" height="10" rx="3" fill="#151928" stroke="#2d3a52" strokeWidth="1" />
 
-        {/* Axle connectors (front bogie) */}
-        <line x1="185" y1="222" x2="185" y2="232" stroke="#2d3a52" strokeWidth="2" />
-        <line x1="240" y1="222" x2="240" y2="232" stroke="#2d3a52" strokeWidth="2" />
-        {/* Axle connectors (rear bogie) */}
-        <line x1="610" y1="222" x2="610" y2="232" stroke="#2d3a52" strokeWidth="2" />
-        <line x1="660" y1="222" x2="660" y2="232" stroke="#2d3a52" strokeWidth="2" />
-        <line x1="733" y1="222" x2="733" y2="232" stroke="#2d3a52" strokeWidth="2" />
+        {/* Suspension blocks */}
+        {[164, 214, 264, 588, 638, 688].map((x) => (
+          <rect key={x} x={x} y="214" width="28" height="8" rx="2" fill="#0f172a" stroke="#334155" strokeWidth="1" />
+        ))}
 
-        {/* Wheels — front bogie (2 axles) */}
-        <circle cx="185" cy="248" r="15" fill="#141826" stroke="#475569" strokeWidth="2" />
-        <circle cx="185" cy="248" r="5" fill="#252d40" />
-        <circle cx="240" cy="248" r="15" fill="#141826" stroke="#475569" strokeWidth="2" />
-        <circle cx="240" cy="248" r="5" fill="#252d40" />
+        {/* Axle connectors */}
+        {[...frontWheelXs, ...rearWheelXs].map((x) => (
+          <g key={x}>
+            <line x1={x} y1="224" x2={x} y2="232" stroke="#475569" strokeWidth="2" />
+            <line x1={x - 14} y1="232" x2={x + 14} y2="232" stroke="#334155" strokeWidth="2" />
+          </g>
+        ))}
 
-        {/* Wheels — rear bogie (3 axles) */}
-        <circle cx="610" cy="248" r="15" fill="#141826" stroke="#475569" strokeWidth="2" />
-        <circle cx="610" cy="248" r="5" fill="#252d40" />
-        <circle cx="660" cy="248" r="15" fill="#141826" stroke="#475569" strokeWidth="2" />
-        <circle cx="660" cy="248" r="5" fill="#252d40" />
-        <circle cx="733" cy="248" r="15" fill="#141826" stroke="#475569" strokeWidth="2" />
-        <circle cx="733" cy="248" r="5" fill="#252d40" />
+        {/* Wheels */}
+        {[...frontWheelXs, ...rearWheelXs].map((x) => (
+          <g key={`wheel-${x}`}>
+            <circle cx={x} cy={wheelY} r={wheelRadius} fill="#141826" stroke="#475569" strokeWidth="2" />
+            <circle cx={x} cy={wheelY} r="5" fill="#252d40" />
+          </g>
+        ))}
 
         {/* Rail */}
-        <line x1="10" y1="263" x2="790" y2="263" stroke="#334155" strokeWidth="2.5" />
+        <line x1="10" y1="262" x2="790" y2="262" stroke="#475569" strokeWidth="2.5" />
+        <line x1="10" y1="266" x2="790" y2="266" stroke="#1e293b" strokeWidth="1.5" />
         {/* Rail ties */}
         {[20, 80, 140, 200, 260, 320, 380, 440, 500, 560, 620, 680, 740].map((x) => (
-          <rect key={x} x={x} y="261" width="25" height="5" fill="#252d40" />
+          <rect key={x} x={x} y="260" width="25" height="5" fill="#252d40" />
         ))}
 
         {/* Front pilot / snowplow */}

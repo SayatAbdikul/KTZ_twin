@@ -100,24 +100,13 @@ services:
         VITE_WS_URL: ${FRONT_LOCOMOTIVE_VITE_WS_URL}
         VITE_API_BASE_URL: ${FRONT_LOCOMOTIVE_VITE_API_BASE_URL}
         VITE_REPLAY_API_BASE_URL: ${FRONT_LOCOMOTIVE_VITE_REPLAY_API_BASE_URL}
-        VITE_API_KEY: ${FRONT_LOCOMOTIVE_VITE_API_KEY}
+        VITE_AUTH_API_BASE_URL: ${FRONT_LOCOMOTIVE_VITE_AUTH_API_BASE_URL}
         VITE_ENABLE_MOCKS: ${FRONT_LOCOMOTIVE_VITE_ENABLE_MOCKS}
     depends_on:
       - back_locomotive
-    ports:
-      - "${FRONT_LOCOMOTIVE_PORT}:80"
-    restart: unless-stopped
-
-  front_dispatcher:
-    build:
-      context: ./front_dispatcher
-      args:
-        VITE_WS_URL: ${FRONT_DISPATCHER_VITE_WS_URL}
-        VITE_API_KEY: ${FRONT_DISPATCHER_VITE_API_KEY}
-    depends_on:
       - back_dispatcher
     ports:
-      - "${FRONT_DISPATCHER_PORT}:80"
+      - "${FRONT_LOCOMOTIVE_PORT}:80"
     restart: unless-stopped
 
 volumes:

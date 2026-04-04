@@ -205,6 +205,7 @@ function buildHealthIndex(timestamp: number): HealthIndex {
   const overall = subsystems.reduce((sum, subsystem) => sum + subsystem.healthScore, 0) / subsystems.length
 
   return {
+    locomotiveId: MOCK_LOCOMOTIVE_ID,
     overall: Math.round(overall * 10) / 10,
     timestamp,
     subsystems,
@@ -236,6 +237,7 @@ function buildAlerts(timestamp: number): Alert[] {
       return [
         {
           alertId: `replay-${definition.metricId}`,
+          locomotiveId: MOCK_LOCOMOTIVE_ID,
           severity,
           status: 'active',
           source: definition.group,

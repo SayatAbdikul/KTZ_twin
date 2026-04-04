@@ -1,3 +1,4 @@
+import type { ComponentType } from 'react'
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard,
@@ -6,24 +7,58 @@ import {
   AlertTriangle,
   MessageSquare,
   History,
+  Radio,
 } from 'lucide-react'
 import { ROUTES } from '@/config/routes'
 import { useAlertStore } from '@/features/alerts/useAlertStore'
+import { useAuthStore } from '@/features/auth/useAuthStore'
 import { useMessageStore } from '@/features/dispatcher-messages/useMessageStore'
+import { useFleetStore } from '@/features/fleet/useFleetStore'
 import { cn } from '@/utils/cn'
+import type { AlertSummary } from '@/types/alerts'
+import type { UserRole } from '@/types/auth'
+import type { MessageSummary } from '@/types/messages'
 
-const NAV_ITEMS = [
+interface NavItem {
+  to: string
+  icon: ComponentType<{ size?: number }>
+  label: string
+  roles?: readonly UserRole[]
+}
+
+const NAV_ITEMS: NavItem[] = [
   { to: ROUTES.DASHBOARD, icon: LayoutDashboard, label: 'Dashboard' },
   { to: ROUTES.DIAGRAM, icon: Train, label: 'Diagram' },
   { to: ROUTES.TELEMETRY, icon: Activity, label: 'Telemetry' },
   { to: ROUTES.ALERTS, icon: AlertTriangle, label: 'Alerts' },
   { to: ROUTES.MESSAGES, icon: MessageSquare, label: 'Messages' },
   { to: ROUTES.REPLAY, icon: History, label: 'History' },
+  { to: ROUTES.DISPATCH, icon: Radio, label: 'Dispatch', roles: ['admin'] as const },
 ]
 
+const EMPTY_ALERT_SUMMARY: AlertSummary = {
+  criticalCount: 0,
+  warningCount: 0,
+  infoCount: 0,
+  totalActive: 0,
+}
+
+const EMPTY_MESSAGE_SUMMARY: MessageSummary = {
+  totalUnread: 0,
+  urgentUnread: 0,
+}
+
 export function Sidebar() {
-  const alertSummary = useAlertStore((s) => s.summary)
-  const messageSummary = useMessageStore((s) => s.summary)
+  const role = useAuthStore((state) => state.user?.role)
+  const selectedLocomotiveId = useFleetStore((s) => s.selectedLocomotiveId)
+  const alertSummaryByLocomotive = useAlertStore((s) => s.summaryByLocomotive)
+  const messageSummaryByLocomotive = useMessageStore((s) => s.summaryByLocomotive)
+  const alertSummary = selectedLocomotiveId
+    ? alertSummaryByLocomotive[selectedLocomotiveId] ?? EMPTY_ALERT_SUMMARY
+    : EMPTY_ALERT_SUMMARY
+  const messageSummary = selectedLocomotiveId
+    ? messageSummaryByLocomotive[selectedLocomotiveId] ?? EMPTY_MESSAGE_SUMMARY
+    : EMPTY_MESSAGE_SUMMARY
 
   const badges: Record<string, number> = {
     [ROUTES.ALERTS]: alertSummary.totalActive,
@@ -38,7 +73,7 @@ export function Sidebar() {
       </div>
 
       <nav className="flex flex-col gap-1">
-        {NAV_ITEMS.map(({ to, icon: Icon, label }) => {
+        {NAV_ITEMS.filter((item) => !item.roles || (role && item.roles.includes(role))).map(({ to, icon: Icon, label }) => {
           const badgeCount = badges[to] ?? 0
           return (
             <NavLink

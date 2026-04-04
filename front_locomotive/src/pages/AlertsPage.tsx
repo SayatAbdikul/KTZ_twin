@@ -1,15 +1,35 @@
 import { useState } from 'react'
 import { AlertTriangle } from 'lucide-react'
-import { useAlertStore } from '@/features/alerts/useAlertStore'
 import { AlertChip } from '@/components/alerts/AlertChip'
 import { ExportMenu } from '@/components/common/ExportMenu'
 import { PageContainer } from '@/components/layout/PageContainer'
+import { APP_CONFIG } from '@/config/app.config'
+import { useAlertStore } from '@/features/alerts/useAlertStore'
+import { useFleetStore } from '@/features/fleet/useFleetStore'
+import type { Alert, AlertSummary } from '@/types/alerts'
 import { downloadCsv } from '@/utils/exportCsv'
+
+const EMPTY_ALERTS: Alert[] = []
+const EMPTY_ALERT_SUMMARY: AlertSummary = {
+  criticalCount: 0,
+  warningCount: 0,
+  infoCount: 0,
+  totalActive: 0,
+}
 
 export function AlertsPage() {
   const [isExporting, setIsExporting] = useState(false)
-  const alerts = useAlertStore((s) => s.activeAlerts)
-  const summary = useAlertStore((s) => s.summary)
+  const selectedLocomotiveId = useFleetStore((s) => s.selectedLocomotiveId)
+  const alertsByLocomotive = useAlertStore((s) => s.alertsByLocomotive)
+  const summaryByLocomotive = useAlertStore((s) => s.summaryByLocomotive)
+  const alerts = selectedLocomotiveId
+    ? alertsByLocomotive[selectedLocomotiveId] ?? EMPTY_ALERTS
+    : EMPTY_ALERTS
+  const summary = selectedLocomotiveId
+    ? summaryByLocomotive[selectedLocomotiveId] ?? EMPTY_ALERT_SUMMARY
+    : EMPTY_ALERT_SUMMARY
+  const canExportCsv =
+    selectedLocomotiveId === null || selectedLocomotiveId === APP_CONFIG.LOCOMOTIVE_ID
 
   async function handleAlertsExport() {
     setIsExporting(true)
@@ -43,8 +63,10 @@ export function AlertsPage() {
               {
                 id: 'alerts-csv',
                 label: isExporting ? 'Exporting CSV...' : 'Export CSV',
-                description: 'Download the current alert feed as CSV.',
-                disabled: isExporting,
+                description: canExportCsv
+                  ? 'Download the current alert feed as CSV.'
+                  : `CSV export is only available for ${APP_CONFIG.LOCOMOTIVE_ID}.`,
+                disabled: isExporting || !canExportCsv,
                 onSelect: handleAlertsExport,
               },
             ]}

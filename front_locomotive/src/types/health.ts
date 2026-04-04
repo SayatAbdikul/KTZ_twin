@@ -21,6 +21,7 @@ export interface SubsystemHealth {
 }
 
 export interface HealthIndex {
+  locomotiveId: string
   overall: number
   timestamp: number
   subsystems: SubsystemHealth[]

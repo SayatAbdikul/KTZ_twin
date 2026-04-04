@@ -9,6 +9,7 @@ export interface MessageAttachment {
 
 export interface DispatcherMessage {
   messageId: string
+  locomotiveId: string
   priority: MessagePriority
   type: MessageType
   subject: string

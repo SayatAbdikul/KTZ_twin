@@ -31,13 +31,13 @@ function nextValue(metricId: string, def: { min: number; max: number }): number 
   return next
 }
 
-export function generateTelemetryFrame(): TelemetryFrame {
+export function generateTelemetryFrame(locomotiveId = 'KTZ-2001'): TelemetryFrame {
   frameCounter++
   const ts = Date.now()
 
   return {
-    locomotiveId: 'KTZ-2001',
-    frameId: `frame-${frameCounter}`,
+    locomotiveId,
+    frameId: `${locomotiveId}-frame-${frameCounter}`,
     timestamp: ts,
     readings: METRIC_DEFINITIONS.map((def) => ({
       metricId: def.metricId,

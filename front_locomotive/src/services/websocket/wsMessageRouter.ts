@@ -4,18 +4,12 @@ import { useHealthStore } from '@/features/health/useHealthStore'
 import { useAlertStore } from '@/features/alerts/useAlertStore'
 import { useMessageStore } from '@/features/dispatcher-messages/useMessageStore'
 import { useConnectionStore } from '@/features/connection/useConnectionStore'
-import { APP_CONFIG } from '@/config/app.config'
+import { useFleetStore } from '@/features/fleet/useFleetStore'
+import { adaptDispatchChatMessage, useDispatchConsoleStore } from '@/features/dispatch-console/useDispatchConsoleStore'
 import { adaptTelemetryFrame } from '@/services/adapters/telemetryAdapter'
 import { adaptAlert } from '@/services/adapters/alertAdapter'
 import { adaptHealthIndex } from '@/services/adapters/healthAdapter'
 import { adaptMessage } from '@/services/adapters/messageAdapter'
-
-function belongsToConfiguredLocomotive(payload: unknown): boolean {
-  const data = payload as Record<string, unknown>
-  const locomotiveId = data['locomotive_id'] ?? data['locomotiveId']
-  if (!locomotiveId) return true
-  return String(locomotiveId) === APP_CONFIG.LOCOMOTIVE_ID
-}
 
 export function routeWsMessage(raw: string): void {
   let msg: WsMessage
@@ -27,40 +21,89 @@ export function routeWsMessage(raw: string): void {
   }
 
   switch (msg.type) {
+    case 'dispatcher.snapshot': {
+      const payload = msg.payload as { locomotives?: Array<Record<string, unknown>> }
+      useFleetStore.getState().applyDispatcherSnapshot(
+        (payload.locomotives ?? []).map((item) => ({
+          locomotiveId: String(item['locomotiveId'] ?? item['locomotive_id'] ?? ''),
+          wsUrl: item['wsUrl'] as string | undefined,
+          connected: item['connected'] as boolean | undefined,
+          lastSeenAt: (item['lastSeenAt'] ?? item['last_seen_at'] ?? null) as number | null,
+          reconnectAttempt: (item['reconnectAttempt'] ?? item['reconnect_attempt'] ?? 0) as number,
+          hasTelemetry: item['hasTelemetry'] as boolean | undefined,
+        }))
+      )
+      break
+    }
+    case 'dispatcher.locomotive_status': {
+      const payload = msg.payload as Record<string, unknown>
+      useFleetStore.getState().applyConnectionStatus({
+        locomotiveId: String(payload['locomotiveId'] ?? payload['locomotive_id'] ?? ''),
+        wsUrl: payload['wsUrl'] as string | undefined,
+        connected: payload['connected'] as boolean | undefined,
+        lastSeenAt: (payload['lastSeenAt'] ?? payload['last_seen_at'] ?? null) as number | null,
+        reconnectAttempt: (payload['reconnectAttempt'] ?? payload['reconnect_attempt'] ?? 0) as number,
+      })
+      break
+    }
     case 'telemetry.frame':
-      if (belongsToConfiguredLocomotive(msg.payload)) {
-        useTelemetryStore.getState().applyFrame(adaptTelemetryFrame(msg.payload))
+      {
+        const frame = adaptTelemetryFrame(msg.payload)
+        useTelemetryStore.getState().applyFrame(frame)
+        useFleetStore.getState().applyTelemetryFrame(frame)
       }
       break
     case 'health.update':
-      if (belongsToConfiguredLocomotive(msg.payload)) {
-        useHealthStore.getState().applyUpdate(adaptHealthIndex(msg.payload))
+      {
+        const index = adaptHealthIndex(msg.payload, msg.event?.locomotive_id)
+        useHealthStore.getState().applyUpdate(index)
+        useFleetStore.getState().applyHealthIndex(index)
       }
       break
     case 'alert.new':
-      if (belongsToConfiguredLocomotive(msg.payload)) {
-        useAlertStore.getState().addAlert(adaptAlert(msg.payload))
+      {
+        const alert = adaptAlert(msg.payload, msg.event?.locomotive_id)
+        useAlertStore.getState().addAlert(alert)
+        const summary = useAlertStore.getState().summaryByLocomotive[alert.locomotiveId]
+        useFleetStore
+          .getState()
+          .setAlertCount(alert.locomotiveId, summary?.totalActive ?? 0)
       }
       break
     case 'alert.update':
-      if (belongsToConfiguredLocomotive(msg.payload)) {
-        useAlertStore.getState().updateAlert(adaptAlert(msg.payload))
+      {
+        const alert = adaptAlert(msg.payload, msg.event?.locomotive_id)
+        useAlertStore.getState().updateAlert(alert)
+        const summary = useAlertStore.getState().summaryByLocomotive[alert.locomotiveId]
+        useFleetStore
+          .getState()
+          .setAlertCount(alert.locomotiveId, summary?.totalActive ?? 0)
       }
       break
     case 'alert.resolved': {
-      if (belongsToConfiguredLocomotive(msg.payload)) {
-        const p = msg.payload as { alertId?: string; alert_id?: string; resolvedAt?: number; resolved_at?: number }
-        useAlertStore.getState().resolveAlert(
-          String(p.alertId ?? p.alert_id ?? ''),
-          Number(p.resolvedAt ?? p.resolved_at ?? Date.now())
-        )
+      const p = msg.payload as {
+        alertId?: string
+        alert_id?: string
+        resolvedAt?: number
+        resolved_at?: number
+        locomotiveId?: string
+        locomotive_id?: string
       }
+      const locomotiveId = String(p.locomotiveId ?? p.locomotive_id ?? msg.event?.locomotive_id ?? '')
+      useAlertStore.getState().resolveAlert(
+        locomotiveId,
+        String(p.alertId ?? p.alert_id ?? ''),
+        Number(p.resolvedAt ?? p.resolved_at ?? Date.now())
+      )
+      const summary = useAlertStore.getState().summaryByLocomotive[locomotiveId]
+      useFleetStore
+        .getState()
+        .setAlertCount(locomotiveId, summary?.totalActive ?? 0)
       break
     }
     case 'message.new':
-      if (belongsToConfiguredLocomotive(msg.payload)) {
-        useMessageStore.getState().addMessage(adaptMessage(msg.payload))
-      }
+      useDispatchConsoleStore.getState().addChatMessage(adaptDispatchChatMessage(msg.payload, msg.event?.locomotive_id))
+      useMessageStore.getState().addMessage(adaptMessage(msg.payload, msg.event?.locomotive_id))
       break
     case 'connection.heartbeat': {
       const p = msg.payload as { serverTime: number }

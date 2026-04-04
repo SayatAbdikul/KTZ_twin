@@ -1,17 +1,25 @@
 import { MessageSquare } from 'lucide-react'
 import { useMessageStore } from '@/features/dispatcher-messages/useMessageStore'
+import { useFleetStore } from '@/features/fleet/useFleetStore'
 import { MessageCard } from '@/components/messaging/MessageCard'
 import { endpoints } from '@/services/api/endpoints'
 import { PageContainer } from '@/components/layout/PageContainer'
+import type { DispatcherMessage } from '@/types/messages'
+
+const EMPTY_MESSAGES: DispatcherMessage[] = []
 
 export function MessagesPage() {
-  const messages = useMessageStore((s) => s.messages)
+  const selectedLocomotiveId = useFleetStore((s) => s.selectedLocomotiveId)
+  const messagesByLocomotive = useMessageStore((s) => s.messagesByLocomotive)
+  const messages = selectedLocomotiveId
+    ? messagesByLocomotive[selectedLocomotiveId] ?? EMPTY_MESSAGES
+    : EMPTY_MESSAGES
   const { markAcknowledged } = useMessageStore()
 
-  async function handleAcknowledge(messageId: string) {
+  async function handleAcknowledge(messageId: string, locomotiveId: string) {
     try {
       await endpoints.messages.acknowledge(messageId)
-      markAcknowledged(messageId)
+      markAcknowledged(locomotiveId, messageId)
     } catch {
       // silent
     }
@@ -31,7 +39,11 @@ export function MessagesPage() {
           </div>
         ) : (
           messages.map((msg) => (
-            <MessageCard key={msg.messageId} message={msg} onAcknowledge={handleAcknowledge} />
+            <MessageCard
+              key={msg.messageId}
+              message={msg}
+              onAcknowledge={(messageId) => handleAcknowledge(messageId, msg.locomotiveId)}
+            />
           ))
         )}
       </div>

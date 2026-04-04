@@ -1,17 +1,33 @@
 import { useAlertStore } from '@/features/alerts/useAlertStore'
+import { useFleetStore } from '@/features/fleet/useFleetStore'
 import { AlertChip } from './AlertChip'
 import { ROUTES } from '@/config/routes'
 import { SectionHeader } from '@/components/common/SectionHeader'
+import type { Alert, AlertSummary } from '@/types/alerts'
 
 interface AlertFeedProps {
   maxVisible?: number
 }
 
+const EMPTY_ALERTS: Alert[] = []
+const EMPTY_ALERT_SUMMARY: AlertSummary = {
+  criticalCount: 0,
+  warningCount: 0,
+  infoCount: 0,
+  totalActive: 0,
+}
+
 export function AlertFeed({ maxVisible = 5 }: AlertFeedProps) {
-  // Select raw array (stable ref), compute filter/slice in render body to avoid new-array-per-render loop
-  const allAlerts = useAlertStore((s) => s.activeAlerts)
+  const selectedLocomotiveId = useFleetStore((s) => s.selectedLocomotiveId)
+  const alertsByLocomotive = useAlertStore((s) => s.alertsByLocomotive)
+  const summaryByLocomotive = useAlertStore((s) => s.summaryByLocomotive)
+  const allAlerts = selectedLocomotiveId
+    ? alertsByLocomotive[selectedLocomotiveId] ?? EMPTY_ALERTS
+    : EMPTY_ALERTS
   const alerts = allAlerts.filter((a) => a.status !== 'resolved').slice(0, maxVisible)
-  const summary = useAlertStore((s) => s.summary)
+  const summary = selectedLocomotiveId
+    ? summaryByLocomotive[selectedLocomotiveId] ?? EMPTY_ALERT_SUMMARY
+    : EMPTY_ALERT_SUMMARY
 
   return (
     <div className="flex flex-col">
