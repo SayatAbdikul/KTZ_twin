@@ -49,11 +49,30 @@ class DispatcherState:
         self.chat_history: dict[str, list[dict]] = defaultdict(list)
         self.stats = DispatcherStats()
         self._lock = asyncio.Lock()
+        self._event_dedupe_lock = asyncio.Lock()
+        self._seen_event_ids: deque[str] = deque(maxlen=20_000)
+        self._seen_event_lookup: set[str] = set()
 
     async def next_sequence(self) -> int:
         async with self._lock:
             self.sequence_id += 1
             return self.sequence_id
+
+    async def accept_event(self, event_id: str | None) -> bool:
+        if not event_id:
+            return True
+
+        async with self._event_dedupe_lock:
+            if event_id in self._seen_event_lookup:
+                return False
+
+            if len(self._seen_event_ids) == self._seen_event_ids.maxlen:
+                evicted = self._seen_event_ids.popleft()
+                self._seen_event_lookup.discard(evicted)
+
+            self._seen_event_ids.append(event_id)
+            self._seen_event_lookup.add(event_id)
+            return True
 
     def note_ws_connected(self) -> None:
         self.stats.ws_accept_total += 1

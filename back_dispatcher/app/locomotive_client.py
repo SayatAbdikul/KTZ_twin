@@ -11,7 +11,14 @@ from pydantic import ValidationError
 from app.config import PING_INTERVAL_S, RECONNECT_BASE_S, RECONNECT_MAX_S, TELEMETRY_RETENTION_HOURS, LocomotiveTarget
 from app.health_engine import evaluate_runtime
 from app.models import WsEnvelope, now_ms
-from app.repository import prune_telemetry, save_alert_event, save_incoming_message, save_telemetry_frame
+from app.repository import (
+    prune_health_snapshots,
+    prune_telemetry,
+    save_alert_event,
+    save_health_snapshot,
+    save_incoming_message,
+    save_telemetry_frame,
+)
 from app.state import state
 from app.ws_server import broadcast_message
 
@@ -21,11 +28,20 @@ _frames_since_prune = 0
 _PRUNE_EVERY_FRAMES = 60
 
 
-async def _forward_locomotive_message(locomotive_id: str, msg: dict[str, Any]) -> None:
+async def _forward_locomotive_message(
+    locomotive_id: str,
+    msg: dict[str, Any],
+    *,
+    event_id: str | None = None,
+) -> None:
     global _frames_since_prune
 
     msg_type = str(msg.get("type", ""))
     payload = msg.get("payload", {})
+
+    if not await state.accept_event(event_id):
+        logger.debug("Skipping duplicate dispatcher ingest event %s for locomotive %s", event_id, locomotive_id)
+        return
 
     runtime = state.locomotives[locomotive_id]
     runtime.last_seen_at = now_ms()
@@ -35,7 +51,7 @@ async def _forward_locomotive_message(locomotive_id: str, msg: dict[str, Any]) -
         # Normalize to expected multi-locomotive frame shape.
         payload.setdefault("locomotive_id", locomotive_id)
         try:
-            save_telemetry_frame(payload)
+            save_telemetry_frame(payload, source_event_id=event_id)
         except Exception as exc:
             logger.warning("Failed to persist telemetry frame: %s", exc)
 
@@ -49,6 +65,16 @@ async def _forward_locomotive_message(locomotive_id: str, msg: dict[str, Any]) -
                     logger.info("Telemetry retention cleanup removed %d rows older than %d hours", deleted, TELEMETRY_RETENTION_HOURS)
             except Exception as exc:
                 logger.warning("Telemetry retention cleanup failed: %s", exc)
+            try:
+                deleted = prune_health_snapshots(cutoff)
+                if deleted > 0:
+                    logger.info(
+                        "Health snapshot retention cleanup removed %d rows older than %d hours",
+                        deleted,
+                        TELEMETRY_RETENTION_HOURS,
+                    )
+            except Exception as exc:
+                logger.warning("Health snapshot retention cleanup failed: %s", exc)
 
         runtime.latest_telemetry = payload
         evaluation = evaluate_runtime(
@@ -60,6 +86,15 @@ async def _forward_locomotive_message(locomotive_id: str, msg: dict[str, Any]) -
         runtime.latest_metrics = evaluation["metrics"]
         runtime.health_index = evaluation["health_index"]
         runtime.active_alerts = evaluation["alerts"]
+        try:
+            save_health_snapshot(
+                locomotive_id=locomotive_id,
+                timestamp_ms=int(payload.get("timestamp") or now_ms()),
+                source_event_id=event_id,
+                payload=runtime.health_index,
+            )
+        except Exception as exc:
+            logger.warning("Failed to persist health snapshot: %s", exc)
 
         await broadcast_message("telemetry.frame", payload, locomotive_id=locomotive_id)
         await broadcast_message("health.update", runtime.health_index, locomotive_id=locomotive_id)
@@ -160,6 +195,7 @@ async def connect_locomotive_forever(target: LocomotiveTarget) -> None:
                                     "type": envelope.type,
                                     "payload": envelope.payload,
                                 },
+                                event_id=envelope.event.event_id,
                             )
                     except json.JSONDecodeError:
                         logger.warning("Malformed WS frame from %s", target.locomotive_id)
