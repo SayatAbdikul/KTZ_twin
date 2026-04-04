@@ -15,6 +15,8 @@ from app.models import EventEnvelopeV1
 logger = logging.getLogger(__name__)
 
 _producer: AIOKafkaProducer | None = None
+_published_count = 0
+_PUBLISH_LOG_EVERY = 100
 
 
 async def start_broker() -> None:
@@ -69,6 +71,8 @@ async def stop_broker() -> None:
 
 
 async def publish_event(*, envelope: dict[str, Any], key: str) -> None:
+    global _published_count
+
     if not KAFKA_ENABLED or _producer is None:
         return
 
@@ -93,5 +97,12 @@ async def publish_event(*, envelope: dict[str, Any], key: str) -> None:
             value=envelope,
             key=key.encode("utf-8"),
         )
+        _published_count += 1
+        if _published_count % _PUBLISH_LOG_EVERY == 0:
+            logger.info(
+                "Kafka producer published %d messages to topic=%s",
+                _published_count,
+                KAFKA_TOPIC_EVENTS,
+            )
     except Exception as exc:
         logger.warning("Kafka publish failed: %s", exc)

@@ -3,8 +3,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 
 from aiokafka import AIOKafkaConsumer
+from aiokafka.structs import TopicPartition
 from pydantic import ValidationError
 
 from app.config import KAFKA_BOOTSTRAP_SERVERS, KAFKA_GROUP_ID, KAFKA_TOPIC_EVENTS
@@ -13,8 +15,14 @@ from app.models import WsEnvelope
 
 logger = logging.getLogger(__name__)
 
+_PROCESSED_LOG_EVERY = 100
+_LAG_LOG_INTERVAL_S = 10.0
+
 
 async def consume_kafka_forever() -> None:
+    processed_count = 0
+    last_lag_log_at = 0.0
+
     while True:
         consumer = AIOKafkaConsumer(
             KAFKA_TOPIC_EVENTS,
@@ -63,6 +71,33 @@ async def consume_kafka_forever() -> None:
                         "payload": envelope.payload,
                     },
                 )
+
+                processed_count += 1
+                if processed_count % _PROCESSED_LOG_EVERY == 0:
+                    logger.info(
+                        "Kafka consumer processed %d messages from topic=%s",
+                        processed_count,
+                        KAFKA_TOPIC_EVENTS,
+                    )
+
+                now = time.monotonic()
+                if now - last_lag_log_at >= _LAG_LOG_INTERVAL_S:
+                    tp = TopicPartition(message.topic, message.partition)
+                    try:
+                        end_offset = (await consumer.end_offsets([tp])).get(tp)
+                        if end_offset is not None:
+                            lag = max(0, end_offset - (message.offset + 1))
+                            logger.info(
+                                "Kafka consumer lag snapshot: topic=%s partition=%s lag=%s current_offset=%s end_offset=%s",
+                                message.topic,
+                                message.partition,
+                                lag,
+                                message.offset,
+                                end_offset,
+                            )
+                    except Exception as exc:
+                        logger.warning("Kafka lag snapshot failed: %s", exc)
+                    last_lag_log_at = now
         except Exception as exc:
             logger.warning("Kafka consumer loop error: %s", exc)
             await asyncio.sleep(2)
