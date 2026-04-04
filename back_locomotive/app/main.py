@@ -17,6 +17,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.broker import start_broker, stop_broker
 from app.config import CORS_ORIGINS
 from app.simulator.health import generate_health_index
 from app.simulator.telemetry import generate_frame
@@ -43,6 +44,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Initialising KTZ Locomotive Telemetry Server…")
+    await start_broker()
 
     # Generate first snapshot so REST endpoints are ready immediately
     generate_frame()
@@ -65,6 +67,7 @@ async def lifespan(app: FastAPI):
     for t in tasks:
         t.cancel()
     await asyncio.gather(*tasks, return_exceptions=True)
+    await stop_broker()
     logger.info("Shutdown complete.")
 
 

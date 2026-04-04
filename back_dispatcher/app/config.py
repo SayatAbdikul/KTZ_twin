@@ -30,3 +30,9 @@ LOCOMOTIVE_TARGETS = _parse_locomotive_targets()
 RECONNECT_BASE_S = float(os.getenv("RECONNECT_BASE_S", "1"))
 RECONNECT_MAX_S = float(os.getenv("RECONNECT_MAX_S", "30"))
 PING_INTERVAL_S = float(os.getenv("PING_INTERVAL_S", "20"))
+
+# Ingest mode: ws | kafka | hybrid
+INGEST_MODE = os.getenv("INGEST_MODE", "ws").strip().lower()
+KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
+KAFKA_TOPIC_EVENTS = os.getenv("KAFKA_TOPIC_EVENTS", "ktz.locomotive.events")
+KAFKA_GROUP_ID = os.getenv("KAFKA_GROUP_ID", "ktz-dispatcher")

@@ -27,6 +27,10 @@ front_locomotive  --WS-->  back_dispatcher  --WS-->  back_locomotive
 front_dispatcher  --WS-->  back_dispatcher
 
 front_locomotive  --HTTP--> back_locomotive   (legacy / partial)
+
+Optional stream path:
+
+back_locomotive --Kafka--> back_dispatcher
 ```
 
 Important: the codebase still contains two different architectural ideas:
@@ -37,8 +41,7 @@ Important: the codebase still contains two different architectural ideas:
   - dispatcher computes health and alerts from raw telemetry rules
 - the currently implemented runtime:
   - `back_locomotive` is still an in-memory simulator
-  - `back_dispatcher` connects to locomotive services over WebSocket
-  - Kafka is not implemented in the current source tree
+  - `back_dispatcher` connects to locomotive services over WebSocket and/or Kafka
 
 So this document separates "current implementation" from "target contracts".
 
@@ -194,6 +197,8 @@ Validation rules implemented:
 - consumer rejects unsupported `schema_version`
 - consumer rejects `event_type` mismatch with transport `type`
 - consumer rejects `locomotive_id` mismatch for the current target stream
+
+These validation rules are applied in both dispatcher WS ingestion and dispatcher Kafka ingestion paths.
 
 ## 5. `back_locomotive` Contracts
 

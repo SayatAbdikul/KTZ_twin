@@ -9,7 +9,8 @@ from typing import Any
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.config import CORS_ORIGINS, LOCOMOTIVE_TARGETS
+from app.config import CORS_ORIGINS, INGEST_MODE, LOCOMOTIVE_TARGETS
+from app.kafka_consumer import consume_kafka_forever
 from app.locomotive_client import connect_locomotive_forever, send_chat_to_locomotive
 from app.models import now_ms
 from app.routes import health, locomotives
@@ -44,11 +45,20 @@ async def lifespan(app: FastAPI):
     for target in LOCOMOTIVE_TARGETS:
         state.locomotives[target.locomotive_id] = LocomotiveRuntime(target=target)
 
-    tasks = [
-        asyncio.create_task(connect_locomotive_forever(target), name=f"loco-{target.locomotive_id}")
-        for target in LOCOMOTIVE_TARGETS
-    ]
-    logger.info("Dispatcher started with %d locomotive targets", len(LOCOMOTIVE_TARGETS))
+    tasks = []
+    if INGEST_MODE in ("ws", "hybrid"):
+        tasks.extend(
+            asyncio.create_task(connect_locomotive_forever(target), name=f"loco-{target.locomotive_id}")
+            for target in LOCOMOTIVE_TARGETS
+        )
+    if INGEST_MODE in ("kafka", "hybrid"):
+        tasks.append(asyncio.create_task(consume_kafka_forever(), name="kafka-consumer"))
+
+    logger.info(
+        "Dispatcher started with ingest mode=%s and %d locomotive targets",
+        INGEST_MODE,
+        len(LOCOMOTIVE_TARGETS),
+    )
 
     yield
 

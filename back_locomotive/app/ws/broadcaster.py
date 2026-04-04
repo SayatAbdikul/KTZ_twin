@@ -21,6 +21,7 @@ from app.config import (
 )
 from app.models import make_event_envelope, now_ms
 from app.state import state
+from app.broker import publish_event
 
 
 # ---------------------------------------------------------------------------
@@ -39,18 +40,20 @@ async def broadcast_message(msg_type: str, payload: object) -> None:
         locomotive_id=locomotive_id,
     )
 
+    envelope = {
+        "type": msg_type,
+        "payload": payload,
+        "timestamp": now_ms(),
+        "sequenceId": state.next_sequence(),
+        "event": event.model_dump(),
+    }
+
+    await publish_event(envelope=envelope, key=locomotive_id)
+
     if not state.ws_clients:
         return
 
-    data = json.dumps(
-        {
-            "type": msg_type,
-            "payload": payload,
-            "timestamp": now_ms(),
-            "sequenceId": state.next_sequence(),
-            "event": event.model_dump(),
-        }
-    )
+    data = json.dumps(envelope)
 
     dead = []
     for ws in list(state.ws_clients):
