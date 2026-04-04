@@ -2,6 +2,7 @@ import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import { Providers } from './providers'
 import { AppShell } from '@/components/layout/AppShell'
 import { DashboardPage } from '@/pages/DashboardPage'
+import { DiagramPage } from '@/pages/DiagramPage'
 import { TelemetryPage } from '@/pages/TelemetryPage'
 import { AlertsPage } from '@/pages/AlertsPage'
 import { MessagesPage } from '@/pages/MessagesPage'
@@ -14,6 +15,7 @@ const router = createBrowserRouter([
     element: <RootWithWs />,
     children: [
       { index: true, element: <DashboardPage /> },
+      { path: ROUTES.DIAGRAM, element: <DiagramPage /> },
       { path: ROUTES.TELEMETRY, element: <TelemetryPage /> },
       { path: ROUTES.ALERTS, element: <AlertsPage /> },
       { path: ROUTES.MESSAGES, element: <MessagesPage /> },
