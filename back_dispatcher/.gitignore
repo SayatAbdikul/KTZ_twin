@@ -1,6 +1,11 @@
 # Python cache
 __pycache__/
 *.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
 # Environments
 .venv/
@@ -9,6 +14,11 @@ venv/
 # Env files
 .env
 .env.*
+.env*
 
 # Logs
 *.log
+
+# Editor and OS files
+.vscode/
+.DS_Store

@@ -1,7 +1,6 @@
 services:
   kafka:
     image: confluentinc/cp-kafka:7.6.1
-    container_name: ktz-kafka
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
@@ -17,11 +16,10 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
     ports:
-      - "9092:9092"
+      - "${KAFKA_PORT}:9092"
 
   timescaledb:
     image: timescale/timescaledb:2.15.3-pg16
-    container_name: ktz-timescaledb
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -40,7 +38,6 @@ services:
   back_locomotive:
     build:
       context: ./back_locomotive
-    container_name: ktz-back-locomotive
     command: ["sh", "-lc", "uvicorn app.main:app --host \"$LOCOMOTIVE_HOST\" --port \"$LOCOMOTIVE_PORT\""]
     environment:
       LOCOMOTIVE_HOST: ${LOCOMOTIVE_HOST}
@@ -64,7 +61,6 @@ services:
   back_dispatcher:
     build:
       context: ./back_dispatcher
-    container_name: ktz-back-dispatcher
     command: ["sh", "-lc", "alembic -c app/alembic.ini upgrade head && uvicorn app.main:app --host \"$DISPATCHER_HOST\" --port \"$DISPATCHER_PORT\""]
     depends_on:
       back_locomotive:
@@ -106,7 +102,6 @@ services:
         VITE_REPLAY_API_BASE_URL: ${FRONT_LOCOMOTIVE_VITE_REPLAY_API_BASE_URL}
         VITE_API_KEY: ${FRONT_LOCOMOTIVE_VITE_API_KEY}
         VITE_ENABLE_MOCKS: ${FRONT_LOCOMOTIVE_VITE_ENABLE_MOCKS}
-    container_name: ktz-front-locomotive
     depends_on:
       - back_locomotive
     ports:
@@ -119,7 +114,6 @@ services:
       args:
         VITE_WS_URL: ${FRONT_DISPATCHER_VITE_WS_URL}
         VITE_API_KEY: ${FRONT_DISPATCHER_VITE_API_KEY}
-    container_name: ktz-front-dispatcher
     depends_on:
       - back_dispatcher
     ports:
