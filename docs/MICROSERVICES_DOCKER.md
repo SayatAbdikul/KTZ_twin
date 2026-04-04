@@ -3,6 +3,7 @@
 This stack simulates the current microservice split:
 
 - `kafka`: message broker for service-to-service event streaming
+- `timescaledb`: operational datastore for dispatcher commands, messages, and alert events
 - `back_locomotive`: generates synthetic telemetry and streams frontend frames over WebSocket
 - `back_dispatcher`: consumes the locomotive WebSocket stream, keeps latest locomotive state, streams dispatcher updates over WebSocket
 - `front_locomotive`: browser UI for locomotive telemetry
@@ -37,6 +38,7 @@ Stop everything:
 ## Exposed Ports
 
 - `9092`: `kafka`
+- `5432`: `timescaledb`
 - `9092`: `kafka`
 - `3001`: `back_locomotive`
 - `3010`: `back_dispatcher`
@@ -53,7 +55,35 @@ Update that file if you need to change:
 - dispatcher target WebSocket URLs
 - ingest mode (`INGEST_MODE=ws|kafka|hybrid`)
 - Kafka connection and topic settings
+- database credentials and `DATABASE_URL`
+- telemetry retention settings (`TELEMETRY_RETENTION_HOURS`)
 - frontend build-time API / WebSocket endpoints
+
+## Dispatcher DB Slice
+
+Dispatcher persists the following entities to TimescaleDB/PostgreSQL:
+
+- dispatcher commands (`dispatcher_commands`)
+- incoming locomotive messages (`incoming_messages`)
+- alert lifecycle events (`alert_events`)
+- short-term telemetry points (`telemetry_points`)
+
+Telemetry retention is controlled via `TELEMETRY_RETENTION_HOURS` (recommended 24-72).
+
+Recent telemetry API for dashboards:
+
+- `GET /api/locomotives/{locomotive_id}/telemetry/recent?minutes=5`
+- `GET /api/locomotives/{locomotive_id}/telemetry/recent?minutes=15&metricId=motion.speed`
+
+The `minutes` query is bounded by `RECENT_TELEMETRY_MAX_MINUTES` (default 15).
+
+Alembic baseline files are in `back_dispatcher/app/alembic`.
+
+Run migrations locally from `back_dispatcher` (after installing requirements):
+
+```bash
+alembic -c app/alembic.ini upgrade head
+```
 
 ## Notes
 

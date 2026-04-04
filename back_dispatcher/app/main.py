@@ -11,8 +11,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import CORS_ORIGINS, INGEST_MODE, LOCOMOTIVE_TARGETS
 from app.kafka_consumer import consume_kafka_forever
+from app.db import init_db_schema, wait_for_db
 from app.locomotive_client import connect_locomotive_forever, send_chat_to_locomotive
 from app.models import now_ms
+from app.repository import save_dispatcher_command
 from app.routes import health, locomotives
 from app.state import LocomotiveRuntime, state
 from app.ws_server import broadcast_message, send_connection_snapshot, send_locomotive_snapshot
@@ -37,11 +39,19 @@ async def _handle_dispatcher_command(payload: dict[str, Any]) -> None:
     delivered = await send_chat_to_locomotive(locomotive_id, body)
     event["delivered"] = delivered
     state.chat_history[locomotive_id].append(event)
+    try:
+        save_dispatcher_command(event)
+    except Exception as exc:
+        logger.warning("Failed to persist dispatcher command: %s", exc)
     await broadcast_message("message.new", event)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if not wait_for_db():
+        raise RuntimeError("Database not reachable after startup retries")
+    init_db_schema()
+
     for target in LOCOMOTIVE_TARGETS:
         state.locomotives[target.locomotive_id] = LocomotiveRuntime(target=target)
 
