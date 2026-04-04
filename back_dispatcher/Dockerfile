@@ -12,4 +12,4 @@ COPY app ./app
 
 EXPOSE 3010
 
-CMD ["sh", "-lc", "alembic -c app/alembic.ini upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 3010"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "3010"]

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import BigInteger, Boolean, Float, Index, Integer, String, Text, text
+from sqlalchemy import BigInteger, Boolean, Float, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -57,13 +57,6 @@ class TelemetryPoint(Base):
     __tablename__ = "telemetry_points"
     __table_args__ = (
         Index("ix_telemetry_points_loco_metric_ts", "locomotive_id", "metric_id", "ts"),
-        Index(
-            "ux_telemetry_points_source_event_metric",
-            "source_event_id",
-            "metric_id",
-            unique=True,
-            postgresql_where=text("source_event_id IS NOT NULL"),
-        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -74,17 +67,3 @@ class TelemetryPoint(Base):
     unit: Mapped[str | None] = mapped_column(String(32), nullable=True)
     quality: Mapped[str | None] = mapped_column(String(16), nullable=True)
     frame_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    source_event_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
-
-
-class HealthSnapshot(Base):
-    __tablename__ = "health_snapshots"
-    __table_args__ = (
-        Index("ix_health_snapshots_locomotive_ts", "locomotive_id", "ts"),
-    )
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    locomotive_id: Mapped[str] = mapped_column(String(64), index=True)
-    ts: Mapped[int] = mapped_column(BigInteger, index=True)
-    source_event_id: Mapped[str] = mapped_column(String(128), unique=True, index=True)
-    payload: Mapped[dict] = mapped_column(JSONB)

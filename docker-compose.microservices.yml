@@ -61,7 +61,7 @@ services:
     build:
       context: ./back_dispatcher
     container_name: ktz-back-dispatcher
-    command: ["sh", "-lc", "alembic -c app/alembic.ini upgrade head && uvicorn app.main:app --host \"$DISPATCHER_HOST\" --port \"$DISPATCHER_PORT\""]
+    command: ["sh", "-lc", "uvicorn app.main:app --host \"$DISPATCHER_HOST\" --port \"$DISPATCHER_PORT\""]
     depends_on:
       back_locomotive:
         condition: service_started
@@ -95,7 +95,6 @@ services:
       args:
         VITE_WS_URL: ${FRONT_LOCOMOTIVE_VITE_WS_URL}
         VITE_API_BASE_URL: ${FRONT_LOCOMOTIVE_VITE_API_BASE_URL}
-        VITE_REPLAY_API_BASE_URL: ${FRONT_LOCOMOTIVE_VITE_REPLAY_API_BASE_URL}
         VITE_ENABLE_MOCKS: ${FRONT_LOCOMOTIVE_VITE_ENABLE_MOCKS}
     container_name: ktz-front-locomotive
     depends_on:

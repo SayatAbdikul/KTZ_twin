@@ -1,23 +1,12 @@
 from __future__ import annotations
 
+from typing import Any
 from collections import defaultdict
-from typing import Any, Literal
 
-from sqlalchemy import BigInteger, cast, delete, func, select
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy import delete
 
 from app.db import session_scope
-from app.db_models import AlertEvent, DispatcherCommand, HealthSnapshot, IncomingMessage, TelemetryPoint
-
-ReplayResolution = Literal["raw", "1s", "10s", "1m", "5m"]
-
-_RESOLUTION_BUCKET_MS: dict[str, int] = {
-    "1s": 1_000,
-    "10s": 10_000,
-    "1m": 60_000,
-    "5m": 300_000,
-}
-_SEVERITY_RANK = {"critical": 0, "warning": 1, "info": 2}
+from app.db_models import AlertEvent, DispatcherCommand, IncomingMessage, TelemetryPoint
 
 
 def save_dispatcher_command(event: dict[str, Any]) -> None:
@@ -107,15 +96,15 @@ def save_alert_event(event_type: str, payload: dict[str, Any], seen_at: int) -> 
         )
 
 
-def save_telemetry_frame(payload: dict[str, Any], source_event_id: str | None = None) -> int:
+def save_telemetry_frame(payload: dict[str, Any]) -> None:
     locomotive_id = str(payload.get("locomotive_id") or payload.get("locomotiveId") or "")
     if not locomotive_id:
-        return 0
+        return
 
     frame_id = payload.get("frame_id") or payload.get("frameId")
     ts_default = int(payload.get("timestamp") or 0)
 
-    rows: list[dict[str, Any]] = []
+    points: list[TelemetryPoint] = []
     for reading in payload.get("readings", []):
         if not isinstance(reading, dict):
             continue
@@ -127,65 +116,29 @@ def save_telemetry_frame(payload: dict[str, Any], source_event_id: str | None = 
         except (TypeError, ValueError):
             continue
 
-        rows.append(
-            {
-                "locomotive_id": locomotive_id,
-                "metric_id": metric_id,
-                "ts": int(reading.get("timestamp") or ts_default),
-                "value": value,
-                "unit": str(reading.get("unit")) if reading.get("unit") is not None else None,
-                "quality": str(reading.get("quality")) if reading.get("quality") is not None else None,
-                "frame_id": str(frame_id) if frame_id is not None else None,
-                "source_event_id": source_event_id,
-            }
+        reading_ts = int(reading.get("timestamp") or ts_default)
+        points.append(
+            TelemetryPoint(
+                locomotive_id=locomotive_id,
+                metric_id=metric_id,
+                ts=reading_ts,
+                value=value,
+                unit=(str(reading.get("unit")) if reading.get("unit") is not None else None),
+                quality=(str(reading.get("quality")) if reading.get("quality") is not None else None),
+                frame_id=(str(frame_id) if frame_id is not None else None),
+            )
         )
 
-    if not rows:
-        return 0
-
-    with session_scope() as session:
-        stmt = insert(TelemetryPoint).values(rows)
-        if source_event_id:
-            stmt = stmt.on_conflict_do_nothing(
-                index_elements=["source_event_id", "metric_id"],
-                index_where=TelemetryPoint.source_event_id.is_not(None),
-            )
-        result = session.execute(stmt)
-        return int(result.rowcount or 0)
-
-
-def save_health_snapshot(
-    locomotive_id: str,
-    timestamp_ms: int,
-    source_event_id: str | None,
-    payload: dict[str, Any],
-) -> None:
-    if not locomotive_id or not source_event_id:
+    if not points:
         return
 
     with session_scope() as session:
-        stmt = (
-            insert(HealthSnapshot)
-            .values(
-                locomotive_id=locomotive_id,
-                ts=timestamp_ms,
-                source_event_id=source_event_id,
-                payload=payload,
-            )
-            .on_conflict_do_nothing(index_elements=["source_event_id"])
-        )
-        session.execute(stmt)
+        session.bulk_save_objects(points)
 
 
 def prune_telemetry(cutoff_ts_ms: int) -> int:
     with session_scope() as session:
         result = session.execute(delete(TelemetryPoint).where(TelemetryPoint.ts < cutoff_ts_ms))
-        return int(result.rowcount or 0)
-
-
-def prune_health_snapshots(cutoff_ts_ms: int) -> int:
-    with session_scope() as session:
-        result = session.execute(delete(HealthSnapshot).where(HealthSnapshot.ts < cutoff_ts_ms))
         return int(result.rowcount or 0)
 
 
@@ -215,190 +168,3 @@ def get_recent_telemetry(
             }
         )
     return dict(grouped)
-
-
-def get_replay_time_range(locomotive_id: str) -> tuple[int | None, int | None]:
-    with session_scope() as session:
-        earliest, latest = session.query(
-            func.min(TelemetryPoint.ts),
-            func.max(TelemetryPoint.ts),
-        ).filter(TelemetryPoint.locomotive_id == locomotive_id).one()
-
-    return (
-        int(earliest) if earliest is not None else None,
-        int(latest) if latest is not None else None,
-    )
-
-
-def get_replay_range(
-    locomotive_id: str,
-    from_ts_ms: int,
-    to_ts_ms: int,
-    metric_ids: list[str] | None,
-    resolution: ReplayResolution,
-) -> dict[str, list[dict[str, float | int]]]:
-    with session_scope() as session:
-        if resolution == "raw":
-            query = session.query(TelemetryPoint).filter(
-                TelemetryPoint.locomotive_id == locomotive_id,
-                TelemetryPoint.ts >= from_ts_ms,
-                TelemetryPoint.ts <= to_ts_ms,
-            )
-            if metric_ids:
-                query = query.filter(TelemetryPoint.metric_id.in_(metric_ids))
-
-            rows = query.order_by(TelemetryPoint.metric_id.asc(), TelemetryPoint.ts.asc()).all()
-
-            grouped: dict[str, list[dict[str, float | int]]] = defaultdict(list)
-            for row in rows:
-                grouped[row.metric_id].append({"timestamp": row.ts, "value": row.value})
-            return dict(grouped)
-
-        bucket_ms = _RESOLUTION_BUCKET_MS[resolution]
-        bucket_expr = cast(
-            func.floor(TelemetryPoint.ts / bucket_ms) * bucket_ms,
-            BigInteger,
-        ).label("bucket_ts")
-
-        query = (
-            session.query(
-                TelemetryPoint.metric_id.label("metric_id"),
-                bucket_expr,
-                func.avg(TelemetryPoint.value).label("avg_value"),
-            )
-            .filter(
-                TelemetryPoint.locomotive_id == locomotive_id,
-                TelemetryPoint.ts >= from_ts_ms,
-                TelemetryPoint.ts <= to_ts_ms,
-            )
-        )
-        if metric_ids:
-            query = query.filter(TelemetryPoint.metric_id.in_(metric_ids))
-
-        rows = (
-            query.group_by(TelemetryPoint.metric_id, bucket_expr)
-            .order_by(TelemetryPoint.metric_id.asc(), bucket_expr.asc())
-            .all()
-        )
-
-    grouped: dict[str, list[dict[str, float | int]]] = defaultdict(list)
-    for row in rows:
-        grouped[str(row.metric_id)].append(
-            {
-                "timestamp": int(row.bucket_ts),
-                "value": float(row.avg_value),
-            }
-        )
-    return dict(grouped)
-
-
-def get_replay_snapshot(
-    locomotive_id: str,
-    timestamp_ms: int,
-) -> dict[str, Any]:
-    latest_reading_subquery = (
-        select(
-            TelemetryPoint.metric_id.label("metric_id"),
-            TelemetryPoint.ts.label("ts"),
-            TelemetryPoint.value.label("value"),
-            TelemetryPoint.unit.label("unit"),
-            TelemetryPoint.quality.label("quality"),
-            func.row_number()
-            .over(partition_by=TelemetryPoint.metric_id, order_by=TelemetryPoint.ts.desc())
-            .label("rn"),
-        )
-        .where(
-            TelemetryPoint.locomotive_id == locomotive_id,
-            TelemetryPoint.ts <= timestamp_ms,
-        )
-        .subquery()
-    )
-
-    with session_scope() as session:
-        telemetry_rows = session.execute(
-            select(
-                latest_reading_subquery.c.metric_id,
-                latest_reading_subquery.c.ts,
-                latest_reading_subquery.c.value,
-                latest_reading_subquery.c.unit,
-                latest_reading_subquery.c.quality,
-            )
-            .where(latest_reading_subquery.c.rn == 1)
-            .order_by(latest_reading_subquery.c.metric_id.asc())
-        ).all()
-
-        health_row = (
-            session.query(HealthSnapshot)
-            .filter(
-                HealthSnapshot.locomotive_id == locomotive_id,
-                HealthSnapshot.ts <= timestamp_ms,
-            )
-            .order_by(HealthSnapshot.ts.desc())
-            .first()
-        )
-
-        alert_rows = (
-            session.query(AlertEvent)
-            .filter(
-                AlertEvent.locomotive_id == locomotive_id,
-                AlertEvent.seen_at <= timestamp_ms,
-            )
-            .order_by(AlertEvent.seen_at.asc(), AlertEvent.id.asc())
-            .all()
-        )
-
-        health_payload = dict(health_row.payload) if health_row is not None else None
-        alert_events = [
-            {
-                "event_type": row.event_type,
-                "alert_id": row.alert_id,
-                "payload": dict(row.payload or {}),
-            }
-            for row in alert_rows
-        ]
-
-    telemetry_payload = None
-    if telemetry_rows:
-        latest_frame_ts = max(int(row.ts) for row in telemetry_rows)
-        telemetry_payload = {
-            "locomotiveId": locomotive_id,
-            "frameId": f"replay-{locomotive_id}-{latest_frame_ts}",
-            "timestamp": latest_frame_ts,
-            "readings": [
-                {
-                    "metricId": str(row.metric_id),
-                    "value": float(row.value),
-                    "unit": row.unit or "",
-                    "timestamp": int(row.ts),
-                    "quality": row.quality or "good",
-                }
-                for row in telemetry_rows
-            ],
-        }
-
-    active_alerts: dict[str, dict[str, Any]] = {}
-    for row in alert_events:
-        payload = row["payload"]
-        if row["event_type"] in {"alert.new", "alert.update"}:
-            alert_id = str(payload.get("alert_id") or payload.get("alertId") or row["alert_id"])
-            if alert_id:
-                active_alerts[alert_id] = payload
-        elif row["event_type"] == "alert.resolved":
-            alert_id = str(payload.get("alert_id") or payload.get("alertId") or row["alert_id"])
-            active_alerts.pop(alert_id, None)
-
-    alerts = sorted(
-        active_alerts.values(),
-        key=lambda alert: (
-            _SEVERITY_RANK.get(str(alert.get("severity")), 99),
-            -int(alert.get("triggered_at") or alert.get("triggeredAt") or 0),
-        ),
-    )
-
-    return {
-        "locomotiveId": locomotive_id,
-        "timestamp": timestamp_ms,
-        "telemetry": telemetry_payload,
-        "health": health_payload,
-        "alerts": alerts,
-    }
