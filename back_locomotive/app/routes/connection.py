@@ -1,4 +1,6 @@
-from __future__ import annotations
+"""
+GET /api/connection/status
+"""
 
 from fastapi import APIRouter
 
@@ -10,11 +12,12 @@ router = APIRouter(prefix="/api", tags=["connection"])
 
 @router.get("/connection/status")
 def get_connection_status():
+    has_clients = len(state.ws_clients) > 0
     connection = ConnectionState(
         backend_status="connected",
         dispatcher_status="connected",
-        ws_connected=bool(state.ws_clients),
-        last_heartbeat=state.last_heartbeat_at,
+        ws_connected=has_clients,
+        last_heartbeat=None,
         latency_ms=None,
         reconnect_attempt=0,
     )
