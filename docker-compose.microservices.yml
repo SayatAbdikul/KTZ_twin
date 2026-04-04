@@ -1,0 +1,95 @@
+services:
+  kafka:
+    image: bitnami/kafka:3.9
+    container_name: ktz-kafka
+    ports:
+      - "29092:29092"
+    environment:
+      KAFKA_CFG_NODE_ID: 0
+      KAFKA_CFG_PROCESS_ROLES: controller,broker
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 0@kafka:9093
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,PLAINTEXT_HOST://:29092
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
+  back_locomotive:
+    build:
+      context: ./back_locomotive
+    container_name: ktz-back-locomotive
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      LOCOMOTIVE_HOST: 0.0.0.0
+      LOCOMOTIVE_PORT: 3001
+      CORS_ORIGINS: http://localhost:5173,http://localhost:5174
+      TELEMETRY_CSV_PATH: /data/telemetry.csv
+      REPLAY_SPEED: ${REPLAY_SPEED:-1.0}
+      LOOP_REPLAY: ${LOOP_REPLAY:-true}
+      FRONTEND_LOCOMOTIVE_ID: ${FRONTEND_LOCOMOTIVE_ID:-}
+      KAFKA_ENABLED: "true"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_TOPIC_TELEMETRY: locomotive.telemetry.raw
+      KAFKA_CLIENT_ID: back-locomotive
+    volumes:
+      - ./synthetic_output_core/telemetry.csv:/data/telemetry.csv:ro
+    ports:
+      - "3001:3001"
+    restart: unless-stopped
+
+  back_dispatcher:
+    build:
+      context: ./back_dispatcher
+    container_name: ktz-back-dispatcher
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      DISPATCHER_HOST: 0.0.0.0
+      DISPATCHER_PORT: 3010
+      CORS_ORIGINS: http://localhost:5173,http://localhost:5174
+      KAFKA_ENABLED: "true"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_TOPIC_TELEMETRY: locomotive.telemetry.raw
+      KAFKA_GROUP_ID: back-dispatcher
+      KAFKA_CLIENT_ID: back-dispatcher
+      LOCOMOTIVE_STALE_AFTER_S: ${LOCOMOTIVE_STALE_AFTER_S:-15}
+    ports:
+      - "3010:3010"
+    restart: unless-stopped
+
+  front_locomotive:
+    build:
+      context: ./front_locomotive
+      args:
+        VITE_WS_URL: ws://localhost:3001/ws
+        VITE_API_BASE_URL: http://localhost:3001
+        VITE_ENABLE_MOCKS: "false"
+    container_name: ktz-front-locomotive
+    depends_on:
+      - back_locomotive
+    ports:
+      - "5173:80"
+    restart: unless-stopped
+
+  front_dispatcher:
+    build:
+      context: ./front_dispatcher
+      args:
+        VITE_WS_URL: ws://localhost:3010/ws
+    container_name: ktz-front-dispatcher
+    depends_on:
+      - back_dispatcher
+    ports:
+      - "5174:80"
+    restart: unless-stopped
