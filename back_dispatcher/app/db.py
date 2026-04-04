@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Iterator
 import time
 
+from alembic import command
+from alembic.config import Config
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -27,9 +30,8 @@ def session_scope() -> Iterator[Session]:
 
 
 def init_db_schema() -> None:
-    from app.db_models import Base
-
-    Base.metadata.create_all(bind=_engine)
+    alembic_cfg = Config(str(Path(__file__).with_name("alembic.ini")))
+    command.upgrade(alembic_cfg, "head")
 
 
 def db_ping() -> bool:

@@ -2,6 +2,7 @@ export const APP_CONFIG = {
   LOCOMOTIVE_ID: 'KTZ-2001',
   WS_URL: import.meta.env.VITE_WS_URL ?? 'ws://localhost:3010/ws',
   API_BASE_URL: import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001',
+  REPLAY_API_BASE_URL: import.meta.env.VITE_REPLAY_API_BASE_URL ?? 'http://localhost:3010',
   ENABLE_MOCKS: import.meta.env.VITE_ENABLE_MOCKS === 'true',
 
   // Update intervals (ms)
