@@ -16,4 +16,5 @@ def service_health() -> dict:
         "locomotivesConnected": connected,
         "locomotivesTotal": total,
         "dispatcherClients": len(state.ws_clients),
+        "runtimeStats": state.stats_snapshot(),
     }

@@ -13,6 +13,8 @@ from app.config import (
     START_VALUES,
     START_SCORES,
     HISTORY_BUFFER_SIZE,
+    RAW_TELEMETRY_INTERVAL_S,
+    TELEMETRY_INTERVAL_S,
 )
 from app.models import Alert, DispatcherMessage, TelemetryFrame, HealthIndex, now_ms
 
@@ -37,6 +39,8 @@ class AppState:
             metric_id: deque(maxlen=HISTORY_BUFFER_SIZE)
             for metric_id in START_VALUES
         }
+        raw_buffer_size = max(10, int((TELEMETRY_INTERVAL_S * 3) / RAW_TELEMETRY_INTERVAL_S))
+        self.raw_samples: deque[tuple[int, dict[str, float]]] = deque(maxlen=raw_buffer_size)
 
         # Alerts list — pre-seeded with 2 initial alerts
         self.alerts: list[Alert] = self._seed_alerts()

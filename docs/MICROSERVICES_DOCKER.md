@@ -53,7 +53,17 @@ Update that file if you need to change:
 - dispatcher target WebSocket URLs
 - ingest mode (`INGEST_MODE=ws|kafka|hybrid`)
 - Kafka connection and topic settings
+- Kafka topic partitioning for expected locomotive / train streams
 - frontend build-time API / WebSocket endpoints
+
+Current Kafka partitioning rule:
+
+- topic key: `locomotive_id`
+- default topic partitions: `100`
+
+This keeps one locomotive stream ordered within one partition while distributing about `1700` expected train streams across at most `100` partitions, or roughly `17` streams per partition on average.
+
+Important: Kafka can increase topic partitions but cannot shrink them. If you already created the topic with more than `100` partitions, changing env config alone will not reduce it; recreate the topic or use a new topic name.
 
 ## Notes
 

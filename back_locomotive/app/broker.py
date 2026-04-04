@@ -6,10 +6,16 @@ import logging
 from typing import Any
 
 from aiokafka import AIOKafkaProducer
-from aiokafka.admin import AIOKafkaAdminClient, NewTopic
+from aiokafka.admin import AIOKafkaAdminClient, NewPartitions, NewTopic
 from aiokafka.errors import TopicAlreadyExistsError
 
-from app.config import KAFKA_BOOTSTRAP_SERVERS, KAFKA_ENABLED, KAFKA_TOPIC_EVENTS
+from app.config import (
+    KAFKA_BOOTSTRAP_SERVERS,
+    KAFKA_ENABLED,
+    KAFKA_TOPIC_EVENTS,
+    KAFKA_TOPIC_PARTITIONS,
+    KAFKA_TOPIC_REPLICATION_FACTOR,
+)
 from app.models import EventEnvelopeV1
 
 logger = logging.getLogger(__name__)
@@ -17,6 +23,102 @@ logger = logging.getLogger(__name__)
 _producer: AIOKafkaProducer | None = None
 _published_count = 0
 _PUBLISH_LOG_EVERY = 100
+
+
+def _partition_key_bytes(key: str) -> bytes:
+    return key.strip().encode("utf-8")
+
+
+def _topic_spec() -> NewTopic:
+    return NewTopic(
+        name=KAFKA_TOPIC_EVENTS,
+        num_partitions=max(1, KAFKA_TOPIC_PARTITIONS),
+        replication_factor=max(1, KAFKA_TOPIC_REPLICATION_FACTOR),
+    )
+
+
+def _extract_partition_count(topic_metadata: Any) -> int | None:
+    if isinstance(topic_metadata, dict):
+        partitions = topic_metadata.get("partitions")
+        if isinstance(partitions, list):
+            return len(partitions)
+
+    if isinstance(topic_metadata, list) and topic_metadata and all(isinstance(item, dict) for item in topic_metadata):
+        partition_entries = [item for item in topic_metadata if "partition" in item]
+        if partition_entries:
+            return len(partition_entries)
+
+    partitions_attr = getattr(topic_metadata, "partitions", None)
+    if partitions_attr is not None:
+        try:
+            return len(partitions_attr)
+        except TypeError:
+            return None
+
+    return None
+
+
+async def _describe_partition_count(admin: AIOKafkaAdminClient) -> int | None:
+    describe_topics = getattr(admin, "describe_topics", None)
+    if describe_topics is None:
+        return None
+
+    metadata = await describe_topics([KAFKA_TOPIC_EVENTS])
+    if isinstance(metadata, list) and len(metadata) == 1:
+        return _extract_partition_count(metadata[0])
+    return _extract_partition_count(metadata)
+
+
+async def _ensure_topic(admin: AIOKafkaAdminClient) -> None:
+    topic_spec = _topic_spec()
+    desired_partitions = topic_spec.num_partitions
+
+    try:
+        await admin.create_topics([topic_spec])
+        logger.info(
+            "Kafka topic ensured: topic=%s partitions=%d replication_factor=%d",
+            KAFKA_TOPIC_EVENTS,
+            topic_spec.num_partitions,
+            topic_spec.replication_factor,
+        )
+    except TopicAlreadyExistsError:
+        pass
+
+    current_partitions = await _describe_partition_count(admin)
+    if current_partitions is None:
+        logger.info(
+            "Kafka topic partition count could not be inspected; expected topic=%s partitions=%d",
+            KAFKA_TOPIC_EVENTS,
+            desired_partitions,
+        )
+        return
+
+    if current_partitions > desired_partitions:
+        logger.warning(
+            "Kafka topic has more partitions than configured and cannot be reduced automatically: "
+            "topic=%s current_partitions=%d target_partitions=%d",
+            KAFKA_TOPIC_EVENTS,
+            current_partitions,
+            desired_partitions,
+        )
+        return
+
+    if current_partitions == desired_partitions:
+        logger.info(
+            "Kafka topic partitioning ready: topic=%s current_partitions=%d target_partitions=%d",
+            KAFKA_TOPIC_EVENTS,
+            current_partitions,
+            desired_partitions,
+        )
+        return
+
+    await admin.create_partitions({KAFKA_TOPIC_EVENTS: NewPartitions(total_count=desired_partitions)})
+    logger.info(
+        "Kafka topic partitions increased: topic=%s old_partitions=%d new_partitions=%d",
+        KAFKA_TOPIC_EVENTS,
+        current_partitions,
+        desired_partitions,
+    )
 
 
 async def start_broker() -> None:
@@ -29,11 +131,7 @@ async def start_broker() -> None:
             admin = AIOKafkaAdminClient(bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS)
             await admin.start()
             try:
-                await admin.create_topics([
-                    NewTopic(name=KAFKA_TOPIC_EVENTS, num_partitions=1, replication_factor=1)
-                ])
-            except TopicAlreadyExistsError:
-                pass
+                await _ensure_topic(admin)
             finally:
                 await admin.close()
             break
@@ -95,7 +193,7 @@ async def publish_event(*, envelope: dict[str, Any], key: str) -> None:
         await _producer.send_and_wait(
             KAFKA_TOPIC_EVENTS,
             value=envelope,
-            key=key.encode("utf-8"),
+            key=_partition_key_bytes(key),
         )
         _published_count += 1
         if _published_count % _PUBLISH_LOG_EVERY == 0:
