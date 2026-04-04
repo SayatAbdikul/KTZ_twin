@@ -14,6 +14,7 @@ export const APP_CONFIG = {
 
   // Sparkline buffer (last N readings at 1Hz = N seconds)
   SPARKLINE_BUFFER_SIZE: 60,
+  TREND_BUFFER_SIZE: 3600,
 
   // Chart throttle (ms between setOption calls)
   CHART_THROTTLE_MS: 1000,

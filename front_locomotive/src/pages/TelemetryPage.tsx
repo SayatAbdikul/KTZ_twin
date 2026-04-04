@@ -1,19 +1,125 @@
+import { useMemo, useState } from 'react'
 import { Activity } from 'lucide-react'
 import { METRIC_DEFINITIONS, METRIC_GROUPS } from '@/config/metrics.config'
+import { useTelemetryStore } from '@/features/telemetry/useTelemetryStore'
+import { useSettingsStore } from '@/features/settings/useSettingsStore'
 import { DynamicMetricRenderer } from '@/components/metrics/DynamicMetricRenderer'
+import { LineChart } from '@/components/charts/LineChart'
+import { TimeRangeSelector, type TimeRangePreset } from '@/components/charts/TimeRangeSelector'
 import { SectionHeader } from '@/components/common/SectionHeader'
+import { ValueDisplay } from '@/components/common/ValueDisplay'
 import { PageContainer } from '@/components/layout/PageContainer'
+import { getMetricSeverity } from '@/utils/thresholds'
 import type { MetricGroup } from '@/types/telemetry'
 
 const ALL_GROUPS: MetricGroup[] = ['motion', 'fuel', 'thermal', 'pressure', 'electrical']
+const TREND_METRIC_IDS = [
+  'motion.speed',
+  'fuel.level',
+  'thermal.coolant_temp',
+  'electrical.traction_current',
+] as const
+const PRESET_WINDOW_MS: Record<Exclude<TimeRangePreset, 'all'>, number> = {
+  '1m': 60_000,
+  '5m': 5 * 60_000,
+  '15m': 15 * 60_000,
+  '1h': 60 * 60_000,
+}
+const EMPTY_BUFFER: Array<{ timestamp: number; value: number }> = []
+
+function LiveTrendCard({
+  metricId,
+  windowMs,
+}: {
+  metricId: (typeof TREND_METRIC_IDS)[number]
+  windowMs: number | 'all'
+}) {
+  const smoothingEnabled = useSettingsStore((s) => s.smoothingEnabled)
+  const currentReadings = useTelemetryStore((s) => s.currentReadings)
+  const smoothedReadings = useTelemetryStore((s) => s.smoothedReadings)
+  const trendBuffers = useTelemetryStore((s) => s.trendBuffers)
+  const smoothedTrendBuffers = useTelemetryStore((s) => s.smoothedTrendBuffers)
+
+  const definition = METRIC_DEFINITIONS.find((item) => item.metricId === metricId)
+  if (!definition) return null
+
+  const reading = smoothingEnabled
+    ? smoothedReadings.get(metricId) ?? currentReadings.get(metricId)
+    : currentReadings.get(metricId)
+  const data = smoothingEnabled
+    ? smoothedTrendBuffers.get(metricId) ?? trendBuffers.get(metricId) ?? EMPTY_BUFFER
+    : trendBuffers.get(metricId) ?? EMPTY_BUFFER
+
+  const severity = reading ? getMetricSeverity(reading.value, definition) : 'normal'
+  const color =
+    severity === 'critical' ? '#f87171' : severity === 'warning' ? '#fbbf24' : '#60a5fa'
+
+  return (
+    <article className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold text-slate-200">{definition.label}</h2>
+          <p className="text-xs text-slate-500">{definition.unit}</p>
+        </div>
+        <ValueDisplay
+          value={reading?.value}
+          unit={definition.unit}
+          precision={definition.precision}
+          timestamp={reading?.timestamp}
+          className="justify-end"
+          valueClassName="text-xl"
+        />
+      </div>
+
+      {data.length > 1 ? (
+        <LineChart
+          series={[
+            {
+              name: definition.label,
+              data,
+              color,
+              unit: definition.unit,
+            },
+          ]}
+          height={220}
+          windowMs={windowMs}
+        />
+      ) : (
+        <div className="flex h-[220px] items-center justify-center rounded-lg border border-dashed border-slate-700 text-sm text-slate-500">
+          Waiting for live telemetry
+        </div>
+      )}
+    </article>
+  )
+}
 
 export function TelemetryPage() {
+  const [preset, setPreset] = useState<TimeRangePreset>('5m')
+  const windowMs = useMemo<number | 'all'>(
+    () => (preset === 'all' ? 'all' : PRESET_WINDOW_MS[preset]),
+    [preset]
+  )
+
   return (
     <PageContainer>
       <div className="mb-4 flex items-center gap-2">
         <Activity size={18} className="text-blue-400" />
         <h1 className="text-base font-semibold text-slate-200">Telemetry</h1>
       </div>
+
+      <section className="mb-6">
+        <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <h2 className="text-sm font-semibold uppercase tracking-widest text-slate-400">
+            Live Trends
+          </h2>
+          <TimeRangeSelector value={preset} onChange={setPreset} />
+        </div>
+        <div className="grid gap-3 xl:grid-cols-2">
+          {TREND_METRIC_IDS.map((metricId) => (
+            <LiveTrendCard key={metricId} metricId={metricId} windowMs={windowMs} />
+          ))}
+        </div>
+      </section>
 
       {ALL_GROUPS.map((group) => {
         const defs = METRIC_DEFINITIONS.filter((d) => d.group === group).sort(
