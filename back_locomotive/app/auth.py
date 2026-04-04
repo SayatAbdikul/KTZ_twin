@@ -23,7 +23,7 @@ PASSWORD_CHANGE_REQUIRED_CODE = "PASSWORD_CHANGE_REQUIRED"
 
 @dataclass(frozen=True)
 class AuthContext:
-    role: Literal["admin", "dispatcher", "train", "service"]
+    role: Literal["admin", "dispatcher", "regular_train", "service"]
     subject: str
     user_id: int | None = None
     session_id: str | None = None
@@ -42,7 +42,7 @@ class AuthContext:
         return self.role in {"admin", "service"}
 
     def can_access_service_locomotive(self) -> bool:
-        return self.is_admin or self.role == "train" and self.locomotive_id == LOCOMOTIVE_ID
+        return self.is_admin or self.role == "regular_train" and self.locomotive_id == LOCOMOTIVE_ID
 
 
 def _encode_segment(raw: bytes) -> str:
@@ -83,7 +83,9 @@ def _decode_access_token(token: str) -> dict[str, object] | None:
 
 def _payload_to_context(payload: dict[str, object]) -> AuthContext | None:
     role = payload.get("role")
-    if role not in {"admin", "dispatcher", "train"}:
+    if role == "train":
+        role = "regular_train"
+    if role not in {"admin", "dispatcher", "regular_train"}:
         return None
 
     subject = str(payload.get("sub") or "").strip()

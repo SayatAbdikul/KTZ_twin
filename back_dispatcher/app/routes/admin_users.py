@@ -19,7 +19,7 @@ router = APIRouter(prefix="/api/admin/users", tags=["admin-users"])
 
 
 class CreateUserRequest(BaseModel):
-    role: Literal["admin", "dispatcher", "train"]
+    role: Literal["admin", "dispatcher", "regular_train"]
     username: str | None = None
     display_name: str = Field(alias="displayName")
     locomotive_id: str | None = Field(default=None, alias="locomotiveId")

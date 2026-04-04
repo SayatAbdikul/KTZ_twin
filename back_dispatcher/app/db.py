@@ -51,6 +51,17 @@ def _detect_legacy_revision() -> str | None:
         "users",
         "auth_sessions",
         "auth_audit_events",
+        "role_types",
+    }.issubset(table_names):
+        user_columns = {column["name"] for column in inspector.get_columns("users")}
+        if {"role_type_id", "is_admin"}.issubset(user_columns):
+            return "0005_normalize_user_role_types"
+
+    if {
+        "health_snapshots",
+        "users",
+        "auth_sessions",
+        "auth_audit_events",
     }.issubset(table_names):
         return "0003_auth_tables"
 

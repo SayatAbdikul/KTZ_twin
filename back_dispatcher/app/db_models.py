@@ -2,11 +2,20 @@ from __future__ import annotations
 
 from sqlalchemy import BigInteger, Boolean, Float, ForeignKey, Index, Integer, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
     pass
+
+
+class RoleType(Base):
+    __tablename__ = "role_types"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    code: Mapped[str] = mapped_column(String(32), unique=True, index=True)
+    label: Mapped[str] = mapped_column(String(160))
+    created_at: Mapped[int] = mapped_column(BigInteger, index=True)
 
 
 class DispatcherCommand(Base):
@@ -98,7 +107,8 @@ class User(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    role: Mapped[str] = mapped_column(String(32), index=True)
+    role_type_id: Mapped[int] = mapped_column(ForeignKey("role_types.id"), index=True)
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     username: Mapped[str | None] = mapped_column(String(128), nullable=True)
     display_name: Mapped[str] = mapped_column(String(160))
     locomotive_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -108,6 +118,8 @@ class User(Base):
     created_at: Mapped[int] = mapped_column(BigInteger, index=True)
     updated_at: Mapped[int] = mapped_column(BigInteger, index=True)
     last_login_at: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
+    role_type: Mapped[RoleType] = relationship()
 
 
 class AuthSession(Base):
@@ -139,3 +151,22 @@ class AuthAuditEvent(Base):
     success: Mapped[bool] = mapped_column(Boolean, default=True)
     payload: Mapped[dict] = mapped_column(JSONB, default=dict)
     created_at: Mapped[int] = mapped_column(BigInteger, index=True)
+
+
+class ApplicationLog(Base):
+    __tablename__ = "application_logs"
+    __table_args__ = (
+        Index("ix_application_logs_service_created_at", "service", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    created_at: Mapped[int] = mapped_column(BigInteger, index=True)
+    service: Mapped[str] = mapped_column(String(64), index=True)
+    level: Mapped[str] = mapped_column(String(16), index=True)
+    logger_name: Mapped[str] = mapped_column(String(255), index=True)
+    module: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    function: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    line_no: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    message: Mapped[str] = mapped_column(Text)
+    exception: Mapped[str | None] = mapped_column(Text, nullable=True)
+    context: Mapped[dict | None] = mapped_column(JSONB, nullable=True)

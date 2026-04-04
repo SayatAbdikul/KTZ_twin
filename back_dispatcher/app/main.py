@@ -13,6 +13,7 @@ from app.auth import authorize_websocket, enforce_http_auth, require_locomotive_
 from app.config import CORS_ORIGINS, INGEST_MODE, LOCOMOTIVE_TARGETS
 from app.kafka_consumer import consume_kafka_forever
 from app.db import init_db_schema, wait_for_db
+from app.logging_db import install_database_logging
 from app.locomotive_client import connect_locomotive_forever, send_chat_to_locomotive
 from app.models import now_ms
 from app.repository import save_dispatcher_command
@@ -53,6 +54,7 @@ async def lifespan(app: FastAPI):
         raise RuntimeError("Database not reachable after startup retries")
     init_db_schema()
     seed_auth_identities()
+    install_database_logging()
 
     for target in LOCOMOTIVE_TARGETS:
         state.locomotives[target.locomotive_id] = LocomotiveRuntime(target=target)
@@ -114,7 +116,7 @@ async def ws_endpoint(websocket: WebSocket):
 
     await websocket.accept()
     state.register_client(websocket)
-    if auth_context.role == "train" and auth_context.locomotive_id:
+    if auth_context.role == "regular_train" and auth_context.locomotive_id:
         state.set_subscription(websocket, auth_context.locomotive_id)
     await send_connection_snapshot(websocket)
 
@@ -137,7 +139,7 @@ async def ws_endpoint(websocket: WebSocket):
                     if isinstance(payload, dict):
                         requested = payload.get("locomotiveId") or payload.get("locomotive_id")
 
-                    if auth_context.role == "train":
+                    if auth_context.role == "regular_train":
                         locomotive_id = auth_context.locomotive_id
                         state.set_subscription(websocket, locomotive_id)
                         if locomotive_id:

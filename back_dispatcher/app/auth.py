@@ -36,7 +36,7 @@ from app.config import (
     DEMO_TRAIN_PASSWORD,
 )
 from app.db import session_scope
-from app.db_models import AuthAuditEvent, AuthSession, User
+from app.db_models import AuthAuditEvent, AuthSession, RoleType, User
 from app.models import now_ms
 
 UNAUTHORIZED_CODE = "UNAUTHORIZED"
@@ -45,6 +45,12 @@ PASSWORD_CHANGE_REQUIRED_CODE = "PASSWORD_CHANGE_REQUIRED"
 COOKIE_PATH = "/"
 USER_STATUS_ACTIVE = "active"
 USER_STATUS_DISABLED = "disabled"
+ROLE_ADMIN = "admin"
+ROLE_DISPATCHER = "dispatcher"
+ROLE_REGULAR_TRAIN = "regular_train"
+ROLE_SERVICE = "service"
+ROLE_TYPE_DISPATCHER = "dispatcher"
+ROLE_TYPE_REGULAR_TRAIN = "regular_train"
 PUBLIC_PATHS = {
     "/api/auth/login",
     "/api/auth/refresh",
@@ -62,7 +68,7 @@ _PASSWORD_HASHER = PasswordHasher()
 
 @dataclass(frozen=True)
 class AuthContext:
-    role: Literal["admin", "dispatcher", "train", "service"]
+    role: Literal["admin", "dispatcher", "regular_train", "service"]
     subject: str
     user_id: int | None = None
     session_id: str | None = None
@@ -74,19 +80,19 @@ class AuthContext:
 
     @property
     def is_service(self) -> bool:
-        return self.role == "service"
+        return self.role == ROLE_SERVICE
 
     @property
     def is_admin(self) -> bool:
-        return self.role in {"admin", "service"}
+        return self.role in {ROLE_ADMIN, ROLE_SERVICE}
 
     @property
     def can_access_all_locomotives(self) -> bool:
-        return self.role in {"admin", "dispatcher", "service"}
+        return self.role in {ROLE_ADMIN, ROLE_DISPATCHER, ROLE_SERVICE}
 
     @property
     def can_use_dispatcher_console(self) -> bool:
-        return self.role in {"admin", "dispatcher", "service"}
+        return self.role in {ROLE_ADMIN, ROLE_DISPATCHER, ROLE_SERVICE}
 
     def can_access_locomotive(self, locomotive_id: str) -> bool:
         return self.can_access_all_locomotives or self.locomotive_id == locomotive_id
@@ -210,9 +216,35 @@ def _generate_temporary_password(length: int = 16) -> str:
             continue
 
 
+def _normalize_requested_role(value: str) -> str:
+    normalized = value.strip().lower()
+    if normalized == "train":
+        return ROLE_REGULAR_TRAIN
+    return normalized
+
+
+def _user_role(user: User) -> str:
+    if user.is_admin:
+        return ROLE_ADMIN
+
+    role_type = user.role_type.code if user.role_type is not None else None
+    if role_type == ROLE_TYPE_DISPATCHER:
+        return ROLE_DISPATCHER
+    if role_type == ROLE_TYPE_REGULAR_TRAIN:
+        return ROLE_REGULAR_TRAIN
+    raise HTTPException(status_code=500, detail="User role type is misconfigured.")
+
+
+def _get_role_type(session, code: str) -> RoleType:
+    role_type = session.scalar(select(RoleType).where(RoleType.code == code))
+    if role_type is None:
+        raise HTTPException(status_code=500, detail=f"Role type {code!r} is missing.")
+    return role_type
+
+
 def _context_from_user(user: User, session_id: str | None) -> AuthContext:
     return AuthContext(
-        role=user.role,  # type: ignore[arg-type]
+        role=_user_role(user),  # type: ignore[arg-type]
         subject=str(user.id),
         user_id=user.id,
         session_id=session_id,
@@ -239,7 +271,7 @@ def serialize_auth_context(auth: AuthContext) -> dict[str, object]:
 def _serialize_user(user: User) -> dict[str, object]:
     return {
         "id": user.id,
-        "role": user.role,
+        "role": _user_role(user),
         "username": user.username,
         "displayName": user.display_name,
         "locomotiveId": user.locomotive_id,
@@ -275,7 +307,7 @@ def _record_audit_event(
 
 
 def _service_context() -> AuthContext:
-    return AuthContext(role="service", subject="service:api-key", display_name="Internal Service")
+    return AuthContext(role=ROLE_SERVICE, subject="service:api-key", display_name="Internal Service")
 
 
 def create_access_token(auth: AuthContext) -> str:
@@ -386,7 +418,7 @@ def _resolve_user_from_access_token(token: str) -> AuthContext | None:
     role = payload.get("role")
     user_id = payload.get("uid")
     session_id = payload.get("sid")
-    if role not in {"admin", "dispatcher", "train"}:
+    if role not in {ROLE_ADMIN, ROLE_DISPATCHER, ROLE_REGULAR_TRAIN, "train"}:
         return None
     if not isinstance(user_id, int) or not isinstance(session_id, str) or not session_id:
         return None
@@ -589,32 +621,40 @@ def change_password(
 
 def list_users() -> list[dict[str, object]]:
     with session_scope() as session:
-        users = session.scalars(select(User).order_by(User.role.asc(), User.display_name.asc(), User.id.asc())).all()
-        return [_serialize_user(user) for user in users]
+        users = session.scalars(select(User).order_by(User.is_admin.desc(), User.display_name.asc(), User.id.asc())).all()
+        serialized = [_serialize_user(user) for user in users]
+        return sorted(
+            serialized,
+            key=lambda user: (
+                0 if user["role"] == ROLE_ADMIN else 1 if user["role"] == ROLE_DISPATCHER else 2,
+                str(user.get("displayName") or ""),
+                int(user["id"]),
+            ),
+        )
 
 
 def create_user_account(
     actor: AuthContext,
     *,
-    role: Literal["admin", "dispatcher", "train"],
+    role: Literal["admin", "dispatcher", "regular_train"],
     username: str | None,
     display_name: str,
     locomotive_id: str | None,
 ) -> dict[str, object]:
     require_admin(actor)
 
-    normalized_role = role.strip().lower()
+    normalized_role = _normalize_requested_role(role)
     normalized_username = _normalize_username(username)
     normalized_locomotive_id = _normalize_locomotive_id(locomotive_id)
     display = display_name.strip()
     if not display:
         raise HTTPException(status_code=400, detail="Display name is required.")
 
-    if normalized_role not in {"admin", "dispatcher", "train"}:
+    if normalized_role not in {ROLE_ADMIN, ROLE_DISPATCHER, ROLE_REGULAR_TRAIN}:
         raise HTTPException(status_code=400, detail="Unsupported role.")
-    if normalized_role == "train":
+    if normalized_role == ROLE_REGULAR_TRAIN:
         if normalized_locomotive_id is None:
-            raise HTTPException(status_code=400, detail="Train users require a locomotiveId.")
+            raise HTTPException(status_code=400, detail="Regular train users require a locomotiveId.")
         normalized_username = None
     else:
         if normalized_username is None:
@@ -634,8 +674,13 @@ def create_user_account(
             if existing_locomotive is not None:
                 raise HTTPException(status_code=409, detail="That locomotive already has an assigned train account.")
 
+        role_type = _get_role_type(
+            session,
+            ROLE_TYPE_REGULAR_TRAIN if normalized_role == ROLE_REGULAR_TRAIN else ROLE_TYPE_DISPATCHER,
+        )
         user = User(
-            role=normalized_role,
+            role_type_id=role_type.id,
+            is_admin=normalized_role == ROLE_ADMIN,
             username=normalized_username,
             display_name=display,
             locomotive_id=normalized_locomotive_id,
@@ -691,10 +736,10 @@ def update_user_account(
                 raise HTTPException(status_code=400, detail="Unsupported status.")
             user.status = status
 
-        if user.role == "train":
+        if _user_role(user) == ROLE_REGULAR_TRAIN:
             if locomotive_id is not None:
                 if normalized_locomotive_id is None:
-                    raise HTTPException(status_code=400, detail="Train users require a locomotiveId.")
+                    raise HTTPException(status_code=400, detail="Regular train users require a locomotiveId.")
                 existing = session.scalar(
                     select(User).where(
                         User.locomotive_id == normalized_locomotive_id,
@@ -705,7 +750,7 @@ def update_user_account(
                     raise HTTPException(status_code=409, detail="That locomotive already has an assigned train account.")
                 user.locomotive_id = normalized_locomotive_id
         elif locomotive_id is not None:
-            raise HTTPException(status_code=400, detail="Only train accounts can set locomotiveId.")
+            raise HTTPException(status_code=400, detail="Only regular train accounts can set locomotiveId.")
 
         user.updated_at = now_ms()
         if user.status == USER_STATUS_DISABLED:
@@ -761,9 +806,11 @@ def seed_auth_identities() -> None:
     with session_scope() as session:
         bootstrap_username = _normalize_username(BOOTSTRAP_ADMIN_USERNAME)
         if bootstrap_username and session.scalar(select(User).where(User.username == bootstrap_username)) is None:
+            dispatcher_role_type = _get_role_type(session, ROLE_TYPE_DISPATCHER)
             session.add(
                 User(
-                    role="admin",
+                    role_type_id=dispatcher_role_type.id,
+                    is_admin=True,
                     username=bootstrap_username,
                     display_name=BOOTSTRAP_ADMIN_DISPLAY_NAME,
                     locomotive_id=None,
@@ -781,9 +828,11 @@ def seed_auth_identities() -> None:
 
         dispatcher_username = _normalize_username(DEMO_DISPATCHER_USERNAME)
         if dispatcher_username and session.scalar(select(User).where(User.username == dispatcher_username)) is None:
+            dispatcher_role_type = _get_role_type(session, ROLE_TYPE_DISPATCHER)
             session.add(
                 User(
-                    role="dispatcher",
+                    role_type_id=dispatcher_role_type.id,
+                    is_admin=False,
                     username=dispatcher_username,
                     display_name=DEMO_DISPATCHER_DISPLAY_NAME,
                     locomotive_id=None,
@@ -798,9 +847,11 @@ def seed_auth_identities() -> None:
 
         demo_locomotive_id = _normalize_locomotive_id(DEMO_TRAIN_LOCOMOTIVE_ID)
         if demo_locomotive_id and session.scalar(select(User).where(User.locomotive_id == demo_locomotive_id)) is None:
+            regular_train_role_type = _get_role_type(session, ROLE_TYPE_REGULAR_TRAIN)
             session.add(
                 User(
-                    role="train",
+                    role_type_id=regular_train_role_type.id,
+                    is_admin=False,
                     username=None,
                     display_name=DEMO_TRAIN_DISPLAY_NAME,
                     locomotive_id=demo_locomotive_id,
