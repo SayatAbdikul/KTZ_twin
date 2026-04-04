@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard,
+  Train,
   Activity,
   AlertTriangle,
   MessageSquare,
@@ -13,6 +14,7 @@ import { cn } from '@/utils/cn'
 
 const NAV_ITEMS = [
   { to: ROUTES.DASHBOARD, icon: LayoutDashboard, label: 'Dashboard' },
+  { to: ROUTES.DIAGRAM, icon: Train, label: 'Diagram' },
   { to: ROUTES.TELEMETRY, icon: Activity, label: 'Telemetry' },
   { to: ROUTES.ALERTS, icon: AlertTriangle, label: 'Alerts' },
   { to: ROUTES.MESSAGES, icon: MessageSquare, label: 'Messages' },
