@@ -8,6 +8,7 @@ from typing import Any
 import websockets
 
 from app.config import PING_INTERVAL_S, RECONNECT_BASE_S, RECONNECT_MAX_S, LocomotiveTarget
+from app.health_engine import evaluate_runtime
 from app.models import now_ms
 from app.state import state
 from app.ws_server import broadcast_message
@@ -26,13 +27,26 @@ async def _forward_locomotive_message(locomotive_id: str, msg: dict[str, Any]) -
         # Normalize to expected multi-locomotive frame shape.
         payload.setdefault("locomotive_id", locomotive_id)
         runtime.latest_telemetry = payload
-        await broadcast_message("telemetry.frame", payload)
+        evaluation = evaluate_runtime(
+            locomotive_id=locomotive_id,
+            frame=payload,
+            history=runtime.telemetry_history,
+            active_alerts=runtime.active_alerts,
+        )
+        runtime.latest_metrics = evaluation["metrics"]
+        runtime.health_index = evaluation["health_index"]
+        runtime.active_alerts = evaluation["alerts"]
+
+        await broadcast_message("telemetry.frame", payload, locomotive_id=locomotive_id)
+        await broadcast_message("health.update", runtime.health_index, locomotive_id=locomotive_id)
+        for event in evaluation["events"]:
+            await broadcast_message(event["type"], event["payload"], locomotive_id=locomotive_id)
         return
 
     if msg_type == "message.new" and isinstance(payload, dict):
         payload.setdefault("locomotive_id", locomotive_id)
         state.chat_history[locomotive_id].append(payload)
-        await broadcast_message("message.new", payload)
+        await broadcast_message("message.new", payload, locomotive_id=locomotive_id)
         return
 
     # Pass through unknown events with source metadata.

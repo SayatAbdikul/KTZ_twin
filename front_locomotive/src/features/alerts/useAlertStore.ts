@@ -49,7 +49,8 @@ export const useAlertStore = create<AlertState>()(
 
       addAlert: (alert) =>
         set((s) => {
-          const updated = sortAlerts([...s.activeAlerts, alert])
+          const withoutExisting = s.activeAlerts.filter((a) => a.alertId !== alert.alertId)
+          const updated = sortAlerts([...withoutExisting, alert])
           return { activeAlerts: updated, summary: computeSummary(updated) }
         }),
 

@@ -25,7 +25,10 @@ export function connectWebSocket(): void {
         socket?.send(
             JSON.stringify({
                 type: 'subscribe',
-                payload: { channels: ['telemetry', 'health', 'alerts', 'messages'] },
+                payload: {
+                    channels: ['telemetry', 'health', 'alerts', 'messages'],
+                    locomotiveId: APP_CONFIG.LOCOMOTIVE_ID,
+                },
             })
         )
     }

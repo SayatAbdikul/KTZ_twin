@@ -14,7 +14,7 @@ from app.locomotive_client import connect_locomotive_forever, send_chat_to_locom
 from app.models import now_ms
 from app.routes import health, locomotives
 from app.state import LocomotiveRuntime, state
-from app.ws_server import broadcast_message, send_connection_snapshot
+from app.ws_server import broadcast_message, send_connection_snapshot, send_locomotive_snapshot
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s %(name)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -85,6 +85,7 @@ def ping() -> dict:
 async def ws_endpoint(websocket: WebSocket):
     await websocket.accept()
     state.ws_clients.add(websocket)
+    state.ws_subscriptions[websocket] = None
     await send_connection_snapshot(websocket)
 
     try:
@@ -97,11 +98,19 @@ async def ws_endpoint(websocket: WebSocket):
                 if msg_type == "dispatcher.chat" and isinstance(payload, dict):
                     await _handle_dispatcher_command(payload)
                 elif msg_type == "subscribe":
-                    # Dispatcher clients currently receive all events.
-                    pass
+                    requested = None
+                    if isinstance(payload, dict):
+                        requested = payload.get("locomotiveId") or payload.get("locomotive_id")
+                    if requested in ("all", "*", "", None):
+                        state.ws_subscriptions[websocket] = "*" if requested else None
+                    else:
+                        locomotive_id = str(requested).strip()
+                        state.ws_subscriptions[websocket] = locomotive_id
+                        await send_locomotive_snapshot(websocket, locomotive_id)
             except json.JSONDecodeError:
                 continue
     except WebSocketDisconnect:
         pass
     finally:
         state.ws_clients.discard(websocket)
+        state.ws_subscriptions.pop(websocket, None)

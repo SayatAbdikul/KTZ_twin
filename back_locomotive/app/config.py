@@ -4,6 +4,8 @@ All values ported from front_locomotive/src/config/metrics.config.ts
 and front_locomotive/src/config/app.config.ts.
 """
 
+import os
+
 LOCOMOTIVE_ID = "KTZ-2001"
 PORT = 3001
 
@@ -22,11 +24,12 @@ HISTORY_BUFFER_SIZE = 3600
 DRIFT_BIAS = 0.48   # slight upward tendency
 DRIFT_SCALE = 0.01  # 1% of range per step
 
-# CORS origins
-CORS_ORIGINS = [
-    "http://localhost:5173",  # Vite dev
-    "http://localhost:4173",  # Vite preview
-]
+def _cors_origins() -> list[str]:
+    raw = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:4173")
+    return [s.strip() for s in raw.split(",") if s.strip()]
+
+
+CORS_ORIGINS = _cors_origins()
 
 # ---------------------------------------------------------------------------
 # Metric definitions (14 total) — matches front_locomotive metrics.config.ts

@@ -2,16 +2,16 @@
 
 This stack simulates the current microservice split:
 
-- `back_locomotive`: replays `telemetry.csv`, publishes raw Kafka events, streams frontend frames over WebSocket
-- `back_dispatcher`: consumes raw Kafka telemetry, keeps latest locomotive state, streams dispatcher updates over WebSocket
+- `back_locomotive`: generates synthetic telemetry and streams frontend frames over WebSocket
+- `back_dispatcher`: consumes the locomotive WebSocket stream, keeps latest locomotive state, streams dispatcher updates over WebSocket
 - `front_locomotive`: browser UI for locomotive telemetry
 - `front_dispatcher`: browser UI for dispatcher monitoring
-- `kafka`: single-node Kafka broker for local development
 
 ## Files
 
 - Compose file: `docker-compose.microservices.yml`
 - Start script: `scripts/start_microservices.sh`
+- Env file: `.env.microservices`
 
 ## Usage
 
@@ -37,21 +37,18 @@ Stop everything:
 
 - `3001`: `back_locomotive`
 - `3010`: `back_dispatcher`
-- `5173`: `front_locomotive`
+- `5183`: `front_locomotive`
 - `5174`: `front_dispatcher`
-- `29092`: Kafka broker exposed to the host
 
-## Data Source
+## Configuration
 
-The compose stack mounts:
+The start script passes `.env.microservices` to Docker Compose explicitly.
 
-- `synthetic_output_core/telemetry.csv`
+Update that file if you need to change:
 
-If the file is missing, the start script generates it by running:
-
-```bash
-python3 generate_core_synthetic_telemetry.py
-```
+- backend ports and CORS origins
+- dispatcher target WebSocket URLs
+- frontend build-time API / WebSocket endpoints
 
 ## Notes
 
@@ -59,4 +56,4 @@ python3 generate_core_synthetic_telemetry.py
 - Browser WebSocket targets are set at image build time:
   - locomotive frontend -> `ws://localhost:3001/ws`
   - dispatcher frontend -> `ws://localhost:3010/ws`
-- Backend-to-backend traffic uses Kafka on the internal Docker network as `kafka:9092`.
+- Backend-to-backend traffic uses the Docker network alias `back_locomotive`.

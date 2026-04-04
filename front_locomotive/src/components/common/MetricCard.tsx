@@ -1,5 +1,5 @@
 import { cn } from '@/utils/cn'
-import { getMetricSeverity, severityToBg } from '@/utils/thresholds'
+import { getMetricSeverity } from '@/utils/thresholds'
 import { ValueDisplay } from './ValueDisplay'
 import type { MetricDefinition, MetricReading } from '@/types/telemetry'
 
@@ -48,6 +48,3 @@ export function MetricCard({ definition, reading, sparkline, className }: Metric
     </div>
   )
 }
-
-// Unused import suppressor — `severityToBg` exported for use elsewhere
-export { severityToBg }

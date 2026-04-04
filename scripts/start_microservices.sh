@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COMPOSE_FILE="$ROOT_DIR/docker-compose.microservices.yml"
-CSV_PATH="$ROOT_DIR/synthetic_output_core/telemetry.csv"
+ENV_FILE="$ROOT_DIR/.env.microservices"
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -13,41 +13,41 @@ require_cmd() {
 }
 
 compose() {
-  docker compose -f "$COMPOSE_FILE" "$@"
+  docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"
 }
 
-ensure_csv() {
-  if [[ -f "$CSV_PATH" ]]; then
-    return
+load_env() {
+  if [[ ! -f "$ENV_FILE" ]]; then
+    echo "Missing env file: $ENV_FILE" >&2
+    exit 1
   fi
 
-  echo "Telemetry seed file not found at $CSV_PATH"
-  echo "Generating synthetic telemetry seed..."
-  require_cmd python3
-  (cd "$ROOT_DIR" && python3 generate_core_synthetic_telemetry.py)
+  set -a
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  set +a
 }
 
 print_urls() {
-  cat <<'EOF'
+  cat <<EOF
 Stack is up.
 
-Locomotive backend:  http://localhost:3001/ping
-Dispatcher backend:  http://localhost:3010/ping
-Locomotive frontend: http://localhost:5173
-Dispatcher frontend: http://localhost:5174
-Kafka broker:        localhost:29092
+Locomotive backend:  http://localhost:${LOCOMOTIVE_PORT}/ping
+Dispatcher backend:  http://localhost:${DISPATCHER_PORT}/ping
+Locomotive frontend: http://localhost:${FRONT_LOCOMOTIVE_PORT}
+Dispatcher frontend: http://localhost:${FRONT_DISPATCHER_PORT}
 EOF
 }
 
 main() {
   require_cmd docker
+  load_env
 
   local action="${1:-up}"
   shift || true
 
   case "$action" in
     up)
-      ensure_csv
       compose up --build -d "$@"
       print_urls
       ;;
@@ -55,7 +55,6 @@ main() {
       compose down --remove-orphans "$@"
       ;;
     restart)
-      ensure_csv
       compose down --remove-orphans
       compose up --build -d "$@"
       print_urls
