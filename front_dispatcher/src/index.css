@@ -1,0 +1,275 @@
+:root {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: #d9e1ee;
+    background: radial-gradient(circle at 15% 20%, #162036 0%, #10131f 45%, #0a0d14 100%);
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    min-height: 100svh;
+}
+
+#root {
+    min-height: 100svh;
+}
+
+.app-root {
+    padding: 1rem;
+    min-height: 100svh;
+}
+
+.app-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+    padding: 0.9rem 1rem;
+    border-radius: 12px;
+    border: 1px solid #27314a;
+    background: rgba(8, 12, 21, 0.85);
+    backdrop-filter: blur(6px);
+}
+
+.app-header h1 {
+    margin: 0;
+    font-size: 1.25rem;
+}
+
+.kicker {
+    margin: 0 0 0.25rem;
+    color: #8ab4ff;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.connection-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.45rem 0.75rem;
+    border: 1px solid #2f3b55;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    text-transform: capitalize;
+}
+
+.connection-badge .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+}
+
+.app-layout {
+    display: grid;
+    grid-template-columns: minmax(220px, 280px) 1fr minmax(280px, 340px);
+    gap: 1rem;
+}
+
+.panel {
+    border: 1px solid #2a344b;
+    border-radius: 14px;
+    background: rgba(6, 10, 19, 0.82);
+    padding: 0.9rem;
+    min-height: 400px;
+}
+
+.panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.8rem;
+}
+
+.panel-header h2 {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.muted {
+    color: #93a0bc;
+    font-size: 0.85rem;
+}
+
+.list-panel {
+    display: flex;
+    flex-direction: column;
+}
+
+.loco-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    overflow: auto;
+}
+
+.loco-item {
+    text-align: left;
+    border: 1px solid #2e3a55;
+    background: #0d1423;
+    color: #d8e4ff;
+    border-radius: 10px;
+    padding: 0.7rem;
+    cursor: pointer;
+}
+
+.loco-item.active {
+    border-color: #66b3ff;
+    box-shadow: 0 0 0 1px #66b3ff;
+}
+
+.loco-top-row,
+.loco-metrics-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.loco-metrics-row {
+    margin: 0.5rem 0;
+    font-size: 0.82rem;
+}
+
+.status-pill {
+    border-radius: 999px;
+    font-size: 0.7rem;
+    padding: 0.15rem 0.5rem;
+    text-transform: uppercase;
+}
+
+.status-normal {
+    background: #123b2e;
+    color: #83f0c3;
+}
+
+.status-attention {
+    background: #4d3a12;
+    color: #ffd179;
+}
+
+.status-critical {
+    background: #4b1d1d;
+    color: #ff9f9f;
+}
+
+.metric-grid {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(2, minmax(140px, 1fr));
+}
+
+.metric-card {
+    border: 1px solid #334363;
+    border-radius: 10px;
+    padding: 0.75rem;
+    background: #0d172b;
+    min-height: 130px;
+}
+
+.metric-card .label {
+    margin: 0;
+    color: #9eb2d8;
+    font-size: 0.8rem;
+}
+
+.metric-card .value {
+    margin: 0.35rem 0 0.75rem;
+    font-size: 1.25rem;
+    font-weight: 700;
+}
+
+.trend-line {
+    width: 100%;
+    height: 48px;
+    color: #7ab8ff;
+}
+
+.chat-panel {
+    display: flex;
+    flex-direction: column;
+}
+
+.chat-log {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+}
+
+.bubble {
+    border-radius: 10px;
+    max-width: 95%;
+    padding: 0.55rem 0.65rem;
+}
+
+.bubble p {
+    margin: 0;
+    line-height: 1.35;
+}
+
+.bubble small {
+    display: block;
+    margin-top: 0.35rem;
+    color: #98a6c2;
+}
+
+.bubble.in {
+    align-self: flex-start;
+    background: #16263f;
+    border: 1px solid #35507f;
+}
+
+.bubble.out {
+    align-self: flex-end;
+    background: #1f2d1f;
+    border: 1px solid #396239;
+}
+
+.chat-input-row {
+    margin-top: 0.75rem;
+    display: flex;
+    gap: 0.5rem;
+}
+
+.chat-input-row input {
+    flex: 1;
+    border: 1px solid #2f4367;
+    border-radius: 10px;
+    background: #0a1222;
+    color: #dce8ff;
+    padding: 0.55rem 0.65rem;
+}
+
+.chat-input-row button {
+    border: 1px solid #3f6598;
+    background: #143d70;
+    color: #dceaff;
+    border-radius: 10px;
+    padding: 0.55rem 0.85rem;
+    cursor: pointer;
+}
+
+.chat-input-row button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.empty {
+    color: #8fa0be;
+    margin: 0.4rem 0;
+}
+
+@media (max-width: 1200px) {
+    .app-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .panel {
+        min-height: 280px;
+    }
+}
