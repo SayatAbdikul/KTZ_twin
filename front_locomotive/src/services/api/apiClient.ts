@@ -12,6 +12,15 @@ class ApiError extends Error {
   }
 }
 
+function buildHeaders(headers: HeadersInit | undefined): Headers {
+  const merged = new Headers(headers ?? {})
+  merged.set('Content-Type', 'application/json')
+  if (APP_CONFIG.API_KEY) {
+    merged.set('X-API-Key', APP_CONFIG.API_KEY)
+  }
+  return merged
+}
+
 function createRequest(baseUrl: string) {
   return async function request<T>(
     path: string,
@@ -27,8 +36,8 @@ function createRequest(baseUrl: string) {
     }
 
     const res = await fetch(url, {
-      headers: { 'Content-Type': 'application/json' },
       ...options,
+      headers: buildHeaders(options?.headers),
     })
 
     if (!res.ok) {
@@ -48,6 +57,8 @@ export function createApiClient(baseUrl: string) {
       request<T>(path, { method: 'GET', ...options }),
     post: <T>(path: string, body?: unknown) =>
       request<T>(path, { method: 'POST', body: JSON.stringify(body) }),
+    put: <T>(path: string, body?: unknown) =>
+      request<T>(path, { method: 'PUT', body: JSON.stringify(body) }),
   }
 }
 

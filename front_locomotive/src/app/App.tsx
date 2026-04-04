@@ -9,6 +9,7 @@ import { MessagesPage } from '@/pages/MessagesPage'
 import { ReplayPage } from '@/pages/ReplayPage'
 import { ROUTES } from '@/config/routes'
 import { useWebSocketLifecycle } from './useWebSocketLifecycle'
+import { useMetricDefinitions } from '@/features/telemetry/useTelemetryQueries'
 
 const router = createBrowserRouter([
   {
@@ -26,6 +27,7 @@ const router = createBrowserRouter([
 
 function RootWithWs() {
   useWebSocketLifecycle()
+  useMetricDefinitions()
   return <AppShell />
 }
 

@@ -1,7 +1,7 @@
 import { useHealthStore } from '@/features/health/useHealthStore'
 import { useTelemetryStore } from '@/features/telemetry/useTelemetryStore'
+import { useMetricCatalog } from '@/features/telemetry/metricCatalog'
 import { useAlertStore } from '@/features/alerts/useAlertStore'
-import { METRIC_DEFINITIONS } from '@/config/metrics.config'
 import type { DiagramZone } from '@/types/diagram'
 import type { SubsystemHealth } from '@/types/health'
 import type { MetricDefinition, MetricReading } from '@/types/telemetry'
@@ -37,6 +37,7 @@ export function useDiagramData(zone: DiagramZone | null): DiagramData {
   const allReadings = useTelemetryStore((s) => s.currentReadings)
   const allBuffers = useTelemetryStore((s) => s.sparklineBuffers)
   const allAlerts = useAlertStore((s) => s.activeAlerts)
+  const metricDefinitions = useMetricCatalog()
 
   if (!zone) return EMPTY
 
@@ -46,7 +47,7 @@ export function useDiagramData(zone: DiagramZone | null): DiagramData {
       ? (healthIndex?.subsystems.find((s) => s.subsystemId === zone.subsystemId) ?? null)
       : null
 
-  const definitions = METRIC_DEFINITIONS.filter((d) => zone.metricIds.includes(d.metricId))
+  const definitions = metricDefinitions.filter((d) => zone.metricIds.includes(d.metricId))
 
   const alerts = allAlerts.filter(
     (a) => a.source === zone.subsystemId && a.status !== 'resolved'

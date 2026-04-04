@@ -4,11 +4,12 @@ import asyncio
 import json
 import logging
 from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import websockets
 from pydantic import ValidationError
 
-from app.config import PING_INTERVAL_S, RECONNECT_BASE_S, RECONNECT_MAX_S, TELEMETRY_RETENTION_HOURS, LocomotiveTarget
+from app.config import API_KEY, PING_INTERVAL_S, RECONNECT_BASE_S, RECONNECT_MAX_S, TELEMETRY_RETENTION_HOURS, LocomotiveTarget
 from app.health_engine import evaluate_runtime
 from app.models import WsEnvelope, now_ms
 from app.repository import (
@@ -26,6 +27,16 @@ logger = logging.getLogger(__name__)
 
 _frames_since_prune = 0
 _PRUNE_EVERY_FRAMES = 60
+
+
+def _with_api_key(url: str) -> str:
+    if not API_KEY:
+        return url
+
+    parsed = urlsplit(url)
+    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    query["apiKey"] = API_KEY
+    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, urlencode(query), parsed.fragment))
 
 
 async def _forward_locomotive_message(
@@ -153,7 +164,7 @@ async def connect_locomotive_forever(target: LocomotiveTarget) -> None:
 
     while True:
         try:
-            async with websockets.connect(target.ws_url, ping_interval=PING_INTERVAL_S) as ws:
+            async with websockets.connect(_with_api_key(target.ws_url), ping_interval=PING_INTERVAL_S) as ws:
                 runtime.connected = True
                 runtime.ws = ws
                 runtime.reconnect_attempt = 0

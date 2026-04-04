@@ -1,7 +1,8 @@
 import { create } from 'zustand'
 import { devtools } from 'zustand/middleware'
-import { METRIC_DEFINITIONS } from '@/config/metrics.config'
 import { fetchReplayRange, fetchReplaySnapshot, fetchReplayTimeRange } from '@/services/api/replayApi'
+import { resolveMetricDefinitions } from '@/features/telemetry/metricCatalog'
+import { useTelemetryStore } from '@/features/telemetry/useTelemetryStore'
 import type {
   PlaybackSpeed,
   ReplayLoadedWindow,
@@ -19,13 +20,16 @@ const WINDOW_MS_BY_PRESET: Record<Exclude<TimeRangePreset, 'all'>, number> = {
   '1h': 60 * 60_000,
 }
 
-const DEFAULT_SELECTED_METRICS = METRIC_DEFINITIONS.filter((metric) => metric.sparklineEnabled).map(
-  (metric) => metric.metricId
-)
 const SNAPSHOT_DEBOUNCE_MS = 150
 const SKIP_INTERVAL_MS = 10_000
 
 let snapshotRefreshTimer: ReturnType<typeof setTimeout> | null = null
+
+function getDefaultSelectedMetrics(): string[] {
+  return resolveMetricDefinitions(useTelemetryStore.getState().metricDefinitions)
+    .filter((metric) => metric.sparklineEnabled)
+    .map((metric) => metric.metricId)
+}
 
 function clampTimestamp(timestamp: number, timeRange: ReplayTimeRange | null): number {
   if (!timeRange || timeRange.earliest === null || timeRange.latest === null) {
@@ -213,7 +217,7 @@ export const useReplayStore = create<ReplayState>()(
       isPlaying: false,
       playbackSpeed: 1,
       visibleWindow: '15m',
-      selectedMetricIds: DEFAULT_SELECTED_METRICS,
+      selectedMetricIds: getDefaultSelectedMetrics(),
       seriesByMetric: {},
       loadedWindow: null,
       loadedMetricIds: [],
@@ -235,7 +239,7 @@ export const useReplayStore = create<ReplayState>()(
           error: null,
           isPlaying: false,
           visibleWindow: '15m',
-          selectedMetricIds: DEFAULT_SELECTED_METRICS,
+          selectedMetricIds: getDefaultSelectedMetrics(),
         })
 
         try {
@@ -259,7 +263,7 @@ export const useReplayStore = create<ReplayState>()(
           set({
             timeRange,
             currentTimestamp: latest,
-            selectedMetricIds: DEFAULT_SELECTED_METRICS,
+            selectedMetricIds: getDefaultSelectedMetrics(),
             initializedForLocomotiveId: locomotiveId,
           })
 
@@ -269,7 +273,7 @@ export const useReplayStore = create<ReplayState>()(
               timeRange,
               latest,
               '15m',
-              DEFAULT_SELECTED_METRICS,
+              getDefaultSelectedMetrics(),
               set
             ),
             loadReplaySnapshot(locomotiveId, latest, set),

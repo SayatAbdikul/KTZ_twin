@@ -2,7 +2,6 @@ import { useEffect, useMemo } from 'react'
 import { History } from 'lucide-react'
 import { PageContainer } from '@/components/layout/PageContainer'
 import { TimeRangeSelector } from '@/components/charts/TimeRangeSelector'
-import { METRIC_DEFINITIONS } from '@/config/metrics.config'
 import { APP_CONFIG } from '@/config/app.config'
 import { PlaybackControls } from '@/components/replay/PlaybackControls'
 import { TimelineScrubber } from '@/components/replay/TimelineScrubber'
@@ -10,6 +9,8 @@ import { ReplayMetricSelector } from '@/components/replay/ReplayMetricSelector'
 import { ReplaySnapshotSummary } from '@/components/replay/ReplaySnapshotSummary'
 import { ReplayChart } from '@/components/replay/ReplayChart'
 import { REPLAY_SKIP_INTERVAL_MS, useReplayStore } from '@/features/replay/useReplayStore'
+import { useMetricCatalog } from '@/features/telemetry/metricCatalog'
+import type { MetricDefinition } from '@/types/telemetry'
 
 function formatRangeLabel(earliest: number | null, latest: number | null): string {
   if (earliest === null || latest === null) return 'No replay history available yet'
@@ -26,6 +27,7 @@ function formatRangeLabel(earliest: number | null, latest: number | null): strin
 }
 
 export function ReplayPage() {
+  const metricDefinitions = useMetricCatalog()
   const timeRange = useReplayStore((state) => state.timeRange)
   const currentTimestamp = useReplayStore((state) => state.currentTimestamp)
   const isPlaying = useReplayStore((state) => state.isPlaying)
@@ -63,9 +65,9 @@ export function ReplayPage() {
   const selectedDefinitions = useMemo(
     () =>
       selectedMetricIds
-        .map((metricId) => METRIC_DEFINITIONS.find((metric) => metric.metricId === metricId))
-        .filter((metric): metric is (typeof METRIC_DEFINITIONS)[number] => Boolean(metric)),
-    [selectedMetricIds]
+        .map((metricId) => metricDefinitions.find((metric) => metric.metricId === metricId))
+        .filter((metric): metric is MetricDefinition => metric !== undefined),
+    [metricDefinitions, selectedMetricIds]
   )
 
   const hasReplayData = timeRange?.earliest !== null && timeRange?.latest !== null
@@ -171,6 +173,7 @@ export function ReplayPage() {
 
         <div className="space-y-4">
           <ReplayMetricSelector
+            definitions={metricDefinitions}
             selectedMetricIds={selectedMetricIds}
             onToggleMetric={handleMetricToggle}
           />

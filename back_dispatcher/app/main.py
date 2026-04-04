@@ -9,6 +9,7 @@ from typing import Any
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.auth import authorize_websocket, enforce_http_api_key
 from app.config import CORS_ORIGINS, INGEST_MODE, LOCOMOTIVE_TARGETS
 from app.kafka_consumer import consume_kafka_forever
 from app.db import init_db_schema, wait_for_db
@@ -91,6 +92,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.middleware("http")(enforce_http_api_key)
 
 app.include_router(health.router)
 app.include_router(locomotives.router)
@@ -103,10 +105,11 @@ def ping() -> dict:
 
 @app.websocket("/ws")
 async def ws_endpoint(websocket: WebSocket):
+    if not await authorize_websocket(websocket):
+        return
+
     await websocket.accept()
-    state.ws_clients.add(websocket)
-    state.note_ws_connected()
-    state.ws_subscriptions[websocket] = None
+    state.register_client(websocket)
     await send_connection_snapshot(websocket)
 
     try:
@@ -123,16 +126,14 @@ async def ws_endpoint(websocket: WebSocket):
                     if isinstance(payload, dict):
                         requested = payload.get("locomotiveId") or payload.get("locomotive_id")
                     if requested in ("all", "*", "", None):
-                        state.ws_subscriptions[websocket] = "*" if requested else None
+                        state.set_subscription(websocket, "*" if requested else None)
                     else:
                         locomotive_id = str(requested).strip()
-                        state.ws_subscriptions[websocket] = locomotive_id
+                        state.set_subscription(websocket, locomotive_id)
                         await send_locomotive_snapshot(websocket, locomotive_id)
             except json.JSONDecodeError:
                 continue
     except WebSocketDisconnect:
         pass
     finally:
-        state.ws_clients.discard(websocket)
-        state.ws_subscriptions.pop(websocket, None)
-        state.note_ws_disconnected()
+        state.unregister_client(websocket, reason="client_disconnected")

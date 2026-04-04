@@ -12,6 +12,7 @@ import logging
 
 from fastapi import WebSocket, WebSocketDisconnect
 
+from app.auth import authorize_websocket
 from app.config import LOCOMOTIVE_ID
 from app.models import make_event_envelope, now_ms
 from app.state import state
@@ -21,6 +22,9 @@ logger = logging.getLogger(__name__)
 
 
 async def websocket_endpoint(websocket: WebSocket) -> None:
+    if not await authorize_websocket(websocket):
+        return
+
     await websocket.accept()
     state.ws_clients.add(websocket)
     logger.info("WS client connected. Total: %d", len(state.ws_clients))

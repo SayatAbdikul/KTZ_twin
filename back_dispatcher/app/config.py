@@ -26,10 +26,14 @@ APP_HOST = os.getenv("DISPATCHER_HOST", "0.0.0.0")
 APP_PORT = int(os.getenv("DISPATCHER_PORT", "3010"))
 CORS_ORIGINS = [s.strip() for s in os.getenv("CORS_ORIGINS", "*").split(",") if s.strip()]
 LOCOMOTIVE_TARGETS = _parse_locomotive_targets()
+API_KEY = os.getenv("API_KEY", "ktz-demo-key")
+THRESHOLDS_FILE = os.getenv("THRESHOLDS_FILE", "")
 
 RECONNECT_BASE_S = float(os.getenv("RECONNECT_BASE_S", "1"))
 RECONNECT_MAX_S = float(os.getenv("RECONNECT_MAX_S", "30"))
 PING_INTERVAL_S = float(os.getenv("PING_INTERVAL_S", "20"))
+WS_ORDERED_QUEUE_LIMIT = int(os.getenv("WS_ORDERED_QUEUE_LIMIT", "256"))
+WS_MAX_SEND_FAILURES = int(os.getenv("WS_MAX_SEND_FAILURES", "3"))
 
 # Ingest mode: ws | kafka | hybrid
 INGEST_MODE = os.getenv("INGEST_MODE", "ws").strip().lower()

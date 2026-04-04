@@ -13,6 +13,24 @@ export interface TelemetryFrame {
     readings: MetricReading[]
 }
 
+export type HealthSubsystemStatus = 'normal' | 'degraded' | 'warning' | 'critical' | 'unknown'
+
+export interface HealthSubsystem {
+    subsystemId: string
+    label: string
+    healthScore: number
+    status: HealthSubsystemStatus
+    activeAlertCount: number
+    lastUpdated: number
+}
+
+export interface HealthIndex {
+    overall: number
+    status?: HealthSubsystemStatus
+    timestamp: number
+    subsystems: HealthSubsystem[]
+}
+
 export interface LocomotiveSnapshot {
     locomotiveId: string
     timestamp: number

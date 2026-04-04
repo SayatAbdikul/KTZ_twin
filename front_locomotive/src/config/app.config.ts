@@ -3,6 +3,7 @@ export const APP_CONFIG = {
   WS_URL: import.meta.env.VITE_WS_URL ?? 'ws://localhost:3010/ws',
   API_BASE_URL: import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001',
   REPLAY_API_BASE_URL: import.meta.env.VITE_REPLAY_API_BASE_URL ?? 'http://localhost:3010',
+  API_KEY: import.meta.env.VITE_API_KEY ?? 'ktz-demo-key',
   ENABLE_MOCKS: import.meta.env.VITE_ENABLE_MOCKS === 'true',
 
   // Update intervals (ms)

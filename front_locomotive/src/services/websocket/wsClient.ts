@@ -6,6 +6,14 @@ let socket: WebSocket | null = null
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 let destroyed = false
 
+function buildWsUrl(): string {
+    const url = new URL(APP_CONFIG.WS_URL)
+    if (APP_CONFIG.API_KEY) {
+        url.searchParams.set('apiKey', APP_CONFIG.API_KEY)
+    }
+    return url.toString()
+}
+
 export function connectWebSocket(): void {
     if (socket?.readyState === WebSocket.OPEN) return
 
@@ -14,7 +22,7 @@ export function connectWebSocket(): void {
     store.setBackendStatus('connecting')
     store.setWsConnected(false)
 
-    socket = new WebSocket(APP_CONFIG.WS_URL)
+    socket = new WebSocket(buildWsUrl())
 
     socket.onopen = () => {
         const s = useConnectionStore.getState()

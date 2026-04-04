@@ -1,10 +1,18 @@
 import { CONFIG } from '../config'
 import { useDispatcherStore } from '../store/useDispatcherStore'
-import type { ChatMessage, TelemetryFrame, WsEnvelope } from '../types'
+import type { ChatMessage, HealthIndex, HealthSubsystem, TelemetryFrame, WsEnvelope } from '../types'
 
 let socket: WebSocket | null = null
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 let manualClose = false
+
+function buildWsUrl(): string {
+    const url = new URL(CONFIG.WS_URL)
+    if (CONFIG.API_KEY) {
+        url.searchParams.set('apiKey', CONFIG.API_KEY)
+    }
+    return url.toString()
+}
 
 function adaptTelemetryFrame(raw: unknown): TelemetryFrame {
     const data = raw as Record<string, unknown>
@@ -33,6 +41,23 @@ function scheduleReconnect(): void {
     reconnectTimer = setTimeout(() => connectWs(), delay)
 }
 
+function adaptHealthIndex(raw: unknown): HealthIndex {
+    const data = raw as Record<string, unknown>
+    return {
+        overall: Number(data['overall'] ?? 100),
+        status: (data['status'] as HealthIndex['status']) ?? undefined,
+        timestamp: Number(data['timestamp'] ?? Date.now()),
+        subsystems: ((data['subsystems'] ?? []) as Array<Record<string, unknown>>).map((subsystem) => ({
+            subsystemId: String(subsystem['subsystem_id'] ?? subsystem['subsystemId'] ?? ''),
+            label: String(subsystem['label'] ?? ''),
+            healthScore: Number(subsystem['health_score'] ?? subsystem['healthScore'] ?? 100),
+            status: (String(subsystem['status'] ?? 'unknown') as HealthSubsystem['status']),
+            activeAlertCount: Number(subsystem['active_alert_count'] ?? subsystem['activeAlertCount'] ?? 0),
+            lastUpdated: Number(subsystem['last_updated'] ?? subsystem['lastUpdated'] ?? Date.now()),
+        })),
+    }
+}
+
 export function connectWs(): void {
     if (socket?.readyState === WebSocket.OPEN) return
 
@@ -40,13 +65,13 @@ export function connectWs(): void {
     const store = useDispatcherStore.getState()
     store.setConnection('connecting')
 
-    socket = new WebSocket(CONFIG.WS_URL)
+    socket = new WebSocket(buildWsUrl())
 
     socket.onopen = () => {
         const s = useDispatcherStore.getState()
         s.setConnection('connected')
         s.setReconnectAttempt(0)
-        socket?.send(JSON.stringify({ type: 'subscribe', payload: { channels: ['telemetry'] } }))
+        socket?.send(JSON.stringify({ type: 'subscribe', payload: { channels: ['telemetry', 'health', 'messages'] } }))
     }
 
     socket.onmessage = (event) => {
@@ -54,6 +79,15 @@ export function connectWs(): void {
             const msg = JSON.parse(event.data) as WsEnvelope
             if (msg.type === 'telemetry.frame') {
                 useDispatcherStore.getState().upsertTelemetry(adaptTelemetryFrame(msg.payload))
+            }
+            if (msg.type === 'health.update') {
+                const locomotiveId = String(
+                    msg.event?.locomotive_id
+                        ?? (msg.payload as Record<string, unknown>)?.['locomotive_id']
+                        ?? (msg.payload as Record<string, unknown>)?.['locomotiveId']
+                        ?? 'KTZ-2001'
+                )
+                useDispatcherStore.getState().upsertHealth(locomotiveId, adaptHealthIndex(msg.payload))
             }
             if (msg.type === 'message.new') {
                 const payload = msg.payload as Record<string, unknown>

@@ -3,6 +3,7 @@ import { CONFIG } from '../config'
 import type {
     ChatMessage,
     ConnectionState,
+    HealthIndex,
     LocomotiveSnapshot,
     TelemetryFrame,
 } from '../types'
@@ -18,6 +19,7 @@ interface DispatcherState {
     setReconnectAttempt: (attempt: number) => void
     setSelectedLocomotive: (locomotiveId: string) => void
     upsertTelemetry: (frame: TelemetryFrame) => void
+    upsertHealth: (locomotiveId: string, health: HealthIndex) => void
     addChatMessage: (message: ChatMessage) => void
 }
 
@@ -25,20 +27,13 @@ function getMetric(frame: TelemetryFrame, metricId: string): number {
     return frame.readings.find((r) => r.metricId === metricId)?.value ?? 0
 }
 
-function computeHealth(speed: number, fuel: number, coolant: number, current: number): number {
-    let score = 100
-    if (fuel < 25) score -= 20
-    if (fuel < 12) score -= 20
-    if (coolant > 95) score -= 20
-    if (coolant > 105) score -= 20
-    if (current > 1600) score -= 10
-    if (speed > 140) score -= 10
-    return Math.max(0, Math.min(100, score))
-}
-
-function healthStatus(score: number): LocomotiveSnapshot['status'] {
-    if (score <= 50) return 'critical'
-    if (score <= 75) return 'attention'
+function healthStatus(health: HealthIndex): LocomotiveSnapshot['status'] {
+    if (health.status === 'critical') return 'critical'
+    if (health.status === 'warning' || health.status === 'degraded') return 'attention'
+    if (health.subsystems.some((subsystem) => subsystem.status === 'critical')) return 'critical'
+    if (health.subsystems.some((subsystem) => subsystem.status === 'warning' || subsystem.status === 'degraded')) {
+        return 'attention'
+    }
     return 'normal'
 }
 
@@ -59,7 +54,6 @@ export const useDispatcherStore = create<DispatcherState>((set) => ({
             const fuel = getMetric(frame, 'fuel.level')
             const coolant = getMetric(frame, 'thermal.coolant_temp')
             const current = getMetric(frame, 'electrical.traction_current')
-            const score = computeHealth(speed, fuel, coolant, current)
 
             const prev = state.locomotives[frame.locomotiveId]
             const oldSparkline = prev?.sparkline ?? []
@@ -75,8 +69,8 @@ export const useDispatcherStore = create<DispatcherState>((set) => ({
                 fuelLevel: fuel,
                 coolantTemp: coolant,
                 tractionCurrent: current,
-                healthScore: score,
-                status: healthStatus(score),
+                healthScore: prev?.healthScore ?? 100,
+                status: prev?.status ?? 'normal',
                 sparkline: nextSparkline,
             }
 
@@ -89,6 +83,30 @@ export const useDispatcherStore = create<DispatcherState>((set) => ({
                     [frame.locomotiveId]: updated,
                 },
                 selectedLocomotiveId,
+            }
+        }),
+
+    upsertHealth: (locomotiveId, health) =>
+        set((state) => {
+            const prev = state.locomotives[locomotiveId]
+            const updated: LocomotiveSnapshot = {
+                locomotiveId,
+                timestamp: Math.max(prev?.timestamp ?? 0, health.timestamp),
+                speedKmh: prev?.speedKmh ?? 0,
+                fuelLevel: prev?.fuelLevel ?? 0,
+                coolantTemp: prev?.coolantTemp ?? 0,
+                tractionCurrent: prev?.tractionCurrent ?? 0,
+                healthScore: health.overall,
+                status: healthStatus(health),
+                sparkline: prev?.sparkline ?? [],
+            }
+
+            return {
+                locomotives: {
+                    ...state.locomotives,
+                    [locomotiveId]: updated,
+                },
+                selectedLocomotiveId: state.selectedLocomotiveId ?? locomotiveId,
             }
         }),
 

@@ -19,26 +19,32 @@ import random
 from app.config import (
     SUBSYSTEMS,
     SUBSYSTEM_METRICS,
-    METRIC_BY_ID,
-    THRESHOLD_PENALTY,
 )
 from app.models import HealthIndex, SubsystemHealth, SubsystemPenalty, now_ms
 from app.state import state
+from app.thresholds import (
+    get_effective_metric_by_id,
+    get_health_status_thresholds,
+    get_threshold_penalties,
+)
 
 
 def _score_to_status(score: float) -> str:
-    if score >= 80:
+    thresholds = get_health_status_thresholds()
+    if score >= thresholds["normal"]:
         return "normal"
-    if score >= 60:
+    if score >= thresholds["degraded"]:
         return "degraded"
-    if score >= 40:
+    if score >= thresholds["warning"]:
         return "warning"
     return "critical"
 
 
 def _threshold_penalty(metric_id: str, value: float) -> tuple[float, str | None, float | None]:
     """Return penalty points and threshold info for a metric value breaching a threshold."""
-    metric = METRIC_BY_ID.get(metric_id)
+    metric_by_id = get_effective_metric_by_id()
+    penalties = get_threshold_penalties()
+    metric = metric_by_id.get(metric_id)
     if not metric:
         return 0.0, None, None
 
@@ -48,16 +54,16 @@ def _threshold_penalty(metric_id: str, value: float) -> tuple[float, str | None,
     warn_high = metric.get("warningHigh")
 
     if crit_low is not None and value <= crit_low:
-        return THRESHOLD_PENALTY["critical"], "criticalLow", float(crit_low)
+        return penalties["critical"], "criticalLow", float(crit_low)
 
     if crit_high is not None and value >= crit_high:
-        return THRESHOLD_PENALTY["critical"], "criticalHigh", float(crit_high)
+        return penalties["critical"], "criticalHigh", float(crit_high)
 
     if warn_low is not None and value <= warn_low:
-        return THRESHOLD_PENALTY["warning"], "warningLow", float(warn_low)
+        return penalties["warning"], "warningLow", float(warn_low)
 
     if warn_high is not None and value >= warn_high:
-        return THRESHOLD_PENALTY["warning"], "warningHigh", float(warn_high)
+        return penalties["warning"], "warningHigh", float(warn_high)
 
     return 0.0, None, None
 
@@ -81,6 +87,7 @@ def generate_health_index() -> HealthIndex:
     for sub in SUBSYSTEMS:
         sid = sub["subsystemId"]
         penalties: list[SubsystemPenalty] = []
+        metric_by_id = get_effective_metric_by_id()
 
         # 1. Random drift
         drift = (random.random() - 0.48) * 0.5
@@ -94,7 +101,7 @@ def generate_health_index() -> HealthIndex:
                 if penalty_points <= 0 or threshold_type is None or threshold_value is None:
                     continue
 
-                metric = METRIC_BY_ID.get(metric_id, {})
+                metric = metric_by_id.get(metric_id, {})
                 penalty = SubsystemPenalty(
                     metric_id=metric_id,
                     metric_label=str(metric.get("label") or metric_id),

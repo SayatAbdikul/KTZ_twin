@@ -3,11 +3,13 @@ from __future__ import annotations
 from collections import deque
 from typing import Any
 
+from app.thresholds import get_health_status_thresholds, get_metric_threshold
 
 WINDOW_1S_MS = 1_000
 WINDOW_5S_MS = 5_000
 WINDOW_30S_MS = 30_000
 WINDOW_10M_MS = 600_000
+MAX_DURATION_SAMPLE_GAP_MS = 2_000
 
 SEVERITY_ORDER = {"critical": 3, "warning": 2, "info": 1}
 SUBSYSTEM_LABELS = {
@@ -73,11 +75,17 @@ def _avg(samples: list[dict[str, float]], key: str, fallback: float = 0.0) -> fl
 
 
 def _duration_ms(samples: list[dict[str, float]], predicate) -> int:
-    duration = 0
-    for sample in reversed(samples):
-        if not predicate(sample):
+    if not samples or not predicate(samples[-1]):
+        return 0
+
+    duration = min(WINDOW_1S_MS, MAX_DURATION_SAMPLE_GAP_MS)
+    for index in range(len(samples) - 1, 0, -1):
+        current = samples[index]
+        previous = samples[index - 1]
+        if not predicate(previous):
             break
-        duration += 1_000
+        gap_ms = max(0, int(current["timestamp"] - previous["timestamp"]))
+        duration += min(gap_ms, MAX_DURATION_SAMPLE_GAP_MS)
     return duration
 
 
@@ -107,11 +115,12 @@ def _clamp(score: float) -> float:
 
 
 def _status_from_score(score: float) -> str:
-    if score >= 85.0:
+    thresholds = get_health_status_thresholds()
+    if score >= thresholds["normal"]:
         return "normal"
-    if score >= 70.0:
+    if score >= thresholds["degraded"]:
         return "degraded"
-    if score >= 50.0:
+    if score >= thresholds["warning"]:
         return "warning"
     return "critical"
 
@@ -164,6 +173,22 @@ def evaluate_runtime(locomotive_id: str, frame: dict[str, Any], history: deque[d
     fuel_rate_30s = _avg(w30, "fuel_rate_lph", sample["fuel_rate_lph"])
     fuel_level_30s = _avg(w30, "fuel_level_pct", sample["fuel_level_pct"])
     voltage_5s = _avg(w5, "traction_voltage_v", sample["traction_voltage_v"])
+
+    speed_warning_high = get_metric_threshold("motion.speed", "warningHigh", 140.0) or 140.0
+    fuel_warning_low = get_metric_threshold("fuel.level", "warningLow", 20.0) or 20.0
+    fuel_critical_low = get_metric_threshold("fuel.level", "criticalLow", 10.0) or 10.0
+    coolant_warning_high = get_metric_threshold("thermal.coolant_temp", "warningHigh", 95.0) or 95.0
+    coolant_critical_high = get_metric_threshold("thermal.coolant_temp", "criticalHigh", 105.0) or 105.0
+    oil_temp_warning_high = get_metric_threshold("thermal.oil_temp", "warningHigh", 110.0) or 110.0
+    oil_temp_critical_high = get_metric_threshold("thermal.oil_temp", "criticalHigh", 130.0) or 130.0
+    exhaust_warning_high = get_metric_threshold("thermal.exhaust_temp", "warningHigh", 550.0) or 550.0
+    exhaust_critical_high = get_metric_threshold("thermal.exhaust_temp", "criticalHigh", 650.0) or 650.0
+    oil_warning_low = get_metric_threshold("pressure.oil", "warningLow", 3.0) or 3.0
+    oil_critical_low = get_metric_threshold("pressure.oil", "criticalLow", 2.0) or 2.0
+    voltage_warning_low = get_metric_threshold("electrical.traction_voltage", "warningLow", 2600.0) or 2600.0
+    voltage_critical_low = get_metric_threshold("electrical.traction_voltage", "criticalLow", 2400.0) or 2400.0
+    current_warning_high = get_metric_threshold("electrical.traction_current", "warningHigh", 1600.0) or 1600.0
+    current_critical_high = get_metric_threshold("electrical.traction_current", "criticalHigh", 1800.0) or 1800.0
 
     speed_drop_3s = _speed_drop(history, now_ms, 3_000)
     speed_3s_ago = _value_at_or_before(history, now_ms, 3_000, "speed_kmh", sample["speed_kmh"])
@@ -221,19 +246,19 @@ def evaluate_runtime(locomotive_id: str, frame: dict[str, Any], history: deque[d
     braking_score = _clamp(braking_score)
 
     thermal_score = 100.0
-    if coolant_30s > 95.0:
+    if coolant_30s > coolant_warning_high:
         thermal_score -= 15.0
-    if coolant_30s > 105.0:
+    if coolant_30s > coolant_critical_high:
         thermal_score -= 30.0
-    if oil_temp_30s > 110.0:
+    if oil_temp_30s > oil_temp_warning_high:
         thermal_score -= 10.0
-    if oil_temp_30s > 125.0:
+    if oil_temp_30s > oil_temp_critical_high:
         thermal_score -= 20.0
-    if high_current_duration_ms >= 10_000 and oil_temp_30s > 110.0:
+    if high_current_duration_ms >= 10_000 and oil_temp_30s > oil_temp_warning_high:
         thermal_score -= 20.0
-    if very_high_current_duration_ms >= 10_000 and oil_temp_30s > 120.0:
+    if very_high_current_duration_ms >= 10_000 and oil_temp_30s > max(oil_temp_warning_high, oil_temp_critical_high - 10.0):
         thermal_score -= 30.0
-    if exhaust_30s > 600.0:
+    if exhaust_30s > exhaust_warning_high:
         thermal_score -= 15.0
     thermal_score = _clamp(thermal_score)
 
@@ -246,15 +271,15 @@ def evaluate_runtime(locomotive_id: str, frame: dict[str, Any], history: deque[d
         powertrain_score -= 20.0
     if high_current_low_accel and high_current_low_accel_duration_ms >= 10_000:
         powertrain_score -= 30.0
-    if voltage_5s < 2_600.0:
+    if voltage_5s < voltage_warning_low:
         powertrain_score -= 15.0
-    if voltage_5s < 2_450.0:
+    if voltage_5s < voltage_critical_low:
         powertrain_score -= 30.0
-    if voltage_5s < 2_600.0 and current_5s > 500.0:
+    if voltage_5s < voltage_warning_low and current_5s > 500.0:
         powertrain_score -= 10.0
-    if oil_pressure_5s < 3.0:
+    if oil_pressure_5s < oil_warning_low:
         powertrain_score -= 15.0 * speed_factor
-    if oil_pressure_5s < 2.0:
+    if oil_pressure_5s < oil_critical_low:
         powertrain_score -= 30.0 * speed_factor
     powertrain_score -= fuel_efficiency_penalty
     powertrain_score = _clamp(powertrain_score)
@@ -322,7 +347,7 @@ def evaluate_runtime(locomotive_id: str, frame: dict[str, Any], history: deque[d
             )
         )
 
-    if oil_pressure_5s < 2.0 and speed_1s > 20.0:
+    if oil_pressure_5s < oil_critical_low and speed_1s > 20.0:
         add_alert(
             _make_alert(
                 locomotive_id,
@@ -337,7 +362,7 @@ def evaluate_runtime(locomotive_id: str, frame: dict[str, Any], history: deque[d
             )
         )
 
-    if coolant_30s > 108.0 or oil_temp_30s > 125.0 or exhaust_30s > 630.0:
+    if coolant_30s > coolant_critical_high or oil_temp_30s > oil_temp_critical_high or exhaust_30s > exhaust_critical_high:
         add_alert(
             _make_alert(
                 locomotive_id,
@@ -382,7 +407,7 @@ def evaluate_runtime(locomotive_id: str, frame: dict[str, Any], history: deque[d
             )
         )
 
-    if coolant_30s > 98.0:
+    if coolant_30s > coolant_warning_high:
         add_alert(
             _make_alert(
                 locomotive_id,
@@ -397,7 +422,7 @@ def evaluate_runtime(locomotive_id: str, frame: dict[str, Any], history: deque[d
             )
         )
 
-    if oil_pressure_5s < 3.0:
+    if oil_pressure_5s < oil_warning_low:
         add_alert(
             _make_alert(
                 locomotive_id,
@@ -412,7 +437,7 @@ def evaluate_runtime(locomotive_id: str, frame: dict[str, Any], history: deque[d
             )
         )
 
-    if voltage_5s < 2_600.0 and current_5s > 400.0:
+    if voltage_5s < voltage_warning_low and current_5s > 400.0:
         add_alert(
             _make_alert(
                 locomotive_id,
@@ -442,7 +467,7 @@ def evaluate_runtime(locomotive_id: str, frame: dict[str, Any], history: deque[d
             )
         )
 
-    if current_5s > 700.0:
+    if current_5s > current_warning_high:
         add_alert(
             _make_alert(
                 locomotive_id,
@@ -457,7 +482,7 @@ def evaluate_runtime(locomotive_id: str, frame: dict[str, Any], history: deque[d
             )
         )
 
-    if fuel_level_30s < 20.0:
+    if fuel_level_30s < fuel_warning_low:
         add_alert(
             _make_alert(
                 locomotive_id,
@@ -501,9 +526,9 @@ def evaluate_runtime(locomotive_id: str, frame: dict[str, Any], history: deque[d
         subsystem_alert_counts[str(alert["source"])] = subsystem_alert_counts.get(str(alert["source"]), 0) + 1
 
     fuel_score = 100.0
-    if fuel_level_30s < 25.0:
+    if fuel_level_30s < fuel_warning_low:
         fuel_score -= 15.0
-    if fuel_level_30s < 12.0:
+    if fuel_level_30s < fuel_critical_low:
         fuel_score -= 25.0
     fuel_score -= fuel_efficiency_penalty
     fuel_score = _clamp(fuel_score)
@@ -516,6 +541,7 @@ def evaluate_runtime(locomotive_id: str, frame: dict[str, Any], history: deque[d
     health_index = {
         "locomotive_id": locomotive_id,
         "overall": overall,
+        "status": _status_from_score(overall),
         "timestamp": now_ms,
         "subsystems": [
             {

@@ -6,8 +6,9 @@ import { DynamicMetricRenderer } from "@/components/metrics/DynamicMetricRendere
 import { AlertFeed } from "@/components/alerts/AlertFeed";
 import { DispatcherInbox } from "@/components/messaging/DispatcherInbox";
 import { SectionHeader } from "@/components/common/SectionHeader";
-import { METRIC_DEFINITIONS, METRIC_GROUPS } from "@/config/metrics.config";
+import { METRIC_GROUPS } from "@/config/metrics.config";
 import { ROUTES } from "@/config/routes";
+import { useMetricCatalog } from "@/features/telemetry/metricCatalog";
 import type { MetricGroup } from "@/types/telemetry";
 
 // Groups shown in the main metrics area
@@ -20,6 +21,7 @@ const DASHBOARD_GROUPS: MetricGroup[] = [
 
 export function DashboardPage() {
   const healthIndex = useHealthStore((s) => s.healthIndex);
+  const metricDefinitions = useMetricCatalog();
 
   return (
     <div className="grid gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_340px] xl:items-start">
@@ -71,7 +73,7 @@ export function DashboardPage() {
       {/* ── Bottom Left: Live Metrics ────────────────────────────── */}
       <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
         {DASHBOARD_GROUPS.map((group) => {
-          const defs = METRIC_DEFINITIONS.filter((d) => d.group === group).sort(
+          const defs = metricDefinitions.filter((d) => d.group === group).sort(
             (a, b) => a.displayOrder - b.displayOrder,
           );
           return (

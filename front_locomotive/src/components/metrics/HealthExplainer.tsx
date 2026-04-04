@@ -1,6 +1,6 @@
 import { ArrowDownRight, ArrowUpRight } from 'lucide-react'
-import { METRIC_DEFINITIONS } from '@/config/metrics.config'
 import { SectionHeader } from '@/components/common/SectionHeader'
+import { useMetricCatalog } from '@/features/telemetry/metricCatalog'
 import { cn } from '@/utils/cn'
 import type { HealthIndex, SubsystemPenalty } from '@/types/health'
 
@@ -8,12 +8,8 @@ interface HealthExplainerProps {
   healthIndex: HealthIndex | null
 }
 
-function getMetricMeta(metricId: string) {
-  return METRIC_DEFINITIONS.find((metric) => metric.metricId === metricId)
-}
-
-function formatMetricValue(metricId: string, value: number) {
-  const metric = getMetricMeta(metricId)
+function formatMetricValue(metricId: string, value: number, definitions: ReturnType<typeof useMetricCatalog>) {
+  const metric = definitions.find((item) => item.metricId === metricId)
   const precision = metric?.precision ?? 1
   const unit = metric?.unit ?? ''
   return `${value.toFixed(precision)}${unit ? ` ${unit}` : ''}`
@@ -33,7 +29,13 @@ function getPenaltyTone(penaltyPoints: number) {
       }
 }
 
-function PenaltyRow({ penalty }: { penalty: SubsystemPenalty }) {
+function PenaltyRow({
+  penalty,
+  definitions,
+}: {
+  penalty: SubsystemPenalty
+  definitions: ReturnType<typeof useMetricCatalog>
+}) {
   const isHigh = penalty.thresholdType.endsWith('High')
   const tone = getPenaltyTone(penalty.penaltyPoints)
   const DirectionIcon = isHigh ? ArrowUpRight : ArrowDownRight
@@ -50,13 +52,13 @@ function PenaltyRow({ penalty }: { penalty: SubsystemPenalty }) {
         <div className="truncate text-sm font-medium text-slate-100">{penalty.metricLabel}</div>
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400">
           <span className="font-mono text-slate-300">
-            {formatMetricValue(penalty.metricId, penalty.currentValue)}
+            {formatMetricValue(penalty.metricId, penalty.currentValue, definitions)}
           </span>
           <span className={cn('inline-flex items-center gap-1', tone.textClassName)}>
             <DirectionIcon size={13} />
             <span>
               {thresholdLabel} {isHigh ? 'high' : 'low'} at{' '}
-              {formatMetricValue(penalty.metricId, penalty.thresholdValue)}
+              {formatMetricValue(penalty.metricId, penalty.thresholdValue, definitions)}
             </span>
           </span>
         </div>
@@ -75,6 +77,7 @@ function PenaltyRow({ penalty }: { penalty: SubsystemPenalty }) {
 }
 
 export function HealthExplainer({ healthIndex }: HealthExplainerProps) {
+  const definitions = useMetricCatalog()
   const topFactors = healthIndex?.topFactors ?? []
 
   return (
@@ -97,6 +100,7 @@ export function HealthExplainer({ healthIndex }: HealthExplainerProps) {
             <PenaltyRow
               key={`${penalty.metricId}-${penalty.thresholdType}-${index}`}
               penalty={penalty}
+              definitions={definitions}
             />
           ))}
         </div>

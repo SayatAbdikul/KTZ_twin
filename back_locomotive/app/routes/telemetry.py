@@ -4,10 +4,10 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query
 
-from app.config import METRIC_DEFINITIONS
 from app.models import MetricDefinition, MetricHistory, MetricHistoryPoint, make_response
 from app.simulator.telemetry import generate_frame
 from app.state import state
+from app.thresholds import get_effective_metric_definitions
 
 router = APIRouter(prefix="/api/telemetry", tags=["telemetry"])
 
@@ -20,8 +20,8 @@ def get_current() -> dict:
 
 @router.get("/metrics")
 def get_metrics() -> dict:
-    definitions = [MetricDefinition.model_validate(metric) for metric in METRIC_DEFINITIONS]
-    return make_response([definition.model_dump(by_alias=True) for definition in definitions])
+    definitions = [MetricDefinition.model_validate(metric) for metric in get_effective_metric_definitions()]
+    return make_response([definition.model_dump(by_alias=True, exclude_none=True) for definition in definitions])
 
 
 @router.get("/history/{metric_id}")

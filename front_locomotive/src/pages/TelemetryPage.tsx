@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { Activity } from 'lucide-react'
-import { METRIC_DEFINITIONS, METRIC_GROUPS } from '@/config/metrics.config'
+import { METRIC_GROUPS } from '@/config/metrics.config'
 import { useTelemetryStore } from '@/features/telemetry/useTelemetryStore'
+import { useMetricCatalog } from '@/features/telemetry/metricCatalog'
 import { useSettingsStore } from '@/features/settings/useSettingsStore'
 import { DynamicMetricRenderer } from '@/components/metrics/DynamicMetricRenderer'
 import { LineChart } from '@/components/charts/LineChart'
@@ -10,7 +11,7 @@ import { SectionHeader } from '@/components/common/SectionHeader'
 import { ValueDisplay } from '@/components/common/ValueDisplay'
 import { PageContainer } from '@/components/layout/PageContainer'
 import { getMetricSeverity } from '@/utils/thresholds'
-import type { MetricGroup } from '@/types/telemetry'
+import type { MetricDefinition, MetricGroup } from '@/types/telemetry'
 
 const ALL_GROUPS: MetricGroup[] = ['motion', 'fuel', 'thermal', 'pressure', 'electrical']
 const TREND_METRIC_IDS = [
@@ -28,10 +29,10 @@ const PRESET_WINDOW_MS: Record<Exclude<TimeRangePreset, 'all'>, number> = {
 const EMPTY_BUFFER: Array<{ timestamp: number; value: number }> = []
 
 function LiveTrendCard({
-  metricId,
+  definition,
   windowMs,
 }: {
-  metricId: (typeof TREND_METRIC_IDS)[number]
+  definition: MetricDefinition
   windowMs: number | 'all'
 }) {
   const smoothingEnabled = useSettingsStore((s) => s.smoothingEnabled)
@@ -40,15 +41,12 @@ function LiveTrendCard({
   const trendBuffers = useTelemetryStore((s) => s.trendBuffers)
   const smoothedTrendBuffers = useTelemetryStore((s) => s.smoothedTrendBuffers)
 
-  const definition = METRIC_DEFINITIONS.find((item) => item.metricId === metricId)
-  if (!definition) return null
-
   const reading = smoothingEnabled
-    ? smoothedReadings.get(metricId) ?? currentReadings.get(metricId)
-    : currentReadings.get(metricId)
+    ? smoothedReadings.get(definition.metricId) ?? currentReadings.get(definition.metricId)
+    : currentReadings.get(definition.metricId)
   const data = smoothingEnabled
-    ? smoothedTrendBuffers.get(metricId) ?? trendBuffers.get(metricId) ?? EMPTY_BUFFER
-    : trendBuffers.get(metricId) ?? EMPTY_BUFFER
+    ? smoothedTrendBuffers.get(definition.metricId) ?? trendBuffers.get(definition.metricId) ?? EMPTY_BUFFER
+    : trendBuffers.get(definition.metricId) ?? EMPTY_BUFFER
 
   const severity = reading ? getMetricSeverity(reading.value, definition) : 'normal'
   const color =
@@ -95,9 +93,17 @@ function LiveTrendCard({
 
 export function TelemetryPage() {
   const [preset, setPreset] = useState<TimeRangePreset>('5m')
+  const metricDefinitions = useMetricCatalog()
   const windowMs = useMemo<number | 'all'>(
     () => (preset === 'all' ? 'all' : PRESET_WINDOW_MS[preset]),
     [preset]
+  )
+  const trendDefinitions = useMemo(
+    () =>
+      TREND_METRIC_IDS.map((metricId) =>
+        metricDefinitions.find((definition) => definition.metricId === metricId)
+      ).filter((definition): definition is MetricDefinition => definition !== undefined),
+    [metricDefinitions]
   )
 
   return (
@@ -115,14 +121,14 @@ export function TelemetryPage() {
           <TimeRangeSelector value={preset} onChange={setPreset} />
         </div>
         <div className="grid gap-3 xl:grid-cols-2">
-          {TREND_METRIC_IDS.map((metricId) => (
-            <LiveTrendCard key={metricId} metricId={metricId} windowMs={windowMs} />
+          {trendDefinitions.map((definition) => (
+            <LiveTrendCard key={definition.metricId} definition={definition} windowMs={windowMs} />
           ))}
         </div>
       </section>
 
       {ALL_GROUPS.map((group) => {
-        const defs = METRIC_DEFINITIONS.filter((d) => d.group === group).sort(
+        const defs = metricDefinitions.filter((d) => d.group === group).sort(
           (a, b) => a.displayOrder - b.displayOrder
         )
         return (

@@ -1,18 +1,21 @@
-import { METRIC_DEFINITIONS, METRIC_GROUPS } from '@/config/metrics.config'
+import { METRIC_GROUPS } from '@/config/metrics.config'
+import type { MetricDefinition } from '@/types/telemetry'
 import { cn } from '@/utils/cn'
 
 interface ReplayMetricSelectorProps {
+  definitions: MetricDefinition[]
   selectedMetricIds: string[]
   onToggleMetric: (metricId: string) => void
 }
 
 export function ReplayMetricSelector({
+  definitions,
   selectedMetricIds,
   onToggleMetric,
 }: ReplayMetricSelectorProps) {
   const groupedDefinitions = Object.entries(
-    METRIC_DEFINITIONS.filter((metric) => metric.sparklineEnabled).reduce<
-      Record<string, typeof METRIC_DEFINITIONS>
+    definitions.filter((metric) => metric.sparklineEnabled).reduce<
+      Record<string, MetricDefinition[]>
     >((acc, metric) => {
       const key = metric.group
       acc[key] ??= []

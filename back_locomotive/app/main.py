@@ -17,9 +17,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.auth import enforce_http_api_key
 from app.broker import start_broker, stop_broker
 from app.config import CORS_ORIGINS
-from app.broker import start_broker, stop_broker
 from app.simulator.health import generate_health_index
 from app.simulator.telemetry import generate_frame
 from app.ws.broadcaster import (
@@ -45,8 +45,6 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Initialising KTZ Locomotive Telemetry Server…")
-    await start_broker()
-
     await start_broker()
 
     # Generate first snapshot so REST endpoints are ready immediately
@@ -93,8 +91,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.middleware("http")(enforce_http_api_key)
 
-from app.routes import alerts, connection, health, messages, replay, telemetry  # noqa: E402
+from app.routes import alerts, config_routes, connection, health, messages, replay, telemetry  # noqa: E402
 
 app.include_router(telemetry.router)
 app.include_router(health.router)
@@ -102,6 +101,7 @@ app.include_router(alerts.router)
 app.include_router(messages.router)
 app.include_router(connection.router)
 app.include_router(replay.router)
+app.include_router(config_routes.router)
 
 
 @app.websocket("/ws")
