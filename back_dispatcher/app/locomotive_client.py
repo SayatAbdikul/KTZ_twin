@@ -8,16 +8,22 @@ from typing import Any
 import websockets
 from pydantic import ValidationError
 
-from app.config import PING_INTERVAL_S, RECONNECT_BASE_S, RECONNECT_MAX_S, LocomotiveTarget
+from app.config import PING_INTERVAL_S, RECONNECT_BASE_S, RECONNECT_MAX_S, TELEMETRY_RETENTION_HOURS, LocomotiveTarget
 from app.health_engine import evaluate_runtime
 from app.models import WsEnvelope, now_ms
+from app.repository import prune_telemetry, save_alert_event, save_incoming_message, save_telemetry_frame
 from app.state import state
 from app.ws_server import broadcast_message
 
 logger = logging.getLogger(__name__)
 
+_frames_since_prune = 0
+_PRUNE_EVERY_FRAMES = 60
+
 
 async def _forward_locomotive_message(locomotive_id: str, msg: dict[str, Any]) -> None:
+    global _frames_since_prune
+
     msg_type = str(msg.get("type", ""))
     payload = msg.get("payload", {})
 
@@ -28,6 +34,22 @@ async def _forward_locomotive_message(locomotive_id: str, msg: dict[str, Any]) -
     if msg_type == "telemetry.frame" and isinstance(payload, dict):
         # Normalize to expected multi-locomotive frame shape.
         payload.setdefault("locomotive_id", locomotive_id)
+        try:
+            save_telemetry_frame(payload)
+        except Exception as exc:
+            logger.warning("Failed to persist telemetry frame: %s", exc)
+
+        _frames_since_prune += 1
+        if _frames_since_prune >= _PRUNE_EVERY_FRAMES:
+            _frames_since_prune = 0
+            cutoff = now_ms() - TELEMETRY_RETENTION_HOURS * 60 * 60 * 1000
+            try:
+                deleted = prune_telemetry(cutoff)
+                if deleted > 0:
+                    logger.info("Telemetry retention cleanup removed %d rows older than %d hours", deleted, TELEMETRY_RETENTION_HOURS)
+            except Exception as exc:
+                logger.warning("Telemetry retention cleanup failed: %s", exc)
+
         runtime.latest_telemetry = payload
         evaluation = evaluate_runtime(
             locomotive_id=locomotive_id,
@@ -42,12 +64,21 @@ async def _forward_locomotive_message(locomotive_id: str, msg: dict[str, Any]) -
         await broadcast_message("telemetry.frame", payload, locomotive_id=locomotive_id)
         await broadcast_message("health.update", runtime.health_index, locomotive_id=locomotive_id)
         for event in evaluation["events"]:
+            if event["type"].startswith("alert.") and isinstance(event.get("payload"), dict):
+                try:
+                    save_alert_event(event["type"], event["payload"], now_ms())
+                except Exception as exc:
+                    logger.warning("Failed to persist alert event: %s", exc)
             await broadcast_message(event["type"], event["payload"], locomotive_id=locomotive_id)
         return
 
     if msg_type == "message.new" and isinstance(payload, dict):
         payload.setdefault("locomotive_id", locomotive_id)
         state.chat_history[locomotive_id].append(payload)
+        try:
+            save_incoming_message(payload)
+        except Exception as exc:
+            logger.warning("Failed to persist incoming message: %s", exc)
         await broadcast_message("message.new", payload, locomotive_id=locomotive_id)
         return
 
