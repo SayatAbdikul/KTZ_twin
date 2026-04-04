@@ -1,0 +1,44 @@
+Traceback (most recent call last):
+  File "/Users/sayat/Documents/GitHub/KTZ_twin/back_locomotive/.venv/bin/uvicorn", line 8, in <module>
+    sys.exit(main())
+  File "/Users/sayat/Documents/GitHub/KTZ_twin/back_locomotive/.venv/lib/python3.10/site-packages/click/core.py", line 1485, in __call__
+    return self.main(*args, **kwargs)
+  File "/Users/sayat/Documents/GitHub/KTZ_twin/back_locomotive/.venv/lib/python3.10/site-packages/click/core.py", line 1406, in main
+    rv = self.invoke(ctx)
+  File "/Users/sayat/Documents/GitHub/KTZ_twin/back_locomotive/.venv/lib/python3.10/site-packages/click/core.py", line 1269, in invoke
+    return ctx.invoke(self.callback, **ctx.params)
+  File "/Users/sayat/Documents/GitHub/KTZ_twin/back_locomotive/.venv/lib/python3.10/site-packages/click/core.py", line 824, in invoke
+    return callback(*args, **kwargs)
+  File "/Users/sayat/Documents/GitHub/KTZ_twin/back_locomotive/.venv/lib/python3.10/site-packages/uvicorn/main.py", line 413, in main
+    run(
+  File "/Users/sayat/Documents/GitHub/KTZ_twin/back_locomotive/.venv/lib/python3.10/site-packages/uvicorn/main.py", line 580, in run
+    server.run()
+  File "/Users/sayat/Documents/GitHub/KTZ_twin/back_locomotive/.venv/lib/python3.10/site-packages/uvicorn/server.py", line 66, in run
+    return asyncio.run(self.serve(sockets=sockets))
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/asyncio/runners.py", line 44, in run
+    return loop.run_until_complete(main)
+  File "uvloop/loop.pyx", line 1518, in uvloop.loop.Loop.run_until_complete
+  File "/Users/sayat/Documents/GitHub/KTZ_twin/back_locomotive/.venv/lib/python3.10/site-packages/uvicorn/server.py", line 70, in serve
+    await self._serve(sockets)
+  File "/Users/sayat/Documents/GitHub/KTZ_twin/back_locomotive/.venv/lib/python3.10/site-packages/uvicorn/server.py", line 77, in _serve
+    config.load()
+  File "/Users/sayat/Documents/GitHub/KTZ_twin/back_locomotive/.venv/lib/python3.10/site-packages/uvicorn/config.py", line 435, in load
+    self.loaded_app = import_from_string(self.app)
+  File "/Users/sayat/Documents/GitHub/KTZ_twin/back_locomotive/.venv/lib/python3.10/site-packages/uvicorn/importer.py", line 19, in import_from_string
+    module = importlib.import_module(module_str)
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/importlib/__init__.py", line 126, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+  File "<frozen importlib._bootstrap>", line 1050, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1027, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1006, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 688, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 883, in exec_module
+  File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
+  File "/Users/sayat/Documents/GitHub/KTZ_twin/back_locomotive/app/main.py", line 95, in <module>
+    from app.routes import alerts, connection, health, messages, replay, telemetry  # noqa: E402
+  File "/Users/sayat/Documents/GitHub/KTZ_twin/back_locomotive/app/routes/__init__.py", line 1, in <module>
+    from . import alerts, connection, health, messages, replay, telemetry
+  File "/Users/sayat/Documents/GitHub/KTZ_twin/back_locomotive/app/routes/alerts.py", line 3
+    <<<<<<< Updated upstream
+    ^^
+SyntaxError: invalid syntax
