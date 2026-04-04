@@ -20,6 +20,7 @@ from app.config import (
 )
 from app.models import now_ms
 from app.state import state
+from app.broker import publish_event
 
 
 # ---------------------------------------------------------------------------
@@ -28,17 +29,22 @@ from app.state import state
 
 async def broadcast_message(msg_type: str, payload: object) -> None:
     """Send a WS message to all connected clients. Remove dead clients silently."""
+    envelope = {
+        "type": msg_type,
+        "payload": payload,
+        "timestamp": now_ms(),
+        "sequenceId": state.next_sequence(),
+    }
+    locomotive_id = ""
+    if isinstance(payload, dict):
+        locomotive_id = str(payload.get("locomotive_id") or payload.get("locomotiveId") or "")
+    if locomotive_id:
+        await publish_event({"locomotive_id": locomotive_id, "message": envelope}, key=locomotive_id)
+
     if not state.ws_clients:
         return
 
-    data = json.dumps(
-        {
-            "type": msg_type,
-            "payload": payload,
-            "timestamp": now_ms(),
-            "sequenceId": state.next_sequence(),
-        }
-    )
+    data = json.dumps(envelope)
 
     dead = []
     for ws in list(state.ws_clients):

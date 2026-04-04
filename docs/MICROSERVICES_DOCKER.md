@@ -2,6 +2,7 @@
 
 This stack simulates the current microservice split:
 
+- `kafka`: message broker for locomotive event streaming
 - `back_locomotive`: generates synthetic telemetry and streams frontend frames over WebSocket
 - `back_dispatcher`: consumes the locomotive WebSocket stream, keeps latest locomotive state, streams dispatcher updates over WebSocket
 - `front_locomotive`: browser UI for locomotive telemetry
@@ -35,6 +36,7 @@ Stop everything:
 
 ## Exposed Ports
 
+- `9092`: `kafka`
 - `3001`: `back_locomotive`
 - `3010`: `back_dispatcher`
 - `5183`: `front_locomotive`
@@ -48,6 +50,8 @@ Update that file if you need to change:
 
 - backend ports and CORS origins
 - dispatcher target WebSocket URLs
+- dispatcher ingest mode (`INGEST_MODE=ws|kafka|hybrid`)
+- Kafka connection and topic settings
 - frontend build-time API / WebSocket endpoints
 
 ## Notes
