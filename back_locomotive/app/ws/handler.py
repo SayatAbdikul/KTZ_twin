@@ -12,7 +12,8 @@ import logging
 
 from fastapi import WebSocket, WebSocketDisconnect
 
-from app.models import now_ms
+from app.config import LOCOMOTIVE_ID
+from app.models import make_event_envelope, now_ms
 from app.state import state
 from app.ws.broadcaster import broadcast_message
 
@@ -33,6 +34,11 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 "payload": {"dispatcherStatus": "connected"},
                 "timestamp": now_ms(),
                 "sequenceId": state.next_sequence(),
+                "event": make_event_envelope(
+                    event_type="connection.status",
+                    source="back_locomotive",
+                    locomotive_id=LOCOMOTIVE_ID,
+                ).model_dump(),
             }
         )
     )

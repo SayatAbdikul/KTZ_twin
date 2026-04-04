@@ -57,3 +57,25 @@ Update that file if you need to change:
   - locomotive frontend -> `ws://localhost:3001/ws`
   - dispatcher frontend -> `ws://localhost:3010/ws`
 - Backend-to-backend traffic uses the Docker network alias `back_locomotive`.
+
+## Event Contract v1
+
+Backend WS envelopes now include optional `event` metadata for producer/consumer validation:
+
+```json
+{
+  "event_id": "uuid",
+  "event_type": "telemetry.frame",
+  "source": "back_locomotive",
+  "locomotive_id": "KTZ-2001",
+  "occurred_at": 1710000000000,
+  "schema_version": "1.0"
+}
+```
+
+Dispatcher validates incoming locomotive stream envelopes and rejects frames when:
+
+- `event` is missing
+- `schema_version` is not `1.0`
+- `event_type` differs from transport `type`
+- `locomotive_id` does not match the configured target stream

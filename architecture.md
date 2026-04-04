@@ -162,6 +162,39 @@ Fields:
 - `timestamp`: server send time in epoch ms
 - `sequenceId`: monotonic per-process sequence counter
 
+### 4.1 Event Contract v1 (Producer/Consumer)
+
+For service-to-service streaming (and now also attached to WS envelopes for compatibility),
+the event metadata contract is:
+
+```json
+{
+  "event_id": "f4f2e5d2-c0cb-4f8f-a9e8-5ccf3d2b2d8b",
+  "event_type": "telemetry.frame",
+  "source": "back_locomotive",
+  "locomotive_id": "KTZ-2001",
+  "occurred_at": 1710000000000,
+  "schema_version": "1.0"
+}
+```
+
+Required fields:
+
+- `event_id`: UUID identifier for deduplication and tracing
+- `event_type`: logical event type (must match transport envelope `type`)
+- `source`: producer service name
+- `locomotive_id`: entity key used for ordering and routing
+- `occurred_at`: event production time in epoch ms
+- `schema_version`: contract version, currently `1.0`
+
+Validation rules implemented:
+
+- producer always emits `event` metadata with `schema_version=1.0`
+- consumer rejects frames without `event`
+- consumer rejects unsupported `schema_version`
+- consumer rejects `event_type` mismatch with transport `type`
+- consumer rejects `locomotive_id` mismatch for the current target stream
+
 ## 5. `back_locomotive` Contracts
 
 ### 5.1 HTTP Routes

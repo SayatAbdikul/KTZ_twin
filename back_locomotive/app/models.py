@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from typing import Any, Generic, Literal, Optional, TypeVar
 import time
+from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
@@ -172,8 +173,35 @@ class WsMessage(BaseModel):
     payload: Any
     timestamp: int
     sequence_id: int = Field(alias="sequenceId")
+    event: "EventEnvelopeV1 | None" = None
 
     model_config = ConfigDict(populate_by_name=True)
+
+
+class EventEnvelopeV1(BaseModel):
+    event_id: str
+    event_type: str
+    source: str
+    locomotive_id: str
+    occurred_at: int
+    schema_version: Literal["1.0"]
+
+
+def make_event_envelope(
+    *,
+    event_type: str,
+    source: str,
+    locomotive_id: str,
+    occurred_at: int | None = None,
+) -> EventEnvelopeV1:
+    return EventEnvelopeV1(
+        event_id=str(uuid4()),
+        event_type=event_type,
+        source=source,
+        locomotive_id=locomotive_id,
+        occurred_at=occurred_at if occurred_at is not None else now_ms(),
+        schema_version="1.0",
+    )
 
 
 # ---------------------------------------------------------------------------

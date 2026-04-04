@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 from fastapi import WebSocket
+from uuid import uuid4
 
 from app.models import now_ms
 from app.state import state
@@ -11,6 +12,10 @@ logger = logging.getLogger(__name__)
 
 
 async def _send_envelope(ws: WebSocket, msg_type: str, payload: object) -> None:
+    locomotive_id = "dispatcher"
+    if isinstance(payload, dict):
+        locomotive_id = str(payload.get("locomotive_id") or payload.get("locomotiveId") or "dispatcher")
+
     await ws.send_text(
         json.dumps(
             {
@@ -18,6 +23,14 @@ async def _send_envelope(ws: WebSocket, msg_type: str, payload: object) -> None:
                 "payload": payload,
                 "timestamp": now_ms(),
                 "sequenceId": await state.next_sequence(),
+                "event": {
+                    "event_id": str(uuid4()),
+                    "event_type": msg_type,
+                    "source": "back_dispatcher",
+                    "locomotive_id": locomotive_id,
+                    "occurred_at": now_ms(),
+                    "schema_version": "1.0",
+                },
             }
         )
     )
@@ -32,6 +45,14 @@ async def broadcast_message(msg_type: str, payload: object, locomotive_id: str |
         "payload": payload,
         "timestamp": now_ms(),
         "sequenceId": await state.next_sequence(),
+        "event": {
+            "event_id": str(uuid4()),
+            "event_type": msg_type,
+            "source": "back_dispatcher",
+            "locomotive_id": locomotive_id or (str(payload.get("locomotive_id") or payload.get("locomotiveId") or "dispatcher") if isinstance(payload, dict) else "dispatcher"),
+            "occurred_at": now_ms(),
+            "schema_version": "1.0",
+        },
     }
     wire = json.dumps(envelope)
 

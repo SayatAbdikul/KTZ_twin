@@ -6,10 +6,11 @@ import logging
 from typing import Any
 
 import websockets
+from pydantic import ValidationError
 
 from app.config import PING_INTERVAL_S, RECONNECT_BASE_S, RECONNECT_MAX_S, LocomotiveTarget
 from app.health_engine import evaluate_runtime
-from app.models import now_ms
+from app.models import WsEnvelope, now_ms
 from app.state import state
 from app.ws_server import broadcast_message
 
@@ -107,9 +108,31 @@ async def connect_locomotive_forever(target: LocomotiveTarget) -> None:
                     try:
                         msg = json.loads(raw)
                         if isinstance(msg, dict):
-                            await _forward_locomotive_message(target.locomotive_id, msg)
+                            envelope = WsEnvelope.model_validate(msg)
+                            if envelope.event is None:
+                                logger.warning("Rejected frame without event envelope from %s", target.locomotive_id)
+                                continue
+                            if envelope.event.schema_version != "1.0":
+                                logger.warning("Rejected frame with unsupported schemaVersion=%s from %s", envelope.event.schema_version, target.locomotive_id)
+                                continue
+                            if envelope.event.event_type != envelope.type:
+                                logger.warning("Rejected frame with mismatched eventType=%s and type=%s from %s", envelope.event.event_type, envelope.type, target.locomotive_id)
+                                continue
+                            if envelope.event.locomotive_id != target.locomotive_id:
+                                logger.warning("Rejected frame with locomotive_id=%s, expected=%s", envelope.event.locomotive_id, target.locomotive_id)
+                                continue
+
+                            await _forward_locomotive_message(
+                                target.locomotive_id,
+                                {
+                                    "type": envelope.type,
+                                    "payload": envelope.payload,
+                                },
+                            )
                     except json.JSONDecodeError:
                         logger.warning("Malformed WS frame from %s", target.locomotive_id)
+                    except ValidationError as exc:
+                        logger.warning("Rejected invalid envelope from %s: %s", target.locomotive_id, exc.errors())
 
         except Exception as exc:
             runtime.connected = False
