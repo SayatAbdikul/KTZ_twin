@@ -4,16 +4,16 @@ import { useNavigate } from 'react-router-dom'
 import { resetSessionState } from '@/app/resetSessionState'
 import { ROUTES } from '@/config/routes'
 import { useAuthStore } from '@/features/auth/useAuthStore'
-import { login } from '@/services/api/authApi'
-import type { UserRole } from '@/types/auth'
+import { login, logoutSession } from '@/services/api/authApi'
 import { cn } from '@/utils/cn'
+
+type LoginMode = 'train' | 'admin'
 
 export function LoginPage() {
   const navigate = useNavigate()
   const setSession = useAuthStore((state) => state.setSession)
-  const [role, setRole] = useState<UserRole>('train')
-  const [username, setUsername] = useState('admin')
-  const [trainId, setTrainId] = useState('KTZ-2001')
+  const [mode, setMode] = useState<LoginMode>('train')
+  const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -25,13 +25,18 @@ export function LoginPage() {
 
     try {
       const session = await login({
-        role,
-        username: role === 'admin' ? username.trim() : undefined,
-        trainId: role === 'train' ? trainId.trim().toUpperCase() : undefined,
+        identifier: mode === 'train' ? identifier.trim().toUpperCase() : identifier.trim(),
         password,
       })
+
+      if (session.user.role === 'dispatcher') {
+        await logoutSession(session.accessToken)
+        setError('Dispatcher accounts should use the dispatcher console, not the locomotive operator app.')
+        return
+      }
+
       resetSessionState()
-      setSession(session.token, session.user)
+      setSession(session.accessToken, session.user, session.mustChangePassword)
       navigate(ROUTES.DASHBOARD, { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed')
@@ -49,29 +54,35 @@ export function LoginPage() {
               KTZ Digital Twin
             </div>
             <h1 className="mt-6 max-w-xl text-4xl font-semibold tracking-tight text-white">
-              Unified operator and dispatcher access for the twin environment.
+              Secure operator access for locomotive telemetry, alerts, and replay.
             </h1>
             <p className="mt-4 max-w-2xl text-base leading-7 text-slate-300">
-              One frontend now serves both roles. Admin sessions can supervise the dispatcher console and fleet data.
-              Train sessions are constrained to a single train ID.
+              Sign in with an admin username or a train account assigned to a locomotive. Dispatcher accounts are
+              routed to the separate dispatcher console.
             </p>
           </div>
 
           <div className="grid gap-4 pt-8 md:grid-cols-3">
             <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
               <Shield size={18} className="text-emerald-300" />
-              <div className="mt-3 text-sm font-semibold text-slate-100">Role-aware access</div>
-              <p className="mt-1 text-sm text-slate-400">Admin sees fleet-wide controls. Train sees only its own locomotive.</p>
+              <div className="mt-3 text-sm font-semibold text-slate-100">Database-backed sessions</div>
+              <p className="mt-1 text-sm text-slate-400">
+                Access tokens and refresh sessions come from the dispatcher auth service.
+              </p>
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
               <TrainFront size={18} className="text-blue-300" />
-              <div className="mt-3 text-sm font-semibold text-slate-100">Train login by ID</div>
-              <p className="mt-1 text-sm text-slate-400">Use the seeded train ID and password provided for the environment.</p>
+              <div className="mt-3 text-sm font-semibold text-slate-100">Train login by locomotive</div>
+              <p className="mt-1 text-sm text-slate-400">
+                Train accounts are restricted to a single locomotive ID and its replay history.
+              </p>
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
               <LockKeyhole size={18} className="text-amber-300" />
-              <div className="mt-3 text-sm font-semibold text-slate-100">Backend-enforced</div>
-              <p className="mt-1 text-sm text-slate-400">The session token is enforced across HTTP APIs and dispatcher websockets.</p>
+              <div className="mt-3 text-sm font-semibold text-slate-100">Forced password change</div>
+              <p className="mt-1 text-sm text-slate-400">
+                Temporary passwords must be replaced before the operator app unlocks.
+              </p>
             </div>
           </div>
         </section>
@@ -79,17 +90,17 @@ export function LoginPage() {
         <section className="rounded-[32px] border border-slate-800/80 bg-slate-950/80 p-8 shadow-2xl shadow-slate-950/40 backdrop-blur">
           <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">Secure Access</p>
           <h2 className="mt-3 text-2xl font-semibold text-white">Sign in</h2>
-          <p className="mt-2 text-sm text-slate-400">Choose a role, then enter the seeded credentials.</p>
+          <p className="mt-2 text-sm text-slate-400">Use your assigned username or locomotive ID and password.</p>
 
           <div className="mt-6 grid grid-cols-2 rounded-2xl border border-slate-800 bg-slate-900/60 p-1">
             {(['train', 'admin'] as const).map((option) => (
               <button
                 key={option}
                 type="button"
-                onClick={() => setRole(option)}
+                onClick={() => setMode(option)}
                 className={cn(
                   'rounded-xl px-4 py-3 text-sm font-semibold capitalize transition-colors',
-                  role === option
+                  mode === option
                     ? 'bg-blue-600 text-white'
                     : 'text-slate-400 hover:text-slate-200'
                 )}
@@ -100,27 +111,17 @@ export function LoginPage() {
           </div>
 
           <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
-            {role === 'train' ? (
-              <label className="block">
-                <span className="mb-2 block text-sm text-slate-300">Train ID</span>
-                <input
-                  value={trainId}
-                  onChange={(event) => setTrainId(event.target.value)}
-                  placeholder="KTZ-2001"
-                  className="w-full rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-slate-100 outline-none transition-colors focus:border-blue-500"
-                />
-              </label>
-            ) : (
-              <label className="block">
-                <span className="mb-2 block text-sm text-slate-300">Admin username</span>
-                <input
-                  value={username}
-                  onChange={(event) => setUsername(event.target.value)}
-                  placeholder="admin"
-                  className="w-full rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-slate-100 outline-none transition-colors focus:border-blue-500"
-                />
-              </label>
-            )}
+            <label className="block">
+              <span className="mb-2 block text-sm text-slate-300">
+                {mode === 'train' ? 'Locomotive ID' : 'Username'}
+              </span>
+              <input
+                value={identifier}
+                onChange={(event) => setIdentifier(event.target.value)}
+                placeholder={mode === 'train' ? 'KTZ-2001' : 'admin'}
+                className="w-full rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-slate-100 outline-none transition-colors focus:border-blue-500"
+              />
+            </label>
 
             <label className="block">
               <span className="mb-2 block text-sm text-slate-300">Password</span>
@@ -141,10 +142,10 @@ export function LoginPage() {
 
             <button
               type="submit"
-              disabled={submitting || !password.trim() || (role === 'train' ? !trainId.trim() : !username.trim())}
+              disabled={submitting || !identifier.trim() || !password.trim()}
               className="w-full rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500"
             >
-              {submitting ? 'Signing in...' : `Continue as ${role}`}
+              {submitting ? 'Signing in...' : 'Continue'}
             </button>
           </form>
         </section>

@@ -1,4 +1,5 @@
 import { CONFIG } from '../config'
+import { useAuthStore } from '../store/useAuthStore'
 import { useDispatcherStore } from '../store/useDispatcherStore'
 import type { ChatMessage, HealthIndex, HealthSubsystem, TelemetryFrame, WsEnvelope } from '../types'
 
@@ -8,8 +9,9 @@ let manualClose = false
 
 function buildWsUrl(): string {
     const url = new URL(CONFIG.WS_URL)
-    if (CONFIG.API_KEY) {
-        url.searchParams.set('apiKey', CONFIG.API_KEY)
+    const accessToken = useAuthStore.getState().accessToken
+    if (accessToken) {
+        url.searchParams.set('token', accessToken)
     }
     return url.toString()
 }
@@ -31,6 +33,9 @@ function adaptTelemetryFrame(raw: unknown): TelemetryFrame {
 }
 
 function scheduleReconnect(): void {
+    if (!useAuthStore.getState().accessToken) {
+        return
+    }
     const store = useDispatcherStore.getState()
     const attempt = store.reconnectAttempt + 1
     store.setReconnectAttempt(attempt)
@@ -60,6 +65,11 @@ function adaptHealthIndex(raw: unknown): HealthIndex {
 
 export function connectWs(): void {
     if (socket?.readyState === WebSocket.OPEN) return
+
+    if (!useAuthStore.getState().accessToken) {
+        useDispatcherStore.getState().setConnection('disconnected')
+        return
+    }
 
     manualClose = false
     const store = useDispatcherStore.getState()
@@ -106,8 +116,14 @@ export function connectWs(): void {
         }
     }
 
-    socket.onclose = () => {
+    socket.onclose = (event) => {
         if (manualClose) return
+        if (event.code === 1008) {
+            useDispatcherStore.getState().reset()
+            useAuthStore.getState().clearSession()
+            disconnectWs()
+            return
+        }
         useDispatcherStore.getState().setConnection('disconnected')
         scheduleReconnect()
     }

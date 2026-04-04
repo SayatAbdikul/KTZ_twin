@@ -46,6 +46,14 @@ def _detect_legacy_revision() -> str | None:
         return None
 
     telemetry_columns = {column["name"] for column in inspector.get_columns("telemetry_points")}
+    if {
+        "health_snapshots",
+        "users",
+        "auth_sessions",
+        "auth_audit_events",
+    }.issubset(table_names):
+        return "0003_auth_tables"
+
     if "health_snapshots" in table_names and "source_event_id" in telemetry_columns:
         return "0002_replay_schema_updates"
 

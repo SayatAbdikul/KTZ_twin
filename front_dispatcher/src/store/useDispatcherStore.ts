@@ -21,6 +21,7 @@ interface DispatcherState {
     upsertTelemetry: (frame: TelemetryFrame) => void
     upsertHealth: (locomotiveId: string, health: HealthIndex) => void
     addChatMessage: (message: ChatMessage) => void
+    reset: () => void
 }
 
 function getMetric(frame: TelemetryFrame, metricId: string): number {
@@ -38,7 +39,7 @@ function healthStatus(health: HealthIndex): LocomotiveSnapshot['status'] {
 }
 
 export const useDispatcherStore = create<DispatcherState>((set) => ({
-    connection: 'connecting',
+    connection: 'disconnected',
     reconnectAttempt: 0,
     selectedLocomotiveId: null,
     locomotives: {},
@@ -119,5 +120,14 @@ export const useDispatcherStore = create<DispatcherState>((set) => ({
                     [message.locomotiveId]: [...old, message],
                 },
             }
+        }),
+
+    reset: () =>
+        set({
+            connection: 'disconnected',
+            reconnectAttempt: 0,
+            selectedLocomotiveId: null,
+            locomotives: {},
+            chats: {},
         }),
 }))

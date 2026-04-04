@@ -79,7 +79,7 @@ async def send_connection_snapshot(ws: WebSocket) -> None:
                 "reconnectAttempt": rt.reconnect_attempt,
             }
             for rt in state.locomotives.values()
-            if auth.is_admin or rt.target.locomotive_id == auth.train_id
+            if auth.can_access_all_locomotives or rt.target.locomotive_id == auth.locomotive_id
         ]
     }
     await send_message(ws, "dispatcher.snapshot", payload)

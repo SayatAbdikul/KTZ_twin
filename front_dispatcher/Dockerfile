@@ -8,9 +8,9 @@ RUN npm ci
 COPY . .
 
 ARG VITE_WS_URL=ws://localhost:3010/ws
-ARG VITE_API_KEY=ktz-demo-key
+ARG VITE_AUTH_API_BASE_URL=http://localhost:3010
 ENV VITE_WS_URL=${VITE_WS_URL}
-ENV VITE_API_KEY=${VITE_API_KEY}
+ENV VITE_AUTH_API_BASE_URL=${VITE_AUTH_API_BASE_URL}
 
 RUN npm run build
 

@@ -17,42 +17,32 @@ from app.models import now_ms
 
 API_KEY = os.getenv("API_KEY", "ktz-demo-key")
 AUTH_TOKEN_SECRET = os.getenv("AUTH_TOKEN_SECRET", "ktz-demo-auth-secret")
-AUTH_TOKEN_TTL_S = int(os.getenv("AUTH_TOKEN_TTL_S", "43200"))
-SHARED_AUTH_PATHS = {
-    "/api/telemetry/metrics",
-}
-
-SEEDED_ADMIN_USERS = (
-    {
-        "username": "admin",
-        "password": "RailCore!4821",
-        "display_name": "KTZ Administrator",
-    },
-)
-
-SEEDED_TRAIN_USERS = (
-    {
-        "train_id": LOCOMOTIVE_ID,
-        "password": "AxleNorth!2714",
-        "display_name": f"Train {LOCOMOTIVE_ID}",
-    },
-)
+UNAUTHORIZED_CODE = "UNAUTHORIZED"
+PASSWORD_CHANGE_REQUIRED_CODE = "PASSWORD_CHANGE_REQUIRED"
 
 
 @dataclass(frozen=True)
 class AuthContext:
-    role: Literal["admin", "train", "service"]
+    role: Literal["admin", "dispatcher", "train", "service"]
     subject: str
+    user_id: int | None = None
+    session_id: str | None = None
     username: str | None = None
-    train_id: str | None = None
+    locomotive_id: str | None = None
     display_name: str | None = None
+    status: str | None = None
+    must_change_password: bool = False
+
+    @property
+    def is_service(self) -> bool:
+        return self.role == "service"
 
     @property
     def is_admin(self) -> bool:
         return self.role in {"admin", "service"}
 
     def can_access_service_locomotive(self) -> bool:
-        return self.is_admin or self.train_id == LOCOMOTIVE_ID
+        return self.is_admin or self.role == "train" and self.locomotive_id == LOCOMOTIVE_ID
 
 
 def _encode_segment(raw: bytes) -> str:
@@ -64,59 +54,19 @@ def _decode_segment(raw: str) -> bytes:
     return base64.urlsafe_b64decode(f"{raw}{padding}")
 
 
-def _sign(body: str) -> str:
-    digest = hmac.new(AUTH_TOKEN_SECRET.encode("utf-8"), body.encode("utf-8"), hashlib.sha256).digest()
+def _sign(signing_input: str) -> str:
+    digest = hmac.new(AUTH_TOKEN_SECRET.encode("utf-8"), signing_input.encode("utf-8"), hashlib.sha256).digest()
     return _encode_segment(digest)
 
 
-def _build_token(payload: dict[str, object]) -> str:
-    body = _encode_segment(json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8"))
-    return f"{body}.{_sign(body)}"
-
-
-def _payload_to_context(payload: dict[str, object]) -> AuthContext | None:
-    role = payload.get("role")
-    if role not in {"admin", "train"}:
-        return None
-
-    subject = str(payload.get("sub") or "").strip()
-    if not subject:
-        return None
-
-    username = payload.get("username")
-    train_id = payload.get("trainId")
-    display_name = payload.get("displayName")
-    return AuthContext(
-        role=role,
-        subject=subject,
-        username=str(username) if username else None,
-        train_id=str(train_id) if train_id else None,
-        display_name=str(display_name) if display_name else None,
-    )
-
-
-def create_access_token(auth: AuthContext) -> str:
-    now_s = int(time.time())
-    return _build_token(
-        {
-            "sub": auth.subject,
-            "role": auth.role,
-            "username": auth.username,
-            "trainId": auth.train_id,
-            "displayName": auth.display_name,
-            "iat": now_s,
-            "exp": now_s + AUTH_TOKEN_TTL_S,
-        }
-    )
-
-
-def decode_access_token(token: str) -> AuthContext | None:
+def _decode_access_token(token: str) -> dict[str, object] | None:
     try:
-        body, signature = token.split(".", 1)
+        header, body, signature = token.split(".", 2)
     except ValueError:
         return None
 
-    if not hmac.compare_digest(signature, _sign(body)):
+    signing_input = f"{header}.{body}"
+    if not hmac.compare_digest(signature, _sign(signing_input)):
         return None
 
     try:
@@ -128,85 +78,46 @@ def decode_access_token(token: str) -> AuthContext | None:
     if not isinstance(exp, int) or exp <= int(time.time()):
         return None
 
-    return _payload_to_context(payload)
+    return payload
 
 
-def authenticate_admin(username: str, password: str) -> AuthContext | None:
-    for admin in SEEDED_ADMIN_USERS:
-        if admin["username"] == username and admin["password"] == password:
-            return AuthContext(
-                role="admin",
-                subject=f"admin:{username}",
-                username=username,
-                display_name=admin["display_name"],
-            )
-    return None
+def _payload_to_context(payload: dict[str, object]) -> AuthContext | None:
+    role = payload.get("role")
+    if role not in {"admin", "dispatcher", "train"}:
+        return None
 
+    subject = str(payload.get("sub") or "").strip()
+    if not subject:
+        return None
 
-def authenticate_train(train_id: str, password: str) -> AuthContext | None:
-    for train in SEEDED_TRAIN_USERS:
-        if train["train_id"] == train_id and train["password"] == password:
-            return AuthContext(
-                role="train",
-                subject=f"train:{train_id}",
-                train_id=train_id,
-                display_name=train["display_name"],
-            )
-    return None
-
-
-def serialize_auth_context(auth: AuthContext) -> dict[str, object]:
-    return {
-        "role": auth.role,
-        "username": auth.username,
-        "trainId": auth.train_id,
-        "displayName": auth.display_name,
-    }
-
-
-def seeded_account_summary() -> dict[str, object]:
-    return {
-        "admins": [
-            {
-                "username": admin["username"],
-                "displayName": admin["display_name"],
-            }
-            for admin in SEEDED_ADMIN_USERS
-        ],
-        "trains": [
-            {
-                "trainId": train["train_id"],
-                "displayName": train["display_name"],
-            }
-            for train in SEEDED_TRAIN_USERS
-        ],
-    }
+    user_id = payload.get("uid")
+    session_id = payload.get("sid")
+    return AuthContext(
+        role=role,
+        subject=subject,
+        user_id=user_id if isinstance(user_id, int) else None,
+        session_id=session_id if isinstance(session_id, str) else None,
+        username=str(payload.get("username")) if payload.get("username") is not None else None,
+        locomotive_id=str(payload.get("locomotiveId")) if payload.get("locomotiveId") is not None else None,
+        display_name=str(payload.get("displayName")) if payload.get("displayName") is not None else None,
+        status=str(payload.get("status")) if payload.get("status") is not None else None,
+        must_change_password=bool(payload.get("mustChangePassword")),
+    )
 
 
 def _service_context() -> AuthContext:
     return AuthContext(role="service", subject="service:api-key", display_name="Internal Service")
 
 
-def _unauthorized_response(message: str) -> JSONResponse:
-    return JSONResponse(
-        status_code=401,
-        content={
-            "error": {
-                "code": "UNAUTHORIZED",
-                "message": message,
-            },
-            "timestamp": now_ms(),
-        },
-    )
-
-
 def _resolve_auth_context(authorization: str | None, api_key: str | None) -> AuthContext | None:
     if authorization:
         scheme, _, token = authorization.partition(" ")
         if scheme.lower() == "bearer" and token:
-            decoded = decode_access_token(token.strip())
-            if decoded is not None:
-                return decoded
+            payload = _decode_access_token(token.strip())
+            if payload is not None:
+                decoded = _payload_to_context(payload)
+                if decoded is not None:
+                    return decoded
 
     if API_KEY and api_key == API_KEY:
         return _service_context()
@@ -214,7 +125,7 @@ def _resolve_auth_context(authorization: str | None, api_key: str | None) -> Aut
     return None
 
 
-def _ensure_service_access(auth: AuthContext | None) -> AuthContext | None:
+def _ensure_locomotive_access(auth: AuthContext | None) -> AuthContext | None:
     if auth is None:
         return None
     if auth.can_access_service_locomotive():
@@ -222,21 +133,38 @@ def _ensure_service_access(auth: AuthContext | None) -> AuthContext | None:
     return None
 
 
+def _json_error(status_code: int, code: str, message: str) -> JSONResponse:
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "error": {
+                "code": code,
+                "message": message,
+            },
+            "timestamp": now_ms(),
+        },
+    )
+
+
 async def enforce_http_auth(request: Request, call_next):
     if request.method == "OPTIONS" or not request.url.path.startswith("/api"):
         return await call_next(request)
 
-    if request.url.path == "/api/auth/login":
-        return await call_next(request)
-
-    auth = _resolve_auth_context(
-        request.headers.get("Authorization"),
-        request.headers.get("X-API-Key"),
+    auth = _ensure_locomotive_access(
+        _resolve_auth_context(
+            request.headers.get("Authorization"),
+            request.headers.get("X-API-Key"),
+        )
     )
-    if request.url.path not in SHARED_AUTH_PATHS:
-        auth = _ensure_service_access(auth)
     if auth is None:
-        return _unauthorized_response("A valid bearer token is required for this endpoint.")
+        return _json_error(401, UNAUTHORIZED_CODE, "A valid bearer token is required for this endpoint.")
+
+    if auth.must_change_password:
+        return _json_error(
+            403,
+            PASSWORD_CHANGE_REQUIRED_CODE,
+            "Password change is required before accessing locomotive resources.",
+        )
 
     request.state.auth = auth
     return await call_next(request)
@@ -252,25 +180,30 @@ def get_request_auth(request: Request | WebSocket) -> AuthContext:
 def require_admin(auth: AuthContext) -> None:
     if auth.is_admin:
         return
-    raise HTTPException(status_code=403, detail="Admin role is required for this action")
+    raise HTTPException(status_code=403, detail="Admin role is required for this action.")
 
 
 async def authorize_websocket(websocket: WebSocket) -> AuthContext | None:
-    auth = _ensure_service_access(
+    auth = _ensure_locomotive_access(
         _resolve_auth_context(
             websocket.headers.get("Authorization"),
             websocket.query_params.get("apiKey"),
         )
     )
-
     if auth is None:
         token = websocket.query_params.get("token")
         if token:
-            auth = _ensure_service_access(decode_access_token(token))
+            payload = _decode_access_token(token)
+            if payload is not None:
+                auth = _ensure_locomotive_access(_payload_to_context(payload))
 
-    if auth is not None:
-        websocket.state.auth = auth
-        return auth
+    if auth is None:
+        await websocket.close(code=1008, reason="Unauthorized")
+        return None
 
-    await websocket.close(code=1008, reason="Unauthorized")
-    return None
+    if auth.must_change_password:
+        await websocket.close(code=1008, reason="Password change required")
+        return None
+
+    websocket.state.auth = auth
+    return auth

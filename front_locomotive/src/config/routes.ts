@@ -7,4 +7,5 @@ export const ROUTES = {
   MESSAGES: '/messages',
   REPLAY: '/replay',
   DISPATCH: '/dispatch',
+  USERS: '/admin/users',
 } as const

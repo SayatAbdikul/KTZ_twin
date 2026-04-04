@@ -8,6 +8,7 @@ import {
   MessageSquare,
   History,
   Radio,
+  Users,
 } from 'lucide-react'
 import { ROUTES } from '@/config/routes'
 import { useAlertStore } from '@/features/alerts/useAlertStore'
@@ -34,6 +35,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: ROUTES.MESSAGES, icon: MessageSquare, label: 'Messages' },
   { to: ROUTES.REPLAY, icon: History, label: 'History' },
   { to: ROUTES.DISPATCH, icon: Radio, label: 'Dispatch', roles: ['admin'] as const },
+  { to: ROUTES.USERS, icon: Users, label: 'Users', roles: ['admin'] as const },
 ]
 
 const EMPTY_ALERT_SUMMARY: AlertSummary = {

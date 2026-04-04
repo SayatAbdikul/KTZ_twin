@@ -1,25 +1,53 @@
 import { create } from 'zustand'
-import { persist, createJSONStorage } from 'zustand/middleware'
+import { createJSONStorage, persist } from 'zustand/middleware'
 import type { AuthUser } from '@/types/auth'
 
 interface AuthState {
-  token: string | null
+  accessToken: string | null
   user: AuthUser | null
-  setSession: (token: string, user: AuthUser) => void
-  logout: () => void
+  mustChangePassword: boolean
+  hasHydrated: boolean
+  isBootstrapping: boolean
+  setSession: (accessToken: string, user: AuthUser, mustChangePassword?: boolean) => void
+  clearSession: () => void
+  setBootstrapping: (isBootstrapping: boolean) => void
+  markHydrated: () => void
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
-      token: null,
+      accessToken: null,
       user: null,
-      setSession: (token, user) => set({ token, user }),
-      logout: () => set({ token: null, user: null }),
+      mustChangePassword: false,
+      hasHydrated: true,
+      isBootstrapping: false,
+      setSession: (accessToken, user, mustChangePassword = Boolean(user.mustChangePassword)) =>
+        set({
+          accessToken,
+          user,
+          mustChangePassword,
+        }),
+      clearSession: () =>
+        set({
+          accessToken: null,
+          user: null,
+          mustChangePassword: false,
+        }),
+      setBootstrapping: (isBootstrapping) => set({ isBootstrapping }),
+      markHydrated: () => set({ hasHydrated: true }),
     }),
     {
       name: 'ktz-auth-session',
       storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({
+        accessToken: state.accessToken,
+        user: state.user,
+        mustChangePassword: state.mustChangePassword,
+      }),
+      onRehydrateStorage: () => (state) => {
+        state?.markHydrated()
+      },
     }
   )
 )

@@ -9,14 +9,14 @@ from typing import Any
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.auth import authorize_websocket, enforce_http_auth
+from app.auth import authorize_websocket, enforce_http_auth, require_locomotive_access, seed_auth_identities
 from app.config import CORS_ORIGINS, INGEST_MODE, LOCOMOTIVE_TARGETS
 from app.kafka_consumer import consume_kafka_forever
 from app.db import init_db_schema, wait_for_db
 from app.locomotive_client import connect_locomotive_forever, send_chat_to_locomotive
 from app.models import now_ms
 from app.repository import save_dispatcher_command
-from app.routes import auth, health, locomotives
+from app.routes import admin_users, auth, health, locomotives
 from app.state import LocomotiveRuntime, state
 from app.ws_server import broadcast_message, send_connection_snapshot, send_locomotive_snapshot
 
@@ -52,6 +52,7 @@ async def lifespan(app: FastAPI):
     if not wait_for_db():
         raise RuntimeError("Database not reachable after startup retries")
     init_db_schema()
+    seed_auth_identities()
 
     for target in LOCOMOTIVE_TARGETS:
         state.locomotives[target.locomotive_id] = LocomotiveRuntime(target=target)
@@ -95,6 +96,7 @@ app.add_middleware(
 app.middleware("http")(enforce_http_auth)
 
 app.include_router(auth.router)
+app.include_router(admin_users.router)
 app.include_router(health.router)
 app.include_router(locomotives.router)
 
@@ -112,8 +114,8 @@ async def ws_endpoint(websocket: WebSocket):
 
     await websocket.accept()
     state.register_client(websocket)
-    if auth_context.role == "train" and auth_context.train_id:
-        state.set_subscription(websocket, auth_context.train_id)
+    if auth_context.role == "train" and auth_context.locomotive_id:
+        state.set_subscription(websocket, auth_context.locomotive_id)
     await send_connection_snapshot(websocket)
 
     try:
@@ -124,7 +126,11 @@ async def ws_endpoint(websocket: WebSocket):
                 msg_type = msg.get("type", "")
                 payload = msg.get("payload", {})
                 if msg_type == "dispatcher.chat" and isinstance(payload, dict):
-                    if auth_context.is_admin:
+                    if auth_context.can_use_dispatcher_console:
+                        requested_locomotive = str(payload.get("locomotiveId") or payload.get("locomotive_id") or "").strip()
+                        if not requested_locomotive:
+                            continue
+                        require_locomotive_access(auth_context, requested_locomotive)
                         await _handle_dispatcher_command(payload)
                 elif msg_type == "subscribe":
                     requested = None
@@ -132,19 +138,21 @@ async def ws_endpoint(websocket: WebSocket):
                         requested = payload.get("locomotiveId") or payload.get("locomotive_id")
 
                     if auth_context.role == "train":
-                        locomotive_id = auth_context.train_id
+                        locomotive_id = auth_context.locomotive_id
                         state.set_subscription(websocket, locomotive_id)
                         if locomotive_id:
                             await send_locomotive_snapshot(websocket, locomotive_id)
                         continue
 
                     if requested in ("all", "*", "", None):
-                        state.set_subscription(websocket, "*" if requested else None)
+                        requested_subscription = "*" if requested else None
+                        state.set_subscription(websocket, requested_subscription)
                         if requested in ("all", "*"):
                             for locomotive_id in state.locomotives.keys():
                                 await send_locomotive_snapshot(websocket, locomotive_id)
                     else:
                         locomotive_id = str(requested).strip()
+                        require_locomotive_access(auth_context, locomotive_id)
                         state.set_subscription(websocket, locomotive_id)
                         await send_locomotive_snapshot(websocket, locomotive_id)
             except json.JSONDecodeError:

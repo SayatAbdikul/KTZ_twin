@@ -1,5 +1,6 @@
 import { APP_CONFIG } from '@/config/app.config'
 import { useAuthStore } from '@/features/auth/useAuthStore'
+import { refreshSession } from '@/services/api/authApi'
 import type { ApiResponse } from '@/types/api'
 
 class ApiError extends Error {
@@ -16,9 +17,9 @@ class ApiError extends Error {
 function buildHeaders(headers: HeadersInit | undefined): Headers {
   const merged = new Headers(headers ?? {})
   merged.set('Content-Type', 'application/json')
-  const token = useAuthStore.getState().token
-  if (token) {
-    merged.set('Authorization', `Bearer ${token}`)
+  const accessToken = useAuthStore.getState().accessToken
+  if (accessToken) {
+    merged.set('Authorization', `Bearer ${accessToken}`)
   }
   return merged
 }
@@ -26,7 +27,10 @@ function buildHeaders(headers: HeadersInit | undefined): Headers {
 function createRequest(baseUrl: string) {
   return async function request<T>(
     path: string,
-    options?: RequestInit & { params?: Record<string, string | number> }
+    options?: RequestInit & {
+      params?: Record<string, string | number>
+      _retriedAfterRefresh?: boolean
+    }
   ): Promise<ApiResponse<T>> {
     let url = `${baseUrl}${path}`
 
@@ -43,6 +47,22 @@ function createRequest(baseUrl: string) {
     })
 
     if (!res.ok) {
+      if (res.status === 401 && !options?._retriedAfterRefresh && useAuthStore.getState().accessToken) {
+        try {
+          const session = await refreshSession()
+          useAuthStore.getState().setSession(
+            session.accessToken,
+            session.user,
+            session.mustChangePassword
+          )
+          return request<T>(path, {
+            ...options,
+            _retriedAfterRefresh: true,
+          })
+        } catch {
+          useAuthStore.getState().clearSession()
+        }
+      }
       const err = await res.json().catch(() => ({ code: 'UNKNOWN', message: res.statusText }))
       throw new ApiError(res.status, err.code, err.message)
     }

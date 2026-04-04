@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import BigInteger, Boolean, Float, Index, Integer, String, Text, text
+from sqlalchemy import BigInteger, Boolean, Float, ForeignKey, Index, Integer, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -88,3 +88,54 @@ class HealthSnapshot(Base):
     ts: Mapped[int] = mapped_column(BigInteger, index=True)
     source_event_id: Mapped[str] = mapped_column(String(128), unique=True, index=True)
     payload: Mapped[dict] = mapped_column(JSONB)
+
+
+class User(Base):
+    __tablename__ = "users"
+    __table_args__ = (
+        Index("ux_users_username", "username", unique=True, postgresql_where=text("username IS NOT NULL")),
+        Index("ux_users_locomotive_id", "locomotive_id", unique=True, postgresql_where=text("locomotive_id IS NOT NULL")),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    role: Mapped[str] = mapped_column(String(32), index=True)
+    username: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    display_name: Mapped[str] = mapped_column(String(160))
+    locomotive_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    password_hash: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(32), default="active", index=True)
+    must_change_password: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[int] = mapped_column(BigInteger, index=True)
+    updated_at: Mapped[int] = mapped_column(BigInteger, index=True)
+    last_login_at: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
+
+class AuthSession(Base):
+    __tablename__ = "auth_sessions"
+    __table_args__ = (
+        Index("ix_auth_sessions_user_id_expires_at", "user_id", "expires_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    session_id: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    refresh_token_hash: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    created_at: Mapped[int] = mapped_column(BigInteger, index=True)
+    updated_at: Mapped[int] = mapped_column(BigInteger, index=True)
+    expires_at: Mapped[int] = mapped_column(BigInteger, index=True)
+    revoked_at: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
+    user_agent: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ip_address: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
+
+class AuthAuditEvent(Base):
+    __tablename__ = "auth_audit_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    event_type: Mapped[str] = mapped_column(String(64), index=True)
+    actor_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    subject_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    session_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    success: Mapped[bool] = mapped_column(Boolean, default=True)
+    payload: Mapped[dict] = mapped_column(JSONB, default=dict)
+    created_at: Mapped[int] = mapped_column(BigInteger, index=True)

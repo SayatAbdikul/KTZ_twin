@@ -1,4 +1,5 @@
 import { APP_CONFIG } from '@/config/app.config'
+import { resetSessionState } from '@/app/resetSessionState'
 import { useAuthStore } from '@/features/auth/useAuthStore'
 import { useConnectionStore } from '@/features/connection/useConnectionStore'
 import { routeWsMessage } from './wsMessageRouter'
@@ -9,9 +10,9 @@ let destroyed = false
 
 function buildWsUrl(): string {
     const url = new URL(APP_CONFIG.WS_URL)
-    const token = useAuthStore.getState().token
-    if (token) {
-        url.searchParams.set('token', token)
+    const accessToken = useAuthStore.getState().accessToken
+    if (accessToken) {
+        url.searchParams.set('token', accessToken)
     }
     return url.toString()
 }
@@ -47,8 +48,14 @@ export function connectWebSocket(): void {
         routeWsMessage(event.data)
     }
 
-    socket.onclose = () => {
+    socket.onclose = (event) => {
         if (destroyed) return
+        if (event.code === 1008) {
+            resetSessionState()
+            useAuthStore.getState().clearSession()
+            disconnectWebSocket()
+            return
+        }
         const s = useConnectionStore.getState()
         s.setWsConnected(false)
         s.setBackendStatus('disconnected')

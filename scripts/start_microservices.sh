@@ -34,7 +34,8 @@ Stack is up.
 
 Locomotive backend:  http://localhost:${LOCOMOTIVE_PORT}/ping
 Dispatcher backend:  http://localhost:${DISPATCHER_PORT}/ping
-Unified frontend:    http://localhost:${FRONT_LOCOMOTIVE_PORT}
+Operator frontend:   http://localhost:${FRONT_LOCOMOTIVE_PORT}
+Dispatcher frontend: http://localhost:${FRONT_DISPATCHER_PORT}
 EOF
 }
 

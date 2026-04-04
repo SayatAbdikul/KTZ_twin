@@ -45,9 +45,9 @@ export async function downloadCsv({
   const headers = new Headers()
   headers.set('Accept', 'text/csv')
 
-  const token = useAuthStore.getState().token
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`)
+  const accessToken = useAuthStore.getState().accessToken
+  if (accessToken) {
+    headers.set('Authorization', `Bearer ${accessToken}`)
   }
 
   const response = await fetch(buildUrl(baseUrl, path, params), {

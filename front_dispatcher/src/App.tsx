@@ -1,15 +1,236 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { connectWs, disconnectWs } from './services/wsClient'
 import { ConnectionBadge } from './components/ConnectionBadge'
 import { LocomotiveList } from './components/LocomotiveList'
 import { TelemetryPanel } from './components/TelemetryPanel'
 import { ChatPanel } from './components/ChatPanel'
+import { useAuthStore } from './store/useAuthStore'
+import { useDispatcherStore } from './store/useDispatcherStore'
+import { changePassword, login, logoutSession, refreshSession } from './services/authApi'
 
-export function App() {
+const BOOTSTRAP_REFRESH_TIMEOUT_MS = 9000
+
+async function refreshSessionWithTimeout() {
+    let timeoutId: number | undefined
+    try {
+        const timeoutPromise = new Promise<never>((_, reject) => {
+            timeoutId = window.setTimeout(() => reject(new Error('Session bootstrap timeout')), BOOTSTRAP_REFRESH_TIMEOUT_MS)
+        })
+        return await Promise.race([refreshSession(), timeoutPromise])
+    } finally {
+        if (timeoutId !== undefined) {
+            window.clearTimeout(timeoutId)
+        }
+    }
+}
+
+function LoadingScreen() {
+    return (
+        <div className="auth-shell">
+            <section className="auth-card">
+                <p className="kicker">KTZ Digital Twin</p>
+                <h1>Restoring dispatcher session...</h1>
+            </section>
+        </div>
+    )
+}
+
+function LoginScreen() {
+    const setSession = useAuthStore((state) => state.setSession)
+    const clearSession = useAuthStore((state) => state.clearSession)
+    const resetDispatcherState = useDispatcherStore((state) => state.reset)
+    const [identifier, setIdentifier] = useState('')
+    const [password, setPassword] = useState('')
+    const [submitting, setSubmitting] = useState(false)
+    const [error, setError] = useState<string | null>(null)
+
+    async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+        event.preventDefault()
+        setSubmitting(true)
+        setError(null)
+
+        try {
+            const session = await login(identifier.trim(), password)
+            if (session.user.role === 'train') {
+                await logoutSession(session.accessToken)
+                clearSession()
+                resetDispatcherState()
+                setError('Train accounts should use the locomotive operator app, not the dispatcher console.')
+                return
+            }
+            setSession(session.accessToken, session.user, session.mustChangePassword)
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Login failed.')
+        } finally {
+            setSubmitting(false)
+        }
+    }
+
+    return (
+        <div className="auth-shell">
+            <section className="auth-card">
+                <p className="kicker">KTZ Digital Twin</p>
+                <h1>Dispatcher Console Login</h1>
+                <p className="auth-copy">
+                    Sign in with a dispatcher or admin username. Train accounts are restricted to the operator app.
+                </p>
+
+                <form className="auth-form" onSubmit={handleSubmit}>
+                    <label>
+                        <span>Username</span>
+                        <input
+                            value={identifier}
+                            onChange={(event) => setIdentifier(event.target.value)}
+                            placeholder="dispatcher"
+                        />
+                    </label>
+
+                    <label>
+                        <span>Password</span>
+                        <input
+                            type="password"
+                            value={password}
+                            onChange={(event) => setPassword(event.target.value)}
+                            placeholder="Enter password"
+                        />
+                    </label>
+
+                    {error ? <div className="auth-error">{error}</div> : null}
+
+                    <button type="submit" disabled={submitting || !identifier.trim() || !password.trim()}>
+                        {submitting ? 'Signing in...' : 'Continue'}
+                    </button>
+                </form>
+            </section>
+        </div>
+    )
+}
+
+function ChangePasswordScreen() {
+    const accessToken = useAuthStore((state) => state.accessToken)
+    const user = useAuthStore((state) => state.user)
+    const setSession = useAuthStore((state) => state.setSession)
+    const clearSession = useAuthStore((state) => state.clearSession)
+    const resetDispatcherState = useDispatcherStore((state) => state.reset)
+    const [currentPassword, setCurrentPassword] = useState('')
+    const [newPassword, setNewPassword] = useState('')
+    const [confirmPassword, setConfirmPassword] = useState('')
+    const [submitting, setSubmitting] = useState(false)
+    const [error, setError] = useState<string | null>(null)
+
+    async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+        event.preventDefault()
+        if (!accessToken) {
+            setError('Session expired. Please sign in again.')
+            return
+        }
+        if (newPassword !== confirmPassword) {
+            setError('New password and confirmation do not match.')
+            return
+        }
+
+        setSubmitting(true)
+        setError(null)
+        try {
+            const session = await changePassword(accessToken, currentPassword, newPassword)
+            setSession(session.accessToken, session.user, session.mustChangePassword)
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Password change failed.')
+        } finally {
+            setSubmitting(false)
+        }
+    }
+
+    async function handleLogout() {
+        await logoutSession(accessToken)
+        disconnectWs()
+        clearSession()
+        resetDispatcherState()
+    }
+
+    return (
+        <div className="auth-shell">
+            <section className="auth-card">
+                <p className="kicker">Password Required</p>
+                <h1>Change your password to continue</h1>
+                <p className="auth-copy">
+                    {user?.displayName ?? user?.username ?? 'This account'} must update its temporary password before
+                    using the dispatcher console.
+                </p>
+
+                <form className="auth-form" onSubmit={handleSubmit}>
+                    <label>
+                        <span>Current password</span>
+                        <input
+                            type="password"
+                            value={currentPassword}
+                            onChange={(event) => setCurrentPassword(event.target.value)}
+                        />
+                    </label>
+
+                    <label>
+                        <span>New password</span>
+                        <input
+                            type="password"
+                            value={newPassword}
+                            onChange={(event) => setNewPassword(event.target.value)}
+                        />
+                    </label>
+
+                    <label>
+                        <span>Confirm new password</span>
+                        <input
+                            type="password"
+                            value={confirmPassword}
+                            onChange={(event) => setConfirmPassword(event.target.value)}
+                        />
+                    </label>
+
+                    {error ? <div className="auth-error">{error}</div> : null}
+
+                    <div className="auth-actions">
+                        <button
+                            type="submit"
+                            disabled={
+                                submitting ||
+                                !currentPassword.trim() ||
+                                !newPassword.trim() ||
+                                !confirmPassword.trim()
+                            }
+                        >
+                            {submitting ? 'Updating...' : 'Save new password'}
+                        </button>
+                        <button type="button" className="secondary" onClick={() => void handleLogout()}>
+                            Sign out
+                        </button>
+                    </div>
+                </form>
+            </section>
+        </div>
+    )
+}
+
+function ConsoleShell() {
+    const accessToken = useAuthStore((state) => state.accessToken)
+    const user = useAuthStore((state) => state.user)
+    const clearSession = useAuthStore((state) => state.clearSession)
+    const resetDispatcherState = useDispatcherStore((state) => state.reset)
+
     useEffect(() => {
+        if (!accessToken) {
+            disconnectWs()
+            return
+        }
         connectWs()
         return () => disconnectWs()
-    }, [])
+    }, [accessToken])
+
+    async function handleLogout() {
+        await logoutSession(accessToken)
+        disconnectWs()
+        clearSession()
+        resetDispatcherState()
+    }
 
     return (
         <div className="app-root">
@@ -17,8 +238,16 @@ export function App() {
                 <div>
                     <p className="kicker">KTZ Digital Twin</p>
                     <h1>Dispatcher Remote Console</h1>
+                    <p className="muted">
+                        {user?.displayName ?? user?.username ?? 'Authenticated user'} · {user?.role}
+                    </p>
                 </div>
-                <ConnectionBadge />
+                <div className="header-actions">
+                    <ConnectionBadge />
+                    <button className="logout-button" type="button" onClick={() => void handleLogout()}>
+                        Logout
+                    </button>
+                </div>
             </header>
 
             <main className="app-layout">
@@ -28,4 +257,82 @@ export function App() {
             </main>
         </div>
     )
+}
+
+export function App() {
+    const accessToken = useAuthStore((state) => state.accessToken)
+    const user = useAuthStore((state) => state.user)
+    const hasHydrated = useAuthStore((state) => state.hasHydrated)
+    const isBootstrapping = useAuthStore((state) => state.isBootstrapping)
+    const mustChangePassword = useAuthStore((state) => state.mustChangePassword)
+    const setSession = useAuthStore((state) => state.setSession)
+    const clearSession = useAuthStore((state) => state.clearSession)
+    const setBootstrapping = useAuthStore((state) => state.setBootstrapping)
+    const resetDispatcherState = useDispatcherStore((state) => state.reset)
+
+    useEffect(() => {
+        if (!hasHydrated) {
+            return
+        }
+
+        if (accessToken && user) {
+            if (user.role === 'train') {
+                void logoutSession(accessToken)
+                clearSession()
+                resetDispatcherState()
+            }
+            return
+        }
+
+        let cancelled = false
+        setBootstrapping(true)
+        void refreshSessionWithTimeout()
+            .then((session) => {
+                if (cancelled) return
+                if (session.user.role === 'train') {
+                    void logoutSession(session.accessToken)
+                    clearSession()
+                    resetDispatcherState()
+                    return
+                }
+                setSession(session.accessToken, session.user, session.mustChangePassword)
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    clearSession()
+                    resetDispatcherState()
+                }
+            })
+            .finally(() => {
+                if (!cancelled) {
+                    setBootstrapping(false)
+                }
+            })
+
+        return () => {
+            cancelled = true
+        }
+    }, [
+        accessToken,
+        clearSession,
+        hasHydrated,
+        resetDispatcherState,
+        setBootstrapping,
+        setSession,
+        user,
+    ])
+
+    if (!hasHydrated || isBootstrapping) {
+        return <LoadingScreen />
+    }
+
+    if (!accessToken || !user) {
+        return <LoginScreen />
+    }
+
+    if (mustChangePassword) {
+        return <ChangePasswordScreen />
+    }
+
+    return <ConsoleShell />
 }

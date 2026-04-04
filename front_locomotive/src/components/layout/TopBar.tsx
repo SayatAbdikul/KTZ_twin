@@ -9,6 +9,7 @@ import { useSettingsStore } from '@/features/settings/useSettingsStore'
 import { ConnectionIndicator } from '@/components/common/ConnectionIndicator'
 import { StatusBadge } from '@/components/common/StatusBadge'
 import { ROUTES } from '@/config/routes'
+import { logoutSession } from '@/services/api/authApi'
 import { disconnectWebSocket } from '@/services/websocket/wsClient'
 import { formatTimestamp } from '@/utils/formatters'
 import { cn } from '@/utils/cn'
@@ -17,7 +18,8 @@ export function TopBar() {
   const navigate = useNavigate()
   const [time, setTime] = useState(() => formatTimestamp(Date.now()))
   const user = useAuthStore((s) => s.user)
-  const logout = useAuthStore((s) => s.logout)
+  const accessToken = useAuthStore((s) => s.accessToken)
+  const clearSession = useAuthStore((s) => s.clearSession)
   const backendStatus = useConnectionStore((s) => s.backendStatus)
   const dispatcherStatus = useConnectionStore((s) => s.dispatcherStatus)
   const smoothingEnabled = useSettingsStore((s) => s.smoothingEnabled)
@@ -34,10 +36,11 @@ export function TopBar() {
     return () => clearInterval(timer)
   }, [])
 
-  function handleLogout() {
+  async function handleLogout() {
+    await logoutSession(accessToken)
     disconnectWebSocket()
     resetSessionState()
-    logout()
+    clearSession()
     navigate(ROUTES.LOGIN, { replace: true })
   }
 
@@ -46,7 +49,7 @@ export function TopBar() {
       <div className="flex items-center gap-3">
         {isTrainUser ? (
           <div className="rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm font-semibold text-slate-200">
-            {user.trainId ?? selectedLocomotiveId ?? 'Train'}
+            {user.locomotiveId ?? selectedLocomotiveId ?? 'Train'}
           </div>
         ) : (
           <select
@@ -75,7 +78,7 @@ export function TopBar() {
 
       <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-4">
         <div className="hidden rounded-md border border-slate-800 bg-slate-900 px-2.5 py-1 text-xs text-slate-300 sm:block">
-          {user?.role === 'admin' ? user.username : user?.trainId}
+          {user?.role === 'train' ? user.locomotiveId : user?.username}
         </div>
         <ConnectionIndicator label="Backend" status={backendStatus} />
         <ConnectionIndicator label="Dispatcher" status={dispatcherStatus} />

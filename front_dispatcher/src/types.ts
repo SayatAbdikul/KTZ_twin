@@ -69,3 +69,22 @@ export interface WsEnvelope<T = unknown> {
     sequenceId: number
     event?: EventEnvelopeV1
 }
+
+export type UserRole = 'admin' | 'dispatcher' | 'train'
+export type UserStatus = 'active' | 'disabled'
+
+export interface AuthUser {
+    id: number
+    role: UserRole
+    username?: string | null
+    displayName?: string | null
+    locomotiveId?: string | null
+    status?: UserStatus | null
+    mustChangePassword?: boolean
+}
+
+export interface AuthSessionResponse {
+    accessToken: string
+    user: AuthUser
+    mustChangePassword: boolean
+}

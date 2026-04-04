@@ -40,7 +40,7 @@ def list_locomotives(request: Request) -> dict:
                 "hasTelemetry": rt.latest_telemetry is not None,
             }
             for rt in state.locomotives.values()
-            if auth.is_admin or rt.target.locomotive_id == auth.train_id
+            if auth.can_access_all_locomotives or rt.target.locomotive_id == auth.locomotive_id
         ]
     }
 

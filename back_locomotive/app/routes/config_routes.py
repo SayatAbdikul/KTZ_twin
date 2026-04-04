@@ -14,7 +14,8 @@ router = APIRouter(prefix="/api/config", tags=["config"])
 
 
 @router.get("/thresholds")
-def get_thresholds() -> dict:
+def get_thresholds(request: Request) -> dict:
+    require_admin(get_request_auth(request))
     return make_response(get_threshold_config())
 
 
