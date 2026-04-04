@@ -37,6 +37,7 @@ Stop everything:
 ## Exposed Ports
 
 - `9092`: `kafka`
+- `9092`: `kafka`
 - `3001`: `back_locomotive`
 - `3010`: `back_dispatcher`
 - `5183`: `front_locomotive`

@@ -1,0 +1,8 @@
+INFO:     Started server process [92698]
+INFO:     Waiting for application startup.
+2026-04-04 22:01:53,416 INFO     app.main - Dispatcher started with ingest mode=hybrid and 1 locomotive targets
+2026-04-04 22:01:53,501 INFO     aiokafka.consumer.subscription_state - Updating subscribed topics to: frozenset({'ktz.locomotive.events'})
+INFO:     Application startup complete.
+ERROR:    [Errno 48] error while attempting to bind on address ('0.0.0.0', 3010): address already in use
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.

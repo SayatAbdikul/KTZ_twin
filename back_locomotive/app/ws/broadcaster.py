@@ -22,6 +22,7 @@ from app.config import (
 from app.models import make_event_envelope, now_ms
 from app.state import state
 from app.broker import publish_event
+from app.broker import publish_event
 
 
 # ---------------------------------------------------------------------------

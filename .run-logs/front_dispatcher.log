@@ -1,0 +1,11 @@
+
+> front_dispatcher@0.1.0 dev
+> vite --host 0.0.0.0 --port 5174
+
+Port 5174 is in use, trying another one...
+
+  VITE v8.0.3  ready in 4672 ms
+
+  ➜  Local:   http://localhost:5175/
+  ➜  Network: http://10.101.33.199:5175/
+  ➜  Network: http://192.168.64.1:5175/

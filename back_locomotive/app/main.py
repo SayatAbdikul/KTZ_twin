@@ -19,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.broker import start_broker, stop_broker
 from app.config import CORS_ORIGINS
+from app.broker import start_broker, stop_broker
 from app.simulator.health import generate_health_index
 from app.simulator.telemetry import generate_frame
 from app.ws.broadcaster import (
@@ -44,6 +45,8 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Initialising KTZ Locomotive Telemetry Server…")
+    await start_broker()
+
     await start_broker()
 
     # Generate first snapshot so REST endpoints are ready immediately
