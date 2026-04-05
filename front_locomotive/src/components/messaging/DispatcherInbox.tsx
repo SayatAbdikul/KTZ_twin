@@ -41,14 +41,14 @@ export function DispatcherInbox({ maxVisible = 3 }: DispatcherInboxProps) {
   return (
     <div className="flex flex-col">
       <SectionHeader
-        title="Dispatcher"
+        title="Диспетчер"
         viewAllTo={ROUTES.MESSAGES}
         count={summary.totalUnread > 0 ? summary.totalUnread : undefined}
       />
 
       {messages.length === 0 ? (
         <div className="flex h-24 items-center justify-center rounded-lg border border-dashed border-slate-700 text-sm text-slate-500">
-          No messages
+          Сообщений нет
         </div>
       ) : (
         <div className="flex flex-col gap-2">

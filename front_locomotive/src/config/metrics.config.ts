@@ -4,7 +4,7 @@ export const METRIC_DEFINITIONS: MetricDefinition[] = [
   // Motion
   {
     metricId: 'motion.speed',
-    label: 'Speed',
+    label: 'Скорость',
     unit: 'km/h',
     group: 'motion',
     precision: 0,
@@ -17,7 +17,7 @@ export const METRIC_DEFINITIONS: MetricDefinition[] = [
   },
   {
     metricId: 'motion.acceleration',
-    label: 'Acceleration',
+    label: 'Ускорение',
     unit: 'm/s²',
     group: 'motion',
     precision: 2,
@@ -28,7 +28,7 @@ export const METRIC_DEFINITIONS: MetricDefinition[] = [
   },
   {
     metricId: 'motion.distance',
-    label: 'Distance',
+    label: 'Расстояние',
     unit: 'km',
     group: 'motion',
     precision: 1,
@@ -41,7 +41,7 @@ export const METRIC_DEFINITIONS: MetricDefinition[] = [
   // Fuel / Energy
   {
     metricId: 'fuel.level',
-    label: 'Fuel Level',
+    label: 'Уровень топлива',
     unit: '%',
     group: 'fuel',
     precision: 1,
@@ -54,7 +54,7 @@ export const METRIC_DEFINITIONS: MetricDefinition[] = [
   },
   {
     metricId: 'fuel.consumption_rate',
-    label: 'Consumption Rate',
+    label: 'Расход топлива',
     unit: 'L/h',
     group: 'fuel',
     precision: 1,
@@ -68,7 +68,7 @@ export const METRIC_DEFINITIONS: MetricDefinition[] = [
   // Thermal
   {
     metricId: 'thermal.coolant_temp',
-    label: 'Coolant Temperature',
+    label: 'Температура охлаждающей жидкости',
     unit: '°C',
     group: 'thermal',
     precision: 1,
@@ -82,7 +82,7 @@ export const METRIC_DEFINITIONS: MetricDefinition[] = [
   },
   {
     metricId: 'thermal.oil_temp',
-    label: 'Oil Temperature',
+    label: 'Температура масла',
     unit: '°C',
     group: 'thermal',
     precision: 1,
@@ -95,7 +95,7 @@ export const METRIC_DEFINITIONS: MetricDefinition[] = [
   },
   {
     metricId: 'thermal.exhaust_temp',
-    label: 'Exhaust Temperature',
+    label: 'Температура выхлопа',
     unit: '°C',
     group: 'thermal',
     precision: 0,
@@ -110,7 +110,7 @@ export const METRIC_DEFINITIONS: MetricDefinition[] = [
   // Pressure / Pneumatics
   {
     metricId: 'pressure.brake_main',
-    label: 'Brake Main Reservoir',
+    label: 'Главный тормозной резервуар',
     unit: 'bar',
     group: 'pressure',
     precision: 1,
@@ -123,7 +123,7 @@ export const METRIC_DEFINITIONS: MetricDefinition[] = [
   },
   {
     metricId: 'pressure.brake_pipe',
-    label: 'Brake Pipe',
+    label: 'Тормозная магистраль',
     unit: 'bar',
     group: 'pressure',
     precision: 1,
@@ -136,7 +136,7 @@ export const METRIC_DEFINITIONS: MetricDefinition[] = [
   },
   {
     metricId: 'pressure.oil',
-    label: 'Oil Pressure',
+    label: 'Давление масла',
     unit: 'bar',
     group: 'pressure',
     precision: 1,
@@ -151,7 +151,7 @@ export const METRIC_DEFINITIONS: MetricDefinition[] = [
   // Electrical
   {
     metricId: 'electrical.traction_voltage',
-    label: 'Traction Voltage',
+    label: 'Тяговое напряжение',
     unit: 'V',
     group: 'electrical',
     precision: 0,
@@ -166,7 +166,7 @@ export const METRIC_DEFINITIONS: MetricDefinition[] = [
   },
   {
     metricId: 'electrical.traction_current',
-    label: 'Traction Current',
+    label: 'Тяговый ток',
     unit: 'A',
     group: 'electrical',
     precision: 0,
@@ -179,7 +179,7 @@ export const METRIC_DEFINITIONS: MetricDefinition[] = [
   },
   {
     metricId: 'electrical.battery_voltage',
-    label: 'Battery Voltage',
+    label: 'Напряжение батареи',
     unit: 'V',
     group: 'electrical',
     precision: 1,
@@ -193,9 +193,9 @@ export const METRIC_DEFINITIONS: MetricDefinition[] = [
 ]
 
 export const METRIC_GROUPS: Record<string, string> = {
-  motion: 'Motion',
-  fuel: 'Fuel & Energy',
-  thermal: 'Thermal',
-  pressure: 'Pressure & Pneumatics',
-  electrical: 'Electrical',
+  motion: 'Движение',
+  fuel: 'Топливо и энергия',
+  thermal: 'Температура',
+  pressure: 'Давление и пневматика',
+  electrical: 'Электрика',
 }

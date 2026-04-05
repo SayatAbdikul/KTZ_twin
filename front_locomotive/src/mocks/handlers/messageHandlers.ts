@@ -16,7 +16,7 @@ export const messageHandlers = [
       messages[idx] = { ...messages[idx], readAt: Date.now() }
       return HttpResponse.json({ data: messages[idx], timestamp: Date.now() })
     }
-    return HttpResponse.json({ code: 'NOT_FOUND', message: 'Message not found' }, { status: 404 })
+    return HttpResponse.json({ code: 'NOT_FOUND', message: 'Сообщение не найдено' }, { status: 404 })
   }),
 
   http.post('/api/messages/:messageId/acknowledge', async ({ params }) => {
@@ -30,6 +30,6 @@ export const messageHandlers = [
       }
       return HttpResponse.json({ data: messages[idx], timestamp: Date.now() })
     }
-    return HttpResponse.json({ code: 'NOT_FOUND', message: 'Message not found' }, { status: 404 })
+    return HttpResponse.json({ code: 'NOT_FOUND', message: 'Сообщение не найдено' }, { status: 404 })
   }),
 ]

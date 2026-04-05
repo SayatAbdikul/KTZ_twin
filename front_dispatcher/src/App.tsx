@@ -13,6 +13,13 @@ type ThemeMode = 'dark' | 'light'
 
 const THEME_STORAGE_KEY = 'dispatcher-theme'
 
+function roleLabel(role: string): string {
+    if (role === 'admin') return 'Администратор'
+    if (role === 'dispatcher') return 'Диспетчер'
+    if (role === 'regular_train') return 'Локомотив'
+    return role
+}
+
 function resolveInitialTheme(): ThemeMode {
     if (typeof window === 'undefined') {
         return 'dark'
@@ -31,7 +38,7 @@ async function refreshSessionWithTimeout() {
     try {
         const timeoutPromise = new Promise<never>((_, reject) => {
             timeoutId = window.setTimeout(
-                () => reject(new Error('Session bootstrap timeout')),
+                () => reject(new Error('Превышено время восстановления сессии')),
                 CONFIG.BOOTSTRAP_REFRESH_TIMEOUT_MS
             )
         })
@@ -49,9 +56,9 @@ function ThemeToggle({ theme, onToggle }: { theme: ThemeMode; onToggle: () => vo
             className="theme-toggle"
             type="button"
             onClick={onToggle}
-            aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
+            aria-label={`Переключить на ${theme === 'dark' ? 'светлую' : 'тёмную'} тему`}
         >
-            <span className="theme-toggle-label">{theme === 'dark' ? 'Dark' : 'Light'} mode</span>
+            <span className="theme-toggle-label">{theme === 'dark' ? 'Тёмная' : 'Светлая'} тема</span>
             <span className="theme-toggle-track" aria-hidden="true">
                 <span className="theme-toggle-thumb" />
             </span>
@@ -66,8 +73,8 @@ function LoadingScreen({ theme, onToggle }: { theme: ThemeMode; onToggle: () => 
                 <ThemeToggle theme={theme} onToggle={onToggle} />
             </div>
             <section className="auth-card">
-                <p className="kicker">KTZ Digital Twin</p>
-                <h1>Restoring dispatcher session...</h1>
+                <p className="kicker">КТЖ</p>
+                <h1>Восстановление сессии диспетчера...</h1>
             </section>
         </div>
     )
@@ -93,12 +100,12 @@ function LoginScreen({ theme, onToggle }: { theme: ThemeMode; onToggle: () => vo
                 await logoutSession(session.accessToken)
                 clearSession()
                 resetDispatcherState()
-                setError('Regular train accounts should use the locomotive operator app, not the dispatcher console.')
+                setError('Локомотивные учетные записи должны использовать приложение машиниста, а не диспетчерский пульт.')
                 return
             }
             setSession(session.accessToken, session.user, session.mustChangePassword)
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Login failed.')
+            setError(err instanceof Error ? err.message : 'Не удалось выполнить вход.')
         } finally {
             setSubmitting(false)
         }
@@ -110,15 +117,15 @@ function LoginScreen({ theme, onToggle }: { theme: ThemeMode; onToggle: () => vo
                 <ThemeToggle theme={theme} onToggle={onToggle} />
             </div>
             <section className="auth-card">
-                <p className="kicker">KTZ Digital Twin</p>
-                <h1>Dispatcher Console Login</h1>
+                <p className="kicker">КТЖ</p>
+                <h1>Вход в диспетчерский пульт</h1>
                 <p className="auth-copy">
-                    Sign in with a dispatcher or admin username. Regular train accounts are restricted to the operator app.
+                    Войдите под именем диспетчера или администратора. Локомотивные учетные записи доступны только в приложении машиниста.
                 </p>
 
                 <form className="auth-form" onSubmit={handleSubmit}>
                     <label>
-                        <span>Username</span>
+                        <span>Имя пользователя</span>
                         <input
                             value={identifier}
                             onChange={(event) => setIdentifier(event.target.value)}
@@ -127,19 +134,19 @@ function LoginScreen({ theme, onToggle }: { theme: ThemeMode; onToggle: () => vo
                     </label>
 
                     <label>
-                        <span>Password</span>
+                        <span>Пароль</span>
                         <input
                             type="password"
                             value={password}
                             onChange={(event) => setPassword(event.target.value)}
-                            placeholder="Enter password"
+                            placeholder="Введите пароль"
                         />
                     </label>
 
                     {error ? <div className="auth-error">{error}</div> : null}
 
                     <button type="submit" disabled={submitting || !identifier.trim() || !password.trim()}>
-                        {submitting ? 'Signing in...' : 'Continue'}
+                        {submitting ? 'Вход...' : 'Продолжить'}
                     </button>
                 </form>
             </section>
@@ -162,11 +169,11 @@ function ChangePasswordScreen({ theme, onToggle }: { theme: ThemeMode; onToggle:
     async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
         event.preventDefault()
         if (!accessToken) {
-            setError('Session expired. Please sign in again.')
+            setError('Сессия истекла. Войдите снова.')
             return
         }
         if (newPassword !== confirmPassword) {
-            setError('New password and confirmation do not match.')
+            setError('Новый пароль и подтверждение не совпадают.')
             return
         }
 
@@ -176,7 +183,7 @@ function ChangePasswordScreen({ theme, onToggle }: { theme: ThemeMode; onToggle:
             const session = await changePassword(accessToken, currentPassword, newPassword)
             setSession(session.accessToken, session.user, session.mustChangePassword)
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Password change failed.')
+            setError(err instanceof Error ? err.message : 'Не удалось изменить пароль.')
         } finally {
             setSubmitting(false)
         }
@@ -195,16 +202,16 @@ function ChangePasswordScreen({ theme, onToggle }: { theme: ThemeMode; onToggle:
                 <ThemeToggle theme={theme} onToggle={onToggle} />
             </div>
             <section className="auth-card">
-                <p className="kicker">Password Required</p>
-                <h1>Change your password to continue</h1>
+                <p className="kicker">Требуется пароль</p>
+                <h1>Смените пароль, чтобы продолжить</h1>
                 <p className="auth-copy">
-                    {user?.displayName ?? user?.username ?? 'This account'} must update its temporary password before
-                    using the dispatcher console.
+                    {(user?.displayName ?? user?.username ?? 'Эта учетная запись')} должна сменить временный пароль
+                    перед использованием диспетчерского пульта.
                 </p>
 
                 <form className="auth-form" onSubmit={handleSubmit}>
                     <label>
-                        <span>Current password</span>
+                        <span>Текущий пароль</span>
                         <input
                             type="password"
                             value={currentPassword}
@@ -213,7 +220,7 @@ function ChangePasswordScreen({ theme, onToggle }: { theme: ThemeMode; onToggle:
                     </label>
 
                     <label>
-                        <span>New password</span>
+                        <span>Новый пароль</span>
                         <input
                             type="password"
                             value={newPassword}
@@ -222,7 +229,7 @@ function ChangePasswordScreen({ theme, onToggle }: { theme: ThemeMode; onToggle:
                     </label>
 
                     <label>
-                        <span>Confirm new password</span>
+                        <span>Подтвердите новый пароль</span>
                         <input
                             type="password"
                             value={confirmPassword}
@@ -242,10 +249,10 @@ function ChangePasswordScreen({ theme, onToggle }: { theme: ThemeMode; onToggle:
                                 !confirmPassword.trim()
                             }
                         >
-                            {submitting ? 'Updating...' : 'Save new password'}
+                            {submitting ? 'Обновление...' : 'Сохранить новый пароль'}
                         </button>
                         <button type="button" className="secondary" onClick={() => void handleLogout()}>
-                            Sign out
+                            Выйти
                         </button>
                     </div>
                 </form>
@@ -280,17 +287,18 @@ function ConsoleShell({ theme, onToggle }: { theme: ThemeMode; onToggle: () => v
         <div className="app-root">
             <header className="app-header">
                 <div>
-                    <p className="kicker">KTZ Digital Twin</p>
-                    <h1>Dispatcher Remote Console</h1>
+                    <p className="kicker">Цифровой двойник КТЖ</p>
+                    <h1>Удалённый диспетчерский пульт</h1>
                     <p className="muted">
-                        {user?.displayName ?? user?.username ?? 'Authenticated user'} · {user?.role}
+                        {user?.displayName ?? user?.username ?? 'Авторизованный пользователь'} ·{' '}
+                        {user ? roleLabel(user.role) : ''}
                     </p>
                 </div>
                 <div className="header-actions">
                     <ThemeToggle theme={theme} onToggle={onToggle} />
                     <ConnectionBadge />
                     <button className="logout-button" type="button" onClick={() => void handleLogout()}>
-                        Logout
+                        Выйти
                     </button>
                 </div>
             </header>

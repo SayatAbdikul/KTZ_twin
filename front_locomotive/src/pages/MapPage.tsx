@@ -2,135 +2,161 @@ import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { PageContainer } from '@/components/layout/PageContainer'
-import { APP_CONFIG } from '@/config/app.config'
-import { useFleetStore } from '@/features/fleet/useFleetStore'
-import { useTelemetryStore } from '@/features/telemetry/useTelemetryStore'
-import { endpoints } from '@/services/api/endpoints'
-import { adaptTelemetryFrame } from '@/services/adapters/telemetryAdapter'
 import { formatTimestamp } from '@/utils/formatters'
 import {
+  buildRailAlignedRoute,
   buildRailGeometryQuery,
   FALLBACK_ROUTE,
+  getRouteLengthKm,
   haversineKm,
   interpolateRouteByDistance,
+  KAZAKHSTAN_BOUNDS,
   MIN_TRAIL_STEP_KM,
   OVERPASS_API,
   parseOverpassSegments,
   RAILWAY_TILE_API,
-  snapToRailway,
-  shouldRefreshRailGeometry,
+  sampleRoute,
   type Coordinate,
   type RailSegment,
 } from '@/features/map/railMap'
-
-type OverlayStatus = 'enabled' | 'disabled' | 'tile error'
 
 interface PositionDetails {
   lat: number
   lon: number
   source: string
-  distanceKm: number | null
+  distanceKm: number
   timestamp: number
+}
+
+interface SimulatedTrain {
+  id: string
+  label: string
+  color: string
+  baseSpeedKmh: number
+  speedKmh: number
+  distanceKm: number
+  waveOffset: number
+  position: PositionDetails
+  trail: Coordinate[]
 }
 
 interface RailState {
   segments: RailSegment[]
-  fetchedCenter: Coordinate | null
   isFetching: boolean
 }
 
-function createLocomotiveIcon() {
+const SIMULATION_TICK_MS = 1000
+const ROUTE_FETCH_SAMPLE_STEP_KM = 80
+const ROUTE_ALIGNMENT_STEP_KM = 18
+const TRAIL_POINT_LIMIT = 180
+const DEFAULT_ROUTE_LENGTH_KM = getRouteLengthKm(FALLBACK_ROUTE)
+const TRAIN_SPACING_KM = DEFAULT_ROUTE_LENGTH_KM / 10
+const TRAIN_COLORS = [
+  '#38bdf8',
+  '#22c55e',
+  '#f59e0b',
+  '#f97316',
+  '#e879f9',
+  '#fb7185',
+  '#facc15',
+  '#2dd4bf',
+  '#a78bfa',
+  '#60a5fa',
+]
+
+function createLocomotiveIcon(label: string, color: string) {
   return L.divIcon({
     className: 'rail-map-marker-wrap',
-    html: '<span class="rail-map-marker"></span>',
-    iconSize: [18, 18],
-    iconAnchor: [9, 9],
+    html: `<span class="rail-map-train-icon" style="--train-color: ${color}"><span class="rail-map-train-label">${label}</span></span>`,
+    iconSize: [32, 32],
+    iconAnchor: [16, 16],
   })
 }
 
-function formatCoordinate(value: number | null) {
-  if (value === null) {
-    return '-'
-  }
-
+function formatCoordinate(value: number) {
   return value.toFixed(5)
 }
 
-function formatDistance(distanceKm: number | null) {
-  if (distanceKm === null) {
-    return '-'
-  }
-
-  return `${distanceKm.toFixed(2)} km`
+function formatDistance(distanceKm: number) {
+  return `${distanceKm.toFixed(1)} km`
 }
 
-function getDistanceReading(snapshot: ReturnType<typeof useTelemetryStore.getState>['byLocomotive'][string] | undefined) {
-  const reading = snapshot?.currentReadings.get('motion.distance')
-  return typeof reading?.value === 'number' ? reading.value : null
+function formatSpeed(speedKmh: number) {
+  return `${speedKmh.toFixed(0)} km/h`
 }
 
-function resolvePosition(args: {
-  latitude?: number
-  longitude?: number
-  distanceKm: number | null
-  timestamp: number | null
-}): PositionDetails | null {
-  if (typeof args.latitude === 'number' && typeof args.longitude === 'number') {
-    return {
-      lat: args.latitude,
-      lon: args.longitude,
-      source: 'direct telemetry coordinates',
-      distanceKm: args.distanceKm,
-      timestamp: args.timestamp ?? Date.now(),
-    }
-  }
+function buildPopupContent(train: SimulatedTrain) {
+  return [
+    `<strong>${train.id}</strong>`,
+    `${formatSpeed(train.speedKmh)}`,
+    `${formatCoordinate(train.position.lat)}, ${formatCoordinate(train.position.lon)}`,
+  ].join('<br/>')
+}
 
-  if (args.distanceKm === null) {
-    return null
-  }
+function resolveSimulatedPosition(
+  distanceKm: number,
+  timestamp: number,
+  route: Coordinate[],
+  routeLengthKm: number,
+  source: string
+): PositionDetails {
+  const normalizedDistanceKm = routeLengthKm > 0 ? distanceKm % routeLengthKm : 0
+  const interpolated = interpolateRouteByDistance(route, normalizedDistanceKm)
 
-  const interpolated = interpolateRouteByDistance(FALLBACK_ROUTE, args.distanceKm)
   return {
-    ...interpolated,
-    source: 'route interpolation from motion.distance',
-    distanceKm: args.distanceKm,
-    timestamp: args.timestamp ?? Date.now(),
+    lat: interpolated.lat,
+    lon: interpolated.lon,
+    source,
+    distanceKm: normalizedDistanceKm,
+    timestamp,
   }
 }
 
-async function fetchBootstrapTelemetry() {
-  const response = await endpoints.telemetry.current()
-  return adaptTelemetryFrame(response.data)
+function createInitialTrains(timestamp: number): SimulatedTrain[] {
+  return Array.from({ length: 10 }, (_, index) => {
+    const distanceKm = TRAIN_SPACING_KM * index
+    const position = resolveSimulatedPosition(
+      distanceKm,
+      timestamp,
+      FALLBACK_ROUTE,
+      DEFAULT_ROUTE_LENGTH_KM,
+      'corridor fallback path'
+    )
+    const label = `${index + 1}`
+
+    return {
+      id: `KTZ-${2101 + index}`,
+      label,
+      color: TRAIN_COLORS[index % TRAIN_COLORS.length],
+      baseSpeedKmh: 68 + index * 1.5,
+      speedKmh: 68 + index * 1.5,
+      distanceKm,
+      waveOffset: index * 0.8,
+      position,
+      trail: [[position.lat, position.lon]],
+    }
+  })
 }
 
 export function MapPage() {
-  const selectedLocomotiveId = useFleetStore((state) => state.selectedLocomotiveId)
-  const selectedLocomotive = useFleetStore((state) =>
-    state.selectedLocomotiveId ? state.locomotives[state.selectedLocomotiveId] ?? null : null
-  )
-  const telemetrySnapshot = useTelemetryStore((state) =>
-    selectedLocomotiveId ? state.byLocomotive[selectedLocomotiveId] : undefined
-  )
-  const applyTelemetryFrame = useTelemetryStore((state) => state.applyFrame)
-  const applyFleetTelemetry = useFleetStore((state) => state.applyTelemetryFrame)
+  const initialTimestamp = useRef(Date.now())
+  const [trains, setTrains] = useState<SimulatedTrain[]>(() => createInitialTrains(initialTimestamp.current))
+  const [selectedTrainId, setSelectedTrainId] = useState<string>('KTZ-2101')
+  const [overlayEnabled, setOverlayEnabled] = useState(true)
   const mapElementRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<L.Map | null>(null)
-  const markerRef = useRef<L.Marker | null>(null)
-  const trailRef = useRef<L.Polyline | null>(null)
   const overlayRef = useRef<L.TileLayer | null>(null)
-  const trailPointsRef = useRef<Coordinate[]>([])
-  const activeLocomotiveRef = useRef<string | null>(null)
+  const markerRef = useRef<Map<string, L.Marker>>(new Map())
+  const trailRef = useRef<Map<string, L.Polyline>>(new Map())
+  const simulationRouteRef = useRef<Coordinate[]>(FALLBACK_ROUTE)
+  const simulationRouteLengthRef = useRef(DEFAULT_ROUTE_LENGTH_KM)
+  const simulationRouteSourceRef = useRef('corridor fallback path')
   const railStateRef = useRef<RailState>({
     segments: [],
-    fetchedCenter: null,
     isFetching: false,
   })
-  const bootstrapAttemptedRef = useRef(false)
-  const [overlayEnabled, setOverlayEnabled] = useState(true)
-  const [overlayStatus, setOverlayStatus] = useState<OverlayStatus>('enabled')
-  const [position, setPosition] = useState<PositionDetails | null>(null)
-  const [errorText, setErrorText] = useState<string | null>(null)
 
+  const selectedTrain = trains.find((train) => train.id === selectedTrainId) ?? trains[0] ?? null
   useEffect(() => {
     if (!mapElementRef.current || mapRef.current) {
       return
@@ -154,39 +180,21 @@ export function MapPage() {
     }).addTo(map)
     overlayRef.current = railwayLayer
 
-    railwayLayer.on('tileerror', () => setOverlayStatus('tile error'))
-    railwayLayer.on('load', () => {
-      setOverlayStatus(map.hasLayer(railwayLayer) ? 'enabled' : 'disabled')
-    })
-
-    const fallbackRouteLine = L.polyline(FALLBACK_ROUTE, {
-      color: '#64748b',
-      weight: 2,
-      opacity: 0.55,
-      dashArray: '6 6',
-    }).addTo(map)
-
-    trailRef.current = L.polyline([], {
-      color: '#2563eb',
-      weight: 4,
-      opacity: 0.92,
-    }).addTo(map)
-
-    markerRef.current = L.marker(FALLBACK_ROUTE[0], {
-      title: APP_CONFIG.LOCOMOTIVE_ID,
-      icon: createLocomotiveIcon(),
-    }).addTo(map)
-    markerRef.current.bindPopup('Locomotive position')
-
-    map.fitBounds(fallbackRouteLine.getBounds(), { padding: [24, 24] })
+    map.fitBounds(KAZAKHSTAN_BOUNDS, { padding: [24, 24] })
 
     return () => {
       railwayLayer.off()
+      for (const marker of markerRef.current.values()) {
+        marker.remove()
+      }
+      for (const trail of trailRef.current.values()) {
+        trail.remove()
+      }
+      markerRef.current.clear()
+      trailRef.current.clear()
       map.remove()
       mapRef.current = null
       overlayRef.current = null
-      markerRef.current = null
-      trailRef.current = null
     }
   }, [])
 
@@ -200,204 +208,269 @@ export function MapPage() {
 
     if (overlayEnabled) {
       overlay.addTo(map)
-      setOverlayStatus('enabled')
     } else {
       map.removeLayer(overlay)
-      setOverlayStatus('disabled')
     }
   }, [overlayEnabled])
 
   useEffect(() => {
-    if (selectedLocomotiveId || bootstrapAttemptedRef.current) {
-      return
-    }
-
-    bootstrapAttemptedRef.current = true
-
-    void fetchBootstrapTelemetry()
-      .then((frame) => {
-        if (!frame.locomotiveId) {
-          return
-        }
-
-        applyTelemetryFrame(frame)
-        applyFleetTelemetry(frame)
-      })
-      .catch(() => {})
-  }, [applyFleetTelemetry, applyTelemetryFrame, selectedLocomotiveId])
-
-  useEffect(() => {
-    if (!selectedLocomotiveId) {
-      return
-    }
-
-    const activeLocomotive = activeLocomotiveRef.current
-    if (activeLocomotive === selectedLocomotiveId) {
-      return
-    }
-
-    activeLocomotiveRef.current = selectedLocomotiveId
-    trailPointsRef.current = []
-    trailRef.current?.setLatLngs([])
-    railStateRef.current = {
-      segments: [],
-      fetchedCenter: null,
-      isFetching: false,
-    }
-    setPosition(null)
-    setErrorText(null)
-
-    const map = mapRef.current
-    if (map) {
-      map.fitBounds(L.latLngBounds(FALLBACK_ROUTE), { padding: [24, 24] })
-    }
-  }, [selectedLocomotiveId])
-
-  useEffect(() => {
-    const marker = markerRef.current
-    const trail = trailRef.current
-    const map = mapRef.current
-
-    if (!selectedLocomotiveId || !marker || !trail || !map) {
-      return
-    }
-
-    const distanceKm = getDistanceReading(telemetrySnapshot)
-    const nextPosition = resolvePosition({
-      latitude: selectedLocomotive?.latitude,
-      longitude: selectedLocomotive?.longitude,
-      distanceKm,
-      timestamp: selectedLocomotive?.latestTelemetryAt ?? null,
-    })
-
-    if (!nextPosition) {
-      setPosition(null)
-      return
-    }
-
-    const resolvedPosition = nextPosition
-    const rawPosition: Coordinate = [resolvedPosition.lat, resolvedPosition.lon]
-    async function updateRailGeometryIfNeeded() {
-      if (railStateRef.current.isFetching || !shouldRefreshRailGeometry(rawPosition, railStateRef.current.fetchedCenter)) {
+    async function preloadRailGeometry() {
+      if (railStateRef.current.isFetching) {
         return
       }
 
       railStateRef.current.isFetching = true
 
       try {
-        const response = await fetch(OVERPASS_API, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
-          body: new URLSearchParams({
-            data: buildRailGeometryQuery(resolvedPosition.lat, resolvedPosition.lon),
-          }),
-        })
+        const routeSamples = sampleRoute(FALLBACK_ROUTE, ROUTE_FETCH_SAMPLE_STEP_KM)
+        const results = await Promise.allSettled(
+          routeSamples.map(async ([lat, lon]) => {
+            const response = await fetch(OVERPASS_API, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+              body: new URLSearchParams({
+                data: buildRailGeometryQuery(lat, lon),
+              }),
+            })
 
-        if (!response.ok) {
-          throw new Error(`Overpass API ${response.status}`)
+            if (!response.ok) {
+              throw new Error(`Overpass API ${response.status}`)
+            }
+
+            const payload = (await response.json()) as unknown
+            return parseOverpassSegments(payload)
+          })
+        )
+
+        const segments = results.flatMap((result) => (result.status === 'fulfilled' ? result.value : []))
+        railStateRef.current.segments = segments
+
+        if (segments.length === 0) {
+          return
         }
 
-        const body = (await response.json()) as unknown
-        railStateRef.current.segments = parseOverpassSegments(body)
-        railStateRef.current.fetchedCenter = rawPosition
-        setErrorText(null)
-      } catch (error) {
-        setErrorText(error instanceof Error ? error.message : 'Failed to refresh railway geometry')
+        const alignedRoute = buildRailAlignedRoute(FALLBACK_ROUTE, segments, ROUTE_ALIGNMENT_STEP_KM)
+        const previousRouteLengthKm = simulationRouteLengthRef.current
+        const alignedRouteLengthKm = getRouteLengthKm(alignedRoute)
+
+        simulationRouteRef.current = alignedRoute
+        simulationRouteLengthRef.current = alignedRouteLengthKm
+        simulationRouteSourceRef.current =
+          alignedRoute !== FALLBACK_ROUTE ? 'rail-aligned simulation path' : 'corridor fallback path'
+
+        setTrains((current) =>
+          current.map((train) => {
+            const routeProgress = previousRouteLengthKm > 0 ? train.distanceKm / previousRouteLengthKm : 0
+            const distanceKm = alignedRouteLengthKm * routeProgress
+            const position = resolveSimulatedPosition(
+              distanceKm,
+              train.position.timestamp,
+              simulationRouteRef.current,
+              simulationRouteLengthRef.current,
+              simulationRouteSourceRef.current
+            )
+            return {
+              ...train,
+              distanceKm,
+              position,
+              trail: [[position.lat, position.lon]],
+            }
+          })
+        )
+      } catch {
       } finally {
         railStateRef.current.isFetching = false
       }
     }
 
-    void updateRailGeometryIfNeeded().then(() => {
-      const snapped = snapToRailway(resolvedPosition.lat, resolvedPosition.lon, railStateRef.current.segments)
-      const finalLat = snapped?.lat ?? resolvedPosition.lat
-      const finalLon = snapped?.lon ?? resolvedPosition.lon
-      const finalSource = snapped
-        ? `${resolvedPosition.source} + rail snap (${(snapped.distanceKm * 1000).toFixed(0)} m)`
-        : `${resolvedPosition.source} (unsnapped)`
+    void preloadRailGeometry()
+  }, [])
 
-      const nextCoordinate: Coordinate = [finalLat, finalLon]
-      const previous = trailPointsRef.current[trailPointsRef.current.length - 1]
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const now = Date.now()
+      setTrains((current) =>
+        current.map((train, index) => {
+          const oscillation = Math.sin(now / 22000 + train.waveOffset) * 6
+          const speedKmh = Math.max(35, train.baseSpeedKmh + oscillation)
+          const nextDistanceKm =
+            simulationRouteLengthRef.current > 0
+              ? (train.distanceKm + (speedKmh * SIMULATION_TICK_MS) / 3_600_000) % simulationRouteLengthRef.current
+              : 0
+          const nextPosition = resolveSimulatedPosition(
+            nextDistanceKm,
+            now,
+            simulationRouteRef.current,
+            simulationRouteLengthRef.current,
+            simulationRouteSourceRef.current
+          )
+          const nextCoordinate: Coordinate = [nextPosition.lat, nextPosition.lon]
+          const previousCoordinate = train.trail[train.trail.length - 1]
+          const nextTrail =
+            !previousCoordinate || haversineKm(previousCoordinate, nextCoordinate) >= MIN_TRAIL_STEP_KM
+              ? [...train.trail, nextCoordinate].slice(-TRAIL_POINT_LIMIT)
+              : train.trail
 
-      if (!previous || haversineKm(previous, nextCoordinate) >= MIN_TRAIL_STEP_KM) {
-        trailPointsRef.current = [...trailPointsRef.current, nextCoordinate]
-        trail.setLatLngs(trailPointsRef.current)
+          return {
+            ...train,
+            speedKmh,
+            distanceKm: nextDistanceKm,
+            position: nextPosition,
+            trail: nextTrail,
+            label: `${index + 1}`,
+          }
+        })
+      )
+    }, SIMULATION_TICK_MS)
+
+    return () => window.clearInterval(timer)
+  }, [])
+
+  useEffect(() => {
+    const map = mapRef.current
+
+    if (!map) {
+      return
+    }
+
+    for (const train of trains) {
+      let trail = trailRef.current.get(train.id)
+      if (!trail) {
+        trail = L.polyline(train.trail, {
+          color: train.color,
+          weight: 3,
+          opacity: 0.75,
+        }).addTo(map)
+        trailRef.current.set(train.id, trail)
+      } else {
+        trail.setLatLngs(train.trail)
       }
 
-      marker.setLatLng(nextCoordinate)
-      marker.setPopupContent(`${selectedLocomotiveId}<br/>${finalLat.toFixed(5)}, ${finalLon.toFixed(5)}`)
-      map.panTo(nextCoordinate, { animate: true, duration: 0.8 })
+      let marker = markerRef.current.get(train.id)
+      if (!marker) {
+        marker = L.marker([train.position.lat, train.position.lon], {
+          title: train.id,
+          icon: createLocomotiveIcon(train.label, train.color),
+        }).addTo(map)
+        marker.on('click', () => setSelectedTrainId(train.id))
+        marker.bindPopup(buildPopupContent(train))
+        markerRef.current.set(train.id, marker)
+      } else {
+        marker.setLatLng([train.position.lat, train.position.lon])
+        marker.setPopupContent(buildPopupContent(train))
+      }
+    }
+  }, [trains])
 
-      setPosition({
-        ...resolvedPosition,
-        lat: finalLat,
-        lon: finalLon,
-        source: finalSource,
-      })
-    })
-  }, [selectedLocomotive, selectedLocomotiveId, telemetrySnapshot])
+  useEffect(() => {
+    if (!selectedTrain) {
+      return
+    }
+
+    const map = mapRef.current
+    const marker = markerRef.current.get(selectedTrain.id)
+
+    if (!map || !marker) {
+      return
+    }
+
+    map.panTo([selectedTrain.position.lat, selectedTrain.position.lon], { animate: true, duration: 0.8 })
+    marker.openPopup()
+  }, [selectedTrainId, selectedTrain])
 
   return (
     <PageContainer className="h-full">
-      <div className="grid h-full gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
+      <div className="grid h-full gap-4 xl:grid-cols-[340px_minmax(0,1fr)]">
         <section className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-500">Railway Map</div>
-          <h1 className="mt-3 text-2xl font-semibold text-slate-100">
-            {selectedLocomotiveId ?? 'Awaiting locomotive stream'}
-          </h1>
-          <p className="mt-2 text-sm text-slate-400">
-            Live route context inside the operator app with OpenRailwayMap tiles and local rail snapping.
-          </p>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-500">Симуляция парка</div>
+          <h1 className="mt-3 text-2xl font-semibold text-slate-100">10 поездов на железнодорожной карте</h1>
+          <div className="mt-4 flex items-center justify-end">
+            <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200">
+              <input
+                type="checkbox"
+                checked={overlayEnabled}
+                onChange={(event) => setOverlayEnabled(event.target.checked)}
+                className="h-3.5 w-3.5 accent-blue-500"
+              />
+              Слой путей
+            </label>
+          </div>
 
-          <div className="mt-6 space-y-3">
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-              <div className="text-xs uppercase tracking-[0.24em] text-slate-500">Source</div>
-              <div className="mt-2 text-sm text-slate-100">{position?.source ?? 'No coordinates available yet'}</div>
-            </div>
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-              <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2 xl:grid-cols-1">
-                <div>
-                  <div className="text-xs uppercase tracking-[0.24em] text-slate-500">Latitude</div>
-                  <div className="mt-1 font-mono text-slate-100">{formatCoordinate(position?.lat ?? null)}</div>
+          <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+            <div className="text-xs uppercase tracking-[0.24em] text-slate-500">Выбранный поезд</div>
+            {selectedTrain ? (
+              <div className="mt-3 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-lg font-semibold text-slate-100">{selectedTrain.id}</div>
+                    <div className="text-sm text-slate-400">{selectedTrain.position.source}</div>
+                  </div>
+                  <div
+                    className="h-4 w-4 rounded-full border border-white/40"
+                    style={{ backgroundColor: selectedTrain.color }}
+                  />
                 </div>
-                <div>
-                  <div className="text-xs uppercase tracking-[0.24em] text-slate-500">Longitude</div>
-                  <div className="mt-1 font-mono text-slate-100">{formatCoordinate(position?.lon ?? null)}</div>
-                </div>
-                <div>
-                  <div className="text-xs uppercase tracking-[0.24em] text-slate-500">Distance</div>
-                  <div className="mt-1 text-slate-100">{formatDistance(position?.distanceKm ?? null)}</div>
-                </div>
-                <div>
-                  <div className="text-xs uppercase tracking-[0.24em] text-slate-500">Updated</div>
-                  <div className="mt-1 text-slate-100">
-                    {position ? formatTimestamp(position.timestamp) : 'Awaiting data'}
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.24em] text-slate-500">Широта</div>
+                    <div className="mt-1 font-mono text-slate-100">{formatCoordinate(selectedTrain.position.lat)}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.24em] text-slate-500">Долгота</div>
+                    <div className="mt-1 font-mono text-slate-100">{formatCoordinate(selectedTrain.position.lon)}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.24em] text-slate-500">Скорость</div>
+                    <div className="mt-1 text-slate-100">{formatSpeed(selectedTrain.speedKmh)}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.24em] text-slate-500">Дистанция</div>
+                    <div className="mt-1 text-slate-100">{formatDistance(selectedTrain.distanceKm)}</div>
+                  </div>
+                  <div className="col-span-2">
+                    <div className="text-xs uppercase tracking-[0.24em] text-slate-500">Обновлено</div>
+                    <div className="mt-1 text-slate-100">{formatTimestamp(selectedTrain.position.timestamp)}</div>
                   </div>
                 </div>
               </div>
-            </div>
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-              <div className="text-xs uppercase tracking-[0.24em] text-slate-500">Railway Overlay API</div>
-              <div className="mt-2 break-all font-mono text-xs text-slate-300">{RAILWAY_TILE_API}</div>
-              <div className="mt-3 flex items-center justify-between gap-3 text-sm">
-                <div>
-                  <div className="text-xs uppercase tracking-[0.24em] text-slate-500">Overlay status</div>
-                  <div className="mt-1 text-slate-100">{overlayStatus}</div>
-                </div>
-                <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200">
-                  <input
-                    type="checkbox"
-                    checked={overlayEnabled}
-                    onChange={(event) => setOverlayEnabled(event.target.checked)}
-                    className="h-3.5 w-3.5 accent-blue-500"
-                  />
-                  Overlay
-                </label>
-              </div>
-            </div>
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-sm text-slate-400">
-              {errorText ?? 'Rail geometry refresh is handled on-demand as the locomotive moves across the route.'}
-            </div>
+            ) : (
+              <div className="mt-3 text-sm text-slate-400">Данные симуляции инициализируются.</div>
+            )}
+          </div>
+
+          <div className="mt-4 space-y-2">
+            {trains.map((train) => {
+              const isSelected = train.id === selectedTrain?.id
+              return (
+                <button
+                  key={train.id}
+                  type="button"
+                  onClick={() => setSelectedTrainId(train.id)}
+                  className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left transition-colors ${
+                    isSelected
+                      ? 'border-slate-500 bg-slate-800/90'
+                      : 'border-slate-800 bg-slate-900/50 hover:border-slate-700 hover:bg-slate-900/80'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/30 text-xs font-semibold text-slate-950"
+                      style={{ backgroundColor: train.color }}
+                    >
+                      {train.label}
+                    </span>
+                    <div>
+                      <div className="text-sm font-semibold text-slate-100">{train.id}</div>
+                      <div className="text-xs text-slate-400">{formatDistance(train.distanceKm)}</div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm font-medium text-slate-100">{formatSpeed(train.speedKmh)}</div>
+                    <div className="text-xs text-slate-400">{formatTimestamp(train.position.timestamp)}</div>
+                  </div>
+                </button>
+              )
+            })}
           </div>
         </section>
 

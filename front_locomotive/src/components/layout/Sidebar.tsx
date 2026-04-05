@@ -29,15 +29,15 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { to: ROUTES.DASHBOARD, icon: LayoutDashboard, label: 'Dashboard' },
-  { to: ROUTES.DIAGRAM, icon: Train, label: 'Diagram' },
-  { to: ROUTES.MAP, icon: Map, label: 'Map' },
-  { to: ROUTES.TELEMETRY, icon: Activity, label: 'Telemetry' },
-  { to: ROUTES.ALERTS, icon: AlertTriangle, label: 'Alerts' },
-  { to: ROUTES.MESSAGES, icon: MessageSquare, label: 'Messages' },
-  { to: ROUTES.REPLAY, icon: History, label: 'History' },
-  { to: ROUTES.DISPATCH, icon: Radio, label: 'Dispatch', roles: ['admin', 'dispatcher'] as const },
-  { to: ROUTES.USERS, icon: Users, label: 'Users', roles: ['admin'] as const },
+  { to: ROUTES.DASHBOARD, icon: LayoutDashboard, label: 'Панель' },
+  { to: ROUTES.DIAGRAM, icon: Train, label: 'Схема' },
+  { to: ROUTES.MAP, icon: Map, label: 'Карта' },
+  { to: ROUTES.TELEMETRY, icon: Activity, label: 'Телеметрия' },
+  { to: ROUTES.ALERTS, icon: AlertTriangle, label: 'Оповещения' },
+  { to: ROUTES.MESSAGES, icon: MessageSquare, label: 'Сообщения' },
+  { to: ROUTES.REPLAY, icon: History, label: 'История' },
+  { to: ROUTES.DISPATCH, icon: Radio, label: 'Диспетчер', roles: ['admin', 'dispatcher'] as const },
+  { to: ROUTES.USERS, icon: Users, label: 'Пользователи', roles: ['admin'] as const },
 ]
 
 const EMPTY_ALERT_SUMMARY: AlertSummary = {
@@ -73,7 +73,7 @@ export function Sidebar() {
     <aside className="flex w-16 flex-col items-center border-r border-slate-800 bg-[#0c0e14] py-4">
       {/* Logo */}
       <div className="mb-6 flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 text-sm font-bold text-white">
-        KTZ
+        КТЖ
       </div>
 
       <nav className="flex flex-col gap-1">

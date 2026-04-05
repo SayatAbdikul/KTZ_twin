@@ -15,7 +15,7 @@ interface ExportMenuProps {
   label?: string
 }
 
-export function ExportMenu({ actions, label = 'Export' }: ExportMenuProps) {
+export function ExportMenu({ actions, label = 'Экспорт' }: ExportMenuProps) {
   const [isOpen, setIsOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement | null>(null)
   const menuId = useId()

@@ -1,28 +1,14 @@
-INFO:     Started server process [48923]
+INFO:     Started server process [73513]
 INFO:     Waiting for application startup.
-2026-04-05 09:08:31,080  INFO      app.main — Initialising KTZ Locomotive Telemetry Server…
-2026-04-05 09:08:31,090  WARNING   aiokafka — Unable to request metadata from "localhost:9092": KafkaConnectionError: Connection at localhost:9092 closed
-2026-04-05 09:08:33,136  INFO      app.broker — Kafka topic ensured: topic=ktz.locomotive.events partitions=100 replication_factor=1
-2026-04-05 09:08:35,219  INFO      app.broker — Kafka topic ensured: topic=ktz.locomotive.events partitions=100 replication_factor=1
-2026-04-05 09:08:35,222  INFO      app.broker — Kafka topic partitioning ready: topic=ktz.locomotive.events current_partitions=100 target_partitions=100
-2026-04-05 09:08:35,236  INFO      app.broker — Kafka producer started: localhost:9092, topic=ktz.locomotive.events
-2026-04-05 09:08:35,239  INFO      app.main — Initial telemetry frame and health index generated.
-2026-04-05 09:08:35,239  INFO      app.main — 6 background tasks started.
+2026-04-05 10:03:16,761  INFO      app.main — Запуск сервера телеметрии локомотива КТЖ…
+2026-04-05 10:03:16,764  WARNING   aiokafka — Unable to request metadata from "localhost:9092": KafkaConnectionError: Connection at localhost:9092 closed
+2026-04-05 10:03:18,768  WARNING   aiokafka — Unable to request metadata from "localhost:9092": KafkaConnectionError: Connection at localhost:9092 closed
+2026-04-05 10:03:20,771  WARNING   aiokafka — Unable to request metadata from "localhost:9092": KafkaConnectionError: Connection at localhost:9092 closed
+2026-04-05 10:03:22,801  INFO      app.broker — Kafka topic ensured: topic=ktz.locomotive.events partitions=100 replication_factor=1
+2026-04-05 10:03:22,805  INFO      app.broker — Kafka topic partitioning ready: topic=ktz.locomotive.events current_partitions=100 target_partitions=100
+2026-04-05 10:03:22,910  INFO      app.broker — Kafka producer started: localhost:9092, topic=ktz.locomotive.events
+2026-04-05 10:03:22,922  INFO      app.main — Сформированы начальный кадр телеметрии и индекс состояния.
+2026-04-05 10:03:22,923  INFO      app.main — Запущено фоновых задач: 6.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:3109 (Press CTRL+C to quit)
-2026-04-05 09:08:59,090  INFO      app.broker — Kafka producer published 100 messages to topic=ktz.locomotive.events
-2026-04-05 09:09:22,981  INFO      app.broker — Kafka producer published 200 messages to topic=ktz.locomotive.events
-2026-04-05 09:09:46,626  INFO      app.broker — Kafka producer published 300 messages to topic=ktz.locomotive.events
-2026-04-05 09:10:10,608  INFO      app.broker — Kafka producer published 400 messages to topic=ktz.locomotive.events
-2026-04-05 09:10:34,239  INFO      app.broker — Kafka producer published 500 messages to topic=ktz.locomotive.events
-2026-04-05 09:10:57,558  INFO      app.broker — Kafka producer published 600 messages to topic=ktz.locomotive.events
-2026-04-05 09:11:21,087  INFO      app.broker — Kafka producer published 700 messages to topic=ktz.locomotive.events
-2026-04-05 09:11:44,841  INFO      app.broker — Kafka producer published 800 messages to topic=ktz.locomotive.events
-2026-04-05 09:12:08,116  INFO      app.broker — Kafka producer published 900 messages to topic=ktz.locomotive.events
-2026-04-05 09:12:31,939  INFO      app.broker — Kafka producer published 1000 messages to topic=ktz.locomotive.events
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-2026-04-05 09:12:32,129  INFO      app.main — Shutting down background tasks…
-2026-04-05 09:12:32,130  INFO      app.main — Shutdown complete.
-INFO:     Application shutdown complete.
-INFO:     Finished server process [48923]
+2026-04-05 10:03:46,403  INFO      app.broker — Kafka producer published 100 messages to topic=ktz.locomotive.events

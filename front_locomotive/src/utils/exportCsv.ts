@@ -58,9 +58,9 @@ export async function downloadCsv({
   if (!response.ok) {
     const errorPayload = await response
       .json()
-      .catch(() => ({ error: { message: 'Failed to export CSV.' } }))
+      .catch(() => ({ error: { message: 'Не удалось экспортировать CSV.' } }))
     throw new Error(
-      errorPayload?.error?.message ?? errorPayload?.message ?? 'Failed to export CSV.'
+      errorPayload?.error?.message ?? errorPayload?.message ?? 'Не удалось экспортировать CSV.'
     )
   }
 

@@ -12,6 +12,49 @@
     font-family: system-ui, -apple-system, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
+  :root[data-theme='light'] body {
+    background-color: #f3f6fb;
+    color: #0f172a;
+  }
+  :root[data-theme='light'] [class*='bg-slate-950'],
+  :root[data-theme='light'] [class*='bg-[#0f1117]'],
+  :root[data-theme='light'] [class*='bg-[#0c0e14]'],
+  :root[data-theme='light'] [class*='bg-[#0b0e15]'],
+  :root[data-theme='light'] [class*='bg-[#090b10]'] {
+    background-color: #ffffff !important;
+  }
+  :root[data-theme='light'] [class*='bg-slate-900'] {
+    background-color: #f8fafc !important;
+  }
+  :root[data-theme='light'] [class*='bg-slate-800'] {
+    background-color: #eef2f7 !important;
+  }
+  :root[data-theme='light'] [class*='border-slate-800'],
+  :root[data-theme='light'] [class*='border-slate-700'] {
+    border-color: #d8e0ea !important;
+  }
+  :root[data-theme='light'] [class*='text-slate-100'],
+  :root[data-theme='light'] [class*='text-white'] {
+    color: #0f172a !important;
+  }
+  :root[data-theme='light'] [class*='text-slate-200'] {
+    color: #1e293b !important;
+  }
+  :root[data-theme='light'] [class*='text-slate-300'] {
+    color: #334155 !important;
+  }
+  :root[data-theme='light'] [class*='text-slate-400'],
+  :root[data-theme='light'] [class*='text-slate-500'],
+  :root[data-theme='light'] [class*='text-slate-600'] {
+    color: #64748b !important;
+  }
+  :root[data-theme='light'] [class*='bg-blue-600'],
+  :root[data-theme='light'] [class*='bg-blue-500'] {
+    color: #ffffff !important;
+  }
+  :root[data-theme='light'] [class*='shadow-slate-950'] {
+    box-shadow: 0 12px 36px rgb(148 163 184 / 0.16) !important;
+  }
   #root {
     width: 100%;
     min-height: 100svh;
@@ -37,5 +80,26 @@
     box-shadow:
       0 0 0 8px rgb(59 130 246 / 0.18),
       0 10px 24px rgb(15 23 42 / 0.5);
+  }
+
+  .rail-map-train-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 9999px;
+    border: 2px solid rgb(226 232 240 / 0.92);
+    background: var(--train-color);
+    color: rgb(2 6 23 / 0.95);
+    box-shadow:
+      0 0 0 8px color-mix(in srgb, var(--train-color) 22%, transparent),
+      0 12px 28px rgb(15 23 42 / 0.45);
+  }
+
+  .rail-map-train-label {
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1;
   }
 }

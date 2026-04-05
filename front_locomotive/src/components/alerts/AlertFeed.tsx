@@ -32,14 +32,14 @@ export function AlertFeed({ maxVisible = 5 }: AlertFeedProps) {
   return (
     <div className="flex flex-col">
       <SectionHeader
-        title="Active Alerts"
+        title="Активные оповещения"
         viewAllTo={ROUTES.ALERTS}
         count={summary.totalActive}
       />
 
       {alerts.length === 0 ? (
         <div className="flex h-24 items-center justify-center rounded-lg border border-dashed border-slate-700 text-sm text-slate-500">
-          No active alerts
+          Активных оповещений нет
         </div>
       ) : (
         <div className="flex flex-col gap-2">

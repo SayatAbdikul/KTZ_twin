@@ -40,7 +40,7 @@ def mark_read(message_id: str) -> dict:
 
         return make_response(state.messages[index].model_dump(by_alias=True, exclude_none=True))
 
-    raise HTTPException(status_code=404, detail=f"Message not found: {message_id}")
+    raise HTTPException(status_code=404, detail=f"Сообщение не найдено: {message_id}")
 
 
 @router.post("/{message_id}/acknowledge")
@@ -58,4 +58,4 @@ def acknowledge_message(message_id: str) -> dict:
         )
         return make_response(state.messages[index].model_dump(by_alias=True, exclude_none=True))
 
-    raise HTTPException(status_code=404, detail=f"Message not found: {message_id}")
+    raise HTTPException(status_code=404, detail=f"Сообщение не найдено: {message_id}")

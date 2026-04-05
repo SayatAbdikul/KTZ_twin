@@ -148,7 +148,7 @@ async function loadReplayWindow(
   } catch (error) {
     set({
       isLoadingWindow: false,
-      error: error instanceof Error ? error.message : 'Failed to load replay range',
+      error: error instanceof Error ? error.message : 'Не удалось загрузить диапазон истории',
     })
   }
 }
@@ -173,7 +173,7 @@ async function loadReplaySnapshot(
   } catch (error) {
     set({
       isLoadingSnapshot: false,
-      error: error instanceof Error ? error.message : 'Failed to load replay snapshot',
+      error: error instanceof Error ? error.message : 'Не удалось загрузить снимок истории',
     })
   }
 }
@@ -282,7 +282,7 @@ export const useReplayStore = create<ReplayState>()(
         } catch (error) {
           set({
             isLoading: false,
-            error: error instanceof Error ? error.message : 'Failed to initialize replay',
+            error: error instanceof Error ? error.message : 'Не удалось инициализировать режим истории',
           })
         }
       },

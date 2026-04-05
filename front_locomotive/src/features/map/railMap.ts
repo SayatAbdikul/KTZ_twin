@@ -1,11 +1,18 @@
 export type Coordinate = [number, number]
 export type RailSegment = [Coordinate, Coordinate]
+export type Bounds = [Coordinate, Coordinate]
 
 export const RAILWAY_TILE_API = 'https://tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png'
 export const OVERPASS_API = 'https://overpass-api.de/api/interpreter'
 export const RAIL_FETCH_RADIUS_M = 4000
 export const RAIL_REFRESH_DISTANCE_KM = 5
 export const MIN_TRAIL_STEP_KM = 0.03
+
+// Approximate national map extent for Kazakhstan.
+export const KAZAKHSTAN_BOUNDS: Bounds = [
+  [40.4, 46.4],
+  [55.6, 87.8],
+]
 
 // Simplified Almaty -> Astana route to provide spatial context when only distance telemetry is available.
 export const FALLBACK_ROUTE: Coordinate[] = [
@@ -136,6 +143,57 @@ export function interpolateRouteByDistance(route: Coordinate[], distanceKm: numb
 
   const last = route[route.length - 1]
   return { lat: last[0], lon: last[1] }
+}
+
+export function getRouteLengthKm(route: Coordinate[]) {
+  let total = 0
+
+  for (let index = 0; index < route.length - 1; index += 1) {
+    total += haversineKm(route[index], route[index + 1])
+  }
+
+  return total
+}
+
+export function sampleRoute(route: Coordinate[], stepKm: number) {
+  const totalLengthKm = getRouteLengthKm(route)
+  const samples: Coordinate[] = []
+
+  if (totalLengthKm === 0) {
+    return route.length > 0 ? [route[0]] : []
+  }
+
+  for (let distanceKm = 0; distanceKm < totalLengthKm; distanceKm += stepKm) {
+    const point = interpolateRouteByDistance(route, distanceKm)
+    samples.push([point.lat, point.lon])
+  }
+
+  samples.push(route[route.length - 1])
+  return samples
+}
+
+export function buildRailAlignedRoute(route: Coordinate[], segments: RailSegment[], stepKm: number) {
+  if (segments.length === 0) {
+    return route
+  }
+
+  const snappedRoute: Coordinate[] = []
+
+  for (const sample of sampleRoute(route, stepKm)) {
+    const snapped = snapToRailway(sample[0], sample[1], segments)
+    if (!snapped || snapped.distanceKm > stepKm) {
+      continue
+    }
+
+    const nextPoint: Coordinate = [snapped.lat, snapped.lon]
+    const previousPoint = snappedRoute[snappedRoute.length - 1]
+
+    if (!previousPoint || haversineKm(previousPoint, nextPoint) >= Math.min(stepKm * 0.35, 4)) {
+      snappedRoute.push(nextPoint)
+    }
+  }
+
+  return snappedRoute.length >= 2 ? snappedRoute : route
 }
 
 export function buildRailGeometryQuery(lat: number, lon: number) {

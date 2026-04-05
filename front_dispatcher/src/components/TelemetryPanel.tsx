@@ -31,8 +31,8 @@ export function TelemetryPanel() {
     if (!selected || !locomotives[selected]) {
         return (
             <section className="panel telemetry-panel">
-                <h2>Telemetry</h2>
-                <p className="empty">Select a locomotive when telemetry appears.</p>
+                <h2>Телеметрия</h2>
+                <p className="empty">Выберите локомотив, когда появится телеметрия.</p>
             </section>
         )
     }
@@ -42,27 +42,27 @@ export function TelemetryPanel() {
     return (
         <section className="panel telemetry-panel">
             <div className="panel-header">
-                <h2>{loco.locomotiveId} telemetry</h2>
+                <h2>Телеметрия {loco.locomotiveId}</h2>
                 <span className="muted">{formatClock(loco.timestamp)}</span>
             </div>
 
             <div className="metric-grid">
                 <article className="metric-card">
-                    <p className="label">Speed</p>
+                    <p className="label">Скорость</p>
                     <p className="value">{loco.speedKmh.toFixed(1)} km/h</p>
                     <MiniTrend values={loco.sparkline.map((s) => s.speed)} />
                 </article>
                 <article className="metric-card">
-                    <p className="label">Fuel</p>
+                    <p className="label">Топливо</p>
                     <p className="value">{loco.fuelLevel.toFixed(1)} %</p>
                 </article>
                 <article className="metric-card">
-                    <p className="label">Coolant</p>
+                    <p className="label">Охлаждение</p>
                     <p className="value">{loco.coolantTemp.toFixed(1)} C</p>
                     <MiniTrend values={loco.sparkline.map((s) => s.temp)} />
                 </article>
                 <article className="metric-card">
-                    <p className="label">Traction current</p>
+                    <p className="label">Тяговый ток</p>
                     <p className="value">{loco.tractionCurrent.toFixed(0)} A</p>
                 </article>
             </div>

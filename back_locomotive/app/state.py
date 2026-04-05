@@ -85,9 +85,9 @@ class AppState:
                 severity="warning",
                 status="active",
                 source="fuel",
-                title="Fuel Level Below 20%",
-                description="Remaining fuel is at 18.3%. Plan for refueling stop.",
-                recommended_action="Contact dispatch to schedule refueling.",
+                title="Уровень топлива ниже 20%",
+                description="Остаток топлива составляет 18,3%. Запланируйте дозаправку.",
+                recommended_action="Свяжитесь с диспетчером, чтобы согласовать дозаправку.",
                 triggered_at=now - 12 * 60 * 1000,
                 related_metric_ids=["fuel.level"],
             ),
@@ -96,11 +96,11 @@ class AppState:
                 severity="info",
                 status="acknowledged",
                 source="electrical",
-                title="Traction Voltage Fluctuation",
-                description="Minor voltage fluctuation detected in traction system.",
+                title="Колебание тягового напряжения",
+                description="В тяговой системе зафиксировано незначительное колебание напряжения.",
                 triggered_at=now - 35 * 60 * 1000,
                 acknowledged_at=now - 30 * 60 * 1000,
-                acknowledged_by="Operator",
+                acknowledged_by="Машинист",
                 related_metric_ids=["electrical.traction_voltage"],
             ),
         ]
@@ -112,36 +112,36 @@ class AppState:
                 message_id="msg-003",
                 priority="urgent",
                 type="directive",
-                subject="URGENT: Track Obstruction at KM 342",
+                subject="СРОЧНО: препятствие на пути на 342 км",
                 body=(
-                    "Track obstruction reported at KM 342. Do not proceed past KM 340 "
-                    "until clearance is given. Emergency services are en route."
+                    "На 342 км обнаружено препятствие на пути. Не следуйте дальше 340 км "
+                    "до получения разрешения. Экстренные службы уже направлены к месту."
                 ),
-                sender_name="Emergency Control",
+                sender_name="Аварийный контроль",
                 sent_at=now - 5 * 60 * 1000,
             ),
             DispatcherMessage(
                 message_id="msg-001",
                 priority="high",
                 type="recommendation",
-                subject="Speed Restriction — Section KZ-7 to KZ-12",
+                subject="Ограничение скорости: участок KZ-7 - KZ-12",
                 body=(
-                    "Due to ongoing maintenance works, maximum speed on section KZ-7 to KZ-12 "
-                    "is restricted to 60 km/h until 18:00 local time. Please acknowledge receipt."
+                    "Из-за ремонтных работ максимальная скорость на участке KZ-7 - KZ-12 "
+                    "ограничена до 60 км/ч до 18:00 местного времени. Подтвердите получение."
                 ),
-                sender_name="Dispatcher Aliyev",
+                sender_name="Диспетчер Алиев",
                 sent_at=now - 25 * 60 * 1000,
             ),
             DispatcherMessage(
                 message_id="msg-002",
                 priority="normal",
                 type="informational",
-                subject="Scheduled Maintenance Reminder",
+                subject="Напоминание о плановом обслуживании",
                 body=(
-                    "Locomotive KTZ-2001 is due for Level B maintenance inspection at Almaty "
-                    "depot on arrival. Estimated duration: 4 hours."
+                    "Локомотив КТЖ-2001 должен пройти обслуживание уровня B в депо Алматы "
+                    "по прибытии. Ориентировочная длительность: 4 часа."
                 ),
-                sender_name="Maintenance Control",
+                sender_name="Служба обслуживания",
                 sent_at=now - 2 * 60 * 60 * 1000,
                 read_at=now - 90 * 60 * 1000,
             ),

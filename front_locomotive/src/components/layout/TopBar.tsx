@@ -8,6 +8,7 @@ import { getFleetLocomotiveOptions, useFleetStore } from '@/features/fleet/useFl
 import { useSettingsStore } from '@/features/settings/useSettingsStore'
 import { ConnectionIndicator } from '@/components/common/ConnectionIndicator'
 import { StatusBadge } from '@/components/common/StatusBadge'
+import { ThemeToggle } from '@/components/common/ThemeToggle'
 import { ROUTES } from '@/config/routes'
 import { logoutSession } from '@/services/api/authApi'
 import { disconnectWebSocket } from '@/services/websocket/wsClient'
@@ -49,7 +50,7 @@ export function TopBar() {
       <div className="flex items-center gap-3">
         {isTrainUser ? (
           <div className="rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm font-semibold text-slate-200">
-            {user.locomotiveId ?? selectedLocomotiveId ?? 'Train'}
+            {user.locomotiveId ?? selectedLocomotiveId ?? 'Локомотив'}
           </div>
         ) : (
           <select
@@ -57,10 +58,10 @@ export function TopBar() {
             onChange={(event) => selectLocomotive(event.target.value)}
             className="rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm font-semibold text-slate-200 outline-none transition-colors focus:border-blue-500"
             disabled={locomotiveOptions.length === 0}
-            aria-label="Select locomotive"
+            aria-label="Выбрать локомотив"
           >
             {locomotiveOptions.length === 0 ? (
-              <option value="">Waiting for locomotive stream</option>
+              <option value="">Ожидание потока локомотивов</option>
             ) : (
               locomotiveOptions.map((locomotiveId) => (
                 <option key={locomotiveId} value={locomotiveId}>
@@ -72,7 +73,7 @@ export function TopBar() {
         )}
         <StatusBadge
           status={selectedLocomotive?.healthStatus ?? 'unknown'}
-          label={selectedLocomotive?.connected ? 'Live' : 'Offline'}
+          label={selectedLocomotive?.connected ? 'Онлайн' : 'Офлайн'}
         />
       </div>
 
@@ -80,14 +81,15 @@ export function TopBar() {
         <div className="hidden rounded-md border border-slate-800 bg-slate-900 px-2.5 py-1 text-xs text-slate-300 sm:block">
           {user?.role === 'regular_train' ? user.locomotiveId : user?.username}
         </div>
-        <ConnectionIndicator label="Backend" status={backendStatus} />
-        <ConnectionIndicator label="Dispatcher" status={dispatcherStatus} />
+        <ConnectionIndicator label="Бэкенд" status={backendStatus} />
+        <ConnectionIndicator label="Диспетчер" status={dispatcherStatus} />
+        <ThemeToggle className="px-2 py-1" />
         <button
           type="button"
           onClick={toggleSmoothing}
-          aria-label={smoothingEnabled ? 'Disable telemetry smoothing' : 'Enable telemetry smoothing'}
+          aria-label={smoothingEnabled ? 'Отключить сглаживание телеметрии' : 'Включить сглаживание телеметрии'}
           aria-pressed={smoothingEnabled}
-          title={smoothingEnabled ? 'Disable telemetry smoothing' : 'Enable telemetry smoothing'}
+          title={smoothingEnabled ? 'Отключить сглаживание телеметрии' : 'Включить сглаживание телеметрии'}
           className={cn(
             'flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors',
             smoothingEnabled
@@ -96,7 +98,7 @@ export function TopBar() {
           )}
         >
           <Waves size={14} />
-          <span className="hidden sm:inline">Smooth</span>
+          <span className="hidden sm:inline">Сглаж.</span>
         </button>
         <button
           type="button"
@@ -104,7 +106,7 @@ export function TopBar() {
           className="flex items-center gap-1.5 rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-300 transition-colors hover:border-slate-500 hover:text-white"
         >
           <LogOut size={14} />
-          <span className="hidden sm:inline">Logout</span>
+          <span className="hidden sm:inline">Выйти</span>
         </button>
         <span className="font-mono text-sm text-slate-300">{time}</span>
       </div>

@@ -32,21 +32,21 @@ def get_history(
     resolution: Annotated[str, Query()] = "raw",
 ) -> dict:
     if metric_id not in state.history_buffer:
-        raise HTTPException(status_code=404, detail=f"Unknown metric: {metric_id}")
+        raise HTTPException(status_code=404, detail=f"Неизвестная метрика: {metric_id}")
 
     buffer = list(state.history_buffer[metric_id])
     if not buffer:
         frame = state.current_frame or generate_frame()
         reading = next((item for item in frame.readings if item.metric_id == metric_id), None)
         if reading is None:
-            raise HTTPException(status_code=404, detail=f"No data for metric: {metric_id}")
+            raise HTTPException(status_code=404, detail=f"Нет данных по метрике: {metric_id}")
         buffer = [(reading.timestamp, reading.value)]
 
     lower_bound = from_ if from_ is not None else buffer[0][0]
     upper_bound = to if to is not None else buffer[-1][0]
 
     if lower_bound > upper_bound:
-        raise HTTPException(status_code=400, detail="'from' must be less than or equal to 'to'")
+        raise HTTPException(status_code=400, detail="'from' должен быть меньше или равен 'to'")
 
     points = [
         MetricHistoryPoint(timestamp=timestamp, value=value)

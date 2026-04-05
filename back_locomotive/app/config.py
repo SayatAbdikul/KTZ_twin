@@ -48,7 +48,7 @@ METRIC_DEFINITIONS = [
     # Motion
     {
         "metricId": "motion.speed",
-        "label": "Speed",
+        "label": "Скорость",
         "unit": "km/h",
         "group": "motion",
         "precision": 0,
@@ -61,7 +61,7 @@ METRIC_DEFINITIONS = [
     },
     {
         "metricId": "motion.acceleration",
-        "label": "Acceleration",
+        "label": "Ускорение",
         "unit": "m/s²",
         "group": "motion",
         "precision": 2,
@@ -72,7 +72,7 @@ METRIC_DEFINITIONS = [
     },
     {
         "metricId": "motion.distance",
-        "label": "Distance",
+        "label": "Пробег",
         "unit": "km",
         "group": "motion",
         "precision": 1,
@@ -84,7 +84,7 @@ METRIC_DEFINITIONS = [
     # Fuel
     {
         "metricId": "fuel.level",
-        "label": "Fuel Level",
+        "label": "Уровень топлива",
         "unit": "%",
         "group": "fuel",
         "precision": 1,
@@ -97,7 +97,7 @@ METRIC_DEFINITIONS = [
     },
     {
         "metricId": "fuel.consumption_rate",
-        "label": "Consumption Rate",
+        "label": "Расход топлива",
         "unit": "L/h",
         "group": "fuel",
         "precision": 1,
@@ -110,7 +110,7 @@ METRIC_DEFINITIONS = [
     # Thermal
     {
         "metricId": "thermal.coolant_temp",
-        "label": "Coolant Temperature",
+        "label": "Температура охлаждающей жидкости",
         "unit": "°C",
         "group": "thermal",
         "precision": 1,
@@ -124,7 +124,7 @@ METRIC_DEFINITIONS = [
     },
     {
         "metricId": "thermal.oil_temp",
-        "label": "Oil Temperature",
+        "label": "Температура масла",
         "unit": "°C",
         "group": "thermal",
         "precision": 1,
@@ -137,7 +137,7 @@ METRIC_DEFINITIONS = [
     },
     {
         "metricId": "thermal.exhaust_temp",
-        "label": "Exhaust Temperature",
+        "label": "Температура выхлопа",
         "unit": "°C",
         "group": "thermal",
         "precision": 0,
@@ -151,7 +151,7 @@ METRIC_DEFINITIONS = [
     # Pressure
     {
         "metricId": "pressure.brake_main",
-        "label": "Brake Main Reservoir",
+        "label": "Главный тормозной резервуар",
         "unit": "bar",
         "group": "pressure",
         "precision": 1,
@@ -164,7 +164,7 @@ METRIC_DEFINITIONS = [
     },
     {
         "metricId": "pressure.brake_pipe",
-        "label": "Brake Pipe",
+        "label": "Тормозная магистраль",
         "unit": "bar",
         "group": "pressure",
         "precision": 1,
@@ -177,7 +177,7 @@ METRIC_DEFINITIONS = [
     },
     {
         "metricId": "pressure.oil",
-        "label": "Oil Pressure",
+        "label": "Давление масла",
         "unit": "bar",
         "group": "pressure",
         "precision": 1,
@@ -191,7 +191,7 @@ METRIC_DEFINITIONS = [
     # Electrical
     {
         "metricId": "electrical.traction_voltage",
-        "label": "Traction Voltage",
+        "label": "Тяговое напряжение",
         "unit": "V",
         "group": "electrical",
         "precision": 0,
@@ -206,7 +206,7 @@ METRIC_DEFINITIONS = [
     },
     {
         "metricId": "electrical.traction_current",
-        "label": "Traction Current",
+        "label": "Тяговый ток",
         "unit": "A",
         "group": "electrical",
         "precision": 0,
@@ -219,7 +219,7 @@ METRIC_DEFINITIONS = [
     },
     {
         "metricId": "electrical.battery_voltage",
-        "label": "Battery Voltage",
+        "label": "Напряжение батареи",
         "unit": "V",
         "group": "electrical",
         "precision": 1,
@@ -239,12 +239,12 @@ METRIC_BY_ID: dict = {m["metricId"]: m for m in METRIC_DEFINITIONS}
 # Subsystems and which metrics affect each one
 # ---------------------------------------------------------------------------
 SUBSYSTEMS = [
-    {"subsystemId": "engine",    "label": "Engine"},
-    {"subsystemId": "brakes",    "label": "Brakes"},
-    {"subsystemId": "electrical","label": "Electrical"},
-    {"subsystemId": "fuel",      "label": "Fuel System"},
-    {"subsystemId": "cooling",   "label": "Cooling"},
-    {"subsystemId": "pneumatic", "label": "Pneumatics"},
+    {"subsystemId": "engine",    "label": "Двигатель"},
+    {"subsystemId": "brakes",    "label": "Тормоза"},
+    {"subsystemId": "electrical","label": "Электрика"},
+    {"subsystemId": "fuel",      "label": "Топливная система"},
+    {"subsystemId": "cooling",   "label": "Охлаждение"},
+    {"subsystemId": "pneumatic", "label": "Пневматика"},
 ]
 
 SUBSYSTEM_METRICS: dict[str, list[str]] = {

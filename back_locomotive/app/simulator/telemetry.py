@@ -66,8 +66,8 @@ _PATTERN_BASE_VALUES: dict[str, float] = {
 FAULT_PATTERN_PROFILES: list[FaultPatternProfile] = [
     FaultPatternProfile(
         locomotive_id="KTZ-BRK-001",
-        name="Broken Stop",
-        description="Hard brake demand is present but speed does not decay.",
+        name="Неисправное торможение",
+        description="Есть жёсткий тормозной запрос, но скорость почти не снижается.",
         base_distance_km=1301.0,
         metrics={
             **_PATTERN_BASE_VALUES,
@@ -79,8 +79,8 @@ FAULT_PATTERN_PROFILES: list[FaultPatternProfile] = [
     ),
     FaultPatternProfile(
         locomotive_id="KTZ-PNE-002",
-        name="Pneumatic Pressure Loss",
-        description="Brake pipe and main reservoir pressure stay below safe braking support.",
+        name="Потеря пневматического давления",
+        description="Давление в тормозной магистрали и главном резервуаре остаётся ниже безопасного уровня для торможения.",
         base_distance_km=1308.0,
         metrics={
             **_PATTERN_BASE_VALUES,
@@ -92,8 +92,8 @@ FAULT_PATTERN_PROFILES: list[FaultPatternProfile] = [
     ),
     FaultPatternProfile(
         locomotive_id="KTZ-OIL-003",
-        name="Oil Starvation",
-        description="Lubrication pressure remains critically low while the locomotive is moving.",
+        name="Масляное голодание",
+        description="Давление смазки остаётся критически низким во время движения локомотива.",
         base_distance_km=1315.0,
         metrics={
             **_PATTERN_BASE_VALUES,
@@ -105,8 +105,8 @@ FAULT_PATTERN_PROFILES: list[FaultPatternProfile] = [
     ),
     FaultPatternProfile(
         locomotive_id="KTZ-THM-004",
-        name="Thermal Runaway",
-        description="Cooling, oil, and exhaust temperatures stay above the critical band.",
+        name="Тепловой разгон",
+        description="Температуры охлаждения, масла и выхлопа остаются выше критического диапазона.",
         base_distance_km=1322.0,
         metrics={
             **_PATTERN_BASE_VALUES,
@@ -120,8 +120,8 @@ FAULT_PATTERN_PROFILES: list[FaultPatternProfile] = [
     ),
     FaultPatternProfile(
         locomotive_id="KTZ-DRV-005",
-        name="High Current Low Acceleration",
-        description="Traction current remains high while acceleration is nearly flat.",
+        name="Высокий ток и слабое ускорение",
+        description="Тяговый ток остаётся высоким, а ускорение почти отсутствует.",
         base_distance_km=1329.0,
         metrics={
             **_PATTERN_BASE_VALUES,
@@ -134,8 +134,8 @@ FAULT_PATTERN_PROFILES: list[FaultPatternProfile] = [
     ),
     FaultPatternProfile(
         locomotive_id="KTZ-VLT-006",
-        name="Voltage Dip Under Load",
-        description="Traction voltage sags persistently while current stays elevated.",
+        name="Просадка напряжения под нагрузкой",
+        description="Тяговое напряжение стабильно проседает, пока ток остаётся повышенным.",
         base_distance_km=1336.0,
         metrics={
             **_PATTERN_BASE_VALUES,
@@ -148,8 +148,8 @@ FAULT_PATTERN_PROFILES: list[FaultPatternProfile] = [
     ),
     FaultPatternProfile(
         locomotive_id="KTZ-AMP-007",
-        name="Traction Overcurrent",
-        description="Traction current stays beyond the warning threshold for the full run.",
+        name="Перегрузка по тяговому току",
+        description="Тяговый ток остаётся выше предупредительного порога на всём протяжении сценария.",
         base_distance_km=1343.0,
         metrics={
             **_PATTERN_BASE_VALUES,
@@ -162,8 +162,8 @@ FAULT_PATTERN_PROFILES: list[FaultPatternProfile] = [
     ),
     FaultPatternProfile(
         locomotive_id="KTZ-FUL-008",
-        name="Fuel Starvation",
-        description="Fuel reserve begins below the critical reserve threshold and keeps falling.",
+        name="Критически низкий запас топлива",
+        description="Запас топлива изначально ниже критического порога и продолжает снижаться.",
         base_distance_km=1350.0,
         metrics={
             **_PATTERN_BASE_VALUES,
@@ -175,8 +175,8 @@ FAULT_PATTERN_PROFILES: list[FaultPatternProfile] = [
     ),
     FaultPatternProfile(
         locomotive_id="KTZ-BRN-009",
-        name="Inefficient Burn",
-        description="Fuel burn is excessive for the sustained low-speed profile.",
+        name="Неэффективный расход топлива",
+        description="Расход топлива чрезмерно высок для длительного движения на низкой скорости.",
         base_distance_km=1357.0,
         metrics={
             **_PATTERN_BASE_VALUES,
@@ -189,8 +189,8 @@ FAULT_PATTERN_PROFILES: list[FaultPatternProfile] = [
     ),
     FaultPatternProfile(
         locomotive_id="KTZ-MIX-010",
-        name="Compound Brake and Oil Fault",
-        description="Weak braking combines with low oil pressure and a modest voltage sag.",
+        name="Комбинированная неисправность тормозов и масла",
+        description="Слабое торможение сочетается с низким давлением масла и умеренной просадкой напряжения.",
         base_distance_km=1364.0,
         metrics={
             **_PATTERN_BASE_VALUES,

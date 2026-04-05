@@ -39,7 +39,7 @@ function PenaltyRow({
   const isHigh = penalty.thresholdType.endsWith('High')
   const tone = getPenaltyTone(penalty.penaltyPoints)
   const DirectionIcon = isHigh ? ArrowUpRight : ArrowDownRight
-  const thresholdLabel = penalty.thresholdType.startsWith('critical') ? 'Critical' : 'Warning'
+  const thresholdLabel = penalty.thresholdType.startsWith('critical') ? 'Критический' : 'Предупредительный'
 
   return (
     <div
@@ -57,7 +57,7 @@ function PenaltyRow({
           <span className={cn('inline-flex items-center gap-1', tone.textClassName)}>
             <DirectionIcon size={13} />
             <span>
-              {thresholdLabel} {isHigh ? 'high' : 'low'} at{' '}
+              {thresholdLabel} {isHigh ? 'верхний' : 'нижний'} порог на уровне{' '}
               {formatMetricValue(penalty.metricId, penalty.thresholdValue, definitions)}
             </span>
           </span>
@@ -82,7 +82,7 @@ export function HealthExplainer({ healthIndex }: HealthExplainerProps) {
 
   return (
     <section className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-      <SectionHeader title="Contributing Factors" count={topFactors.length} />
+      <SectionHeader title="Влияющие факторы" count={topFactors.length} />
 
       {healthIndex === null ? (
         <div className="space-y-2">
@@ -92,7 +92,7 @@ export function HealthExplainer({ healthIndex }: HealthExplainerProps) {
         </div>
       ) : topFactors.length === 0 ? (
         <div className="rounded-lg border border-dashed border-slate-700 px-4 py-6 text-sm text-slate-500">
-          No active threshold penalties
+          Нет активных штрафов по порогам
         </div>
       ) : (
         <div className="space-y-2">

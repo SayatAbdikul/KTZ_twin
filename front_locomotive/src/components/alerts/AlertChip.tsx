@@ -45,7 +45,7 @@ export function AlertChip({ alert }: AlertChipProps) {
             {alert.status === 'acknowledged' && (
               <>
                 <span className="text-slate-600">·</span>
-                <span className="text-xs text-slate-500">ack</span>
+                <span className="text-xs text-slate-500">подтв.</span>
               </>
             )}
           </div>

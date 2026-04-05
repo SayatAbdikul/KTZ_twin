@@ -91,7 +91,7 @@ function LiveTrendCard({
         />
       ) : (
         <div className="flex h-[220px] items-center justify-center rounded-lg border border-dashed border-slate-700 text-sm text-slate-500">
-          Waiting for live telemetry
+          Ожидание телеметрии в реальном времени
         </div>
       )}
     </article>
@@ -122,7 +122,7 @@ export function TelemetryPage() {
         fallbackFilename: 'telemetry.csv',
       })
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : 'Failed to export telemetry CSV.')
+      window.alert(error instanceof Error ? error.message : 'Не удалось экспортировать CSV телеметрии.')
     } finally {
       setIsExporting(false)
     }
@@ -133,14 +133,14 @@ export function TelemetryPage() {
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <Activity size={18} className="text-blue-400" />
-          <h1 className="text-base font-semibold text-slate-200">Telemetry</h1>
+          <h1 className="text-base font-semibold text-slate-200">Телеметрия</h1>
         </div>
         <ExportMenu
           actions={[
             {
               id: 'telemetry-csv',
-              label: isExporting ? 'Exporting CSV...' : 'Export CSV',
-              description: 'Download the raw live telemetry history buffer as CSV.',
+              label: isExporting ? 'Экспорт CSV...' : 'Экспорт CSV',
+              description: 'Скачать буфер истории телеметрии в реальном времени в формате CSV.',
               disabled: isExporting,
               onSelect: handleTelemetryExport,
             },
@@ -151,7 +151,7 @@ export function TelemetryPage() {
       <section className="mb-6">
         <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <h2 className="text-sm font-semibold uppercase tracking-widest text-slate-400">
-            Live Trends
+            Тренды в реальном времени
           </h2>
           <TimeRangeSelector value={preset} onChange={setPreset} />
         </div>

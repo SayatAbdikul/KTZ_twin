@@ -32,7 +32,7 @@ async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit): P
     return await fetch(input, { ...init, signal: controller.signal })
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
-      throw new AuthApiError(408, 'AUTH_TIMEOUT', 'Authentication service timeout. Please try again.')
+      throw new AuthApiError(408, 'AUTH_TIMEOUT', 'Превышено время ожидания сервиса аутентификации. Повторите попытку.')
     }
     throw error
   } finally {
@@ -66,7 +66,7 @@ async function request<T>(
         const message =
             payload?.detail ??
             payload?.error?.message ??
-            'Authentication request failed.'
+            'Ошибка запроса аутентификации.'
         const code = payload?.error?.code ?? 'AUTH_ERROR'
         throw new AuthApiError(response.status, code, message)
     }
