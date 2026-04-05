@@ -17,6 +17,7 @@ import { APP_CONFIG } from '@/config/app.config'
 import { ROUTES } from '@/config/routes'
 import { useWebSocketLifecycle } from './useWebSocketLifecycle'
 import { useMetricDefinitions } from '@/features/telemetry/useTelemetryQueries'
+import { useInitialFleetSnapshot } from '@/features/fleet/useFleetQueries'
 import { useAuthStore } from '@/features/auth/useAuthStore'
 import { useFleetStore } from '@/features/fleet/useFleetStore'
 import { refreshSession } from '@/services/api/authApi'
@@ -145,6 +146,7 @@ function AuthenticatedApp() {
 
   useWebSocketLifecycle(accessToken)
   useMetricDefinitions()
+  useInitialFleetSnapshot(accessToken)
   return <AppShell />
 }
 

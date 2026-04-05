@@ -31,6 +31,7 @@ _BRAKE_DUR = (10.0, 24.0)
 _ALPHA_FAST = 2.0 / (18 + 1)
 _ALPHA_SLOW = 2.0 / (52 + 1)
 _ALPHA_COOL = 2.0 / (20 + 1)
+_ALPHA_SPEED = 2.0 / (10 + 1)
 
 _METRIC_MAP: dict[str, dict] = {metric["metricId"]: metric for metric in METRIC_DEFINITIONS}
 _LAST_VALUE_METRICS = {"motion.distance", "fuel.level"}
@@ -286,8 +287,8 @@ def _start_phase(phase: str) -> None:
         physics.phase_remaining_s = physics.phase_total_s
         physics.phase_start_speed = physics.speed_kmh
         physics.phase_end_speed = physics.speed_kmh
-        physics.cruise_wave_freq = random.uniform(0.04, 0.20)
-        physics.cruise_wave_amp = random.uniform(1.0, 3.5)
+        physics.cruise_wave_freq = random.uniform(0.04, 0.10)
+        physics.cruise_wave_amp = random.uniform(0.8, 2.0)
         physics.cruise_wave_phase = random.uniform(0.0, 2.0 * math.pi)
         return
 
@@ -310,40 +311,39 @@ def _tick_phase(dt_s: float) -> None:
     physics.phase_remaining_s = max(0.0, physics.phase_remaining_s - dt_s)
 
     progress = 1.0 if physics.phase_total_s <= 0 else min(1.0, physics.phase_elapsed_s / physics.phase_total_s)
+    target_speed_kmh = physics.speed_kmh
 
     if physics.phase == "idle":
-        physics.speed_kmh = max(0.0, random.gauss(0.0, 0.05))
+        target_speed_kmh = max(0.0, random.gauss(0.0, 0.02))
         if physics.phase_remaining_s <= 0.0:
             _start_phase("acceleration")
-        return
-
-    if physics.phase == "acceleration":
-        physics.speed_kmh = max(
+    elif physics.phase == "acceleration":
+        target_speed_kmh = max(
             0.0,
             physics.phase_start_speed
             + (physics.phase_end_speed - physics.phase_start_speed) * progress
-            + random.gauss(0.0, 0.2),
+            + random.gauss(0.0, 0.08),
         )
         if physics.phase_remaining_s <= 0.0:
             _start_phase("cruise")
-        return
-
-    if physics.phase == "cruise":
+    elif physics.phase == "cruise":
         wave = physics.cruise_wave_amp * math.sin(
             physics.cruise_wave_freq * physics.phase_elapsed_s + physics.cruise_wave_phase
         )
-        physics.speed_kmh = _clamp(
-            physics.phase_start_speed + wave + random.gauss(0.0, 0.12),
+        target_speed_kmh = _clamp(
+            physics.phase_start_speed + wave + random.gauss(0.0, 0.05),
             0.0,
             MAX_CRUISE_KMH + 4.0,
         )
         if physics.phase_remaining_s <= 0.0:
             _start_phase("braking")
-        return
+    else:
+        target_speed_kmh = max(0.0, physics.phase_start_speed * (1.0 - progress) + random.gauss(0.0, 0.08))
+        if physics.phase_remaining_s <= 0.0:
+            _start_phase("idle")
 
-    physics.speed_kmh = max(0.0, physics.phase_start_speed * (1.0 - progress) + random.gauss(0.0, 0.15))
-    if physics.phase_remaining_s <= 0.0:
-        _start_phase("idle")
+    # Dampen short-term jitter so dashboard traces do not oscillate rapidly.
+    physics.speed_kmh = _ewm(physics.speed_kmh, target_speed_kmh, _ALPHA_SPEED)
 
 
 def _step(dt_s: float) -> dict[str, float]:
@@ -538,10 +538,84 @@ def generate_frame() -> TelemetryFrame:
 def _fault_pattern_values(profile: FaultPatternProfile, tick: int) -> dict[str, float]:
     values = dict(profile.metrics)
 
-    speed_kmh = values["motion.speed"]
+    t = tick * TELEMETRY_INTERVAL_S
+    phase = (sum(ord(char) for char in profile.locomotive_id) % 360) * (math.pi / 180.0)
+
+    # Deterministic low-frequency motion keeps profiles reproducible while avoiding flat lines.
+    speed_base = profile.metrics["motion.speed"]
+    speed_wave = 2.2 * math.sin(0.22 * t + phase) + 0.9 * math.sin(0.07 * t + phase * 0.5)
+    speed_kmh = _clamp(speed_base + speed_wave, 0.0, 200.0)
+
+    prev_t = max(0.0, (tick - 1) * TELEMETRY_INTERVAL_S)
+    prev_wave = 2.2 * math.sin(0.22 * prev_t + phase) + 0.9 * math.sin(0.07 * prev_t + phase * 0.5)
+    prev_speed_kmh = _clamp(speed_base + prev_wave, 0.0, 200.0)
+    accel_mps2 = (speed_kmh - prev_speed_kmh) / max(TELEMETRY_INTERVAL_S * 3.6, 1e-6)
+
+    values["motion.speed"] = speed_kmh
+    if profile.locomotive_id == "KTZ-DRV-005":
+        # Keep drive-lag signature: weak acceleration despite movement.
+        values["motion.acceleration"] = _clamp(0.01 + 0.02 * math.sin(0.19 * t + phase), -0.08, 0.08)
+    else:
+        values["motion.acceleration"] = _clamp(accel_mps2, -1.2, 1.2)
+
     values["motion.distance"] = profile.base_distance_km + tick * speed_kmh / 3600.0
-    if profile.locomotive_id == "KTZ-FUL-008":
-        values["fuel.level"] = max(0.0, profile.metrics["fuel.level"] - tick * 0.02)
+
+    # Keep fuel trend alive for all patterns; fuel-fault profile drains faster.
+    fuel_drain_per_tick = 0.02 if profile.locomotive_id == "KTZ-FUL-008" else 0.004
+    values["fuel.level"] = max(0.0, profile.metrics["fuel.level"] - tick * fuel_drain_per_tick)
+    values["fuel.consumption_rate"] = _clamp(
+        profile.metrics["fuel.consumption_rate"] + 4.0 * math.sin(0.11 * t + phase),
+        0.0,
+        500.0,
+    )
+
+    values["thermal.coolant_temp"] = _clamp(
+        profile.metrics["thermal.coolant_temp"] + 0.9 * math.sin(0.10 * t + phase),
+        0.0,
+        150.0,
+    )
+    values["thermal.oil_temp"] = _clamp(
+        profile.metrics["thermal.oil_temp"] + 1.1 * math.sin(0.09 * t + phase * 0.8),
+        0.0,
+        160.0,
+    )
+    values["thermal.exhaust_temp"] = _clamp(
+        profile.metrics["thermal.exhaust_temp"] + 6.5 * math.sin(0.12 * t + phase * 1.2),
+        0.0,
+        700.0,
+    )
+
+    values["pressure.brake_main"] = _clamp(
+        profile.metrics["pressure.brake_main"] + 0.10 * math.sin(0.17 * t + phase),
+        0.0,
+        10.0,
+    )
+    values["pressure.brake_pipe"] = _clamp(
+        profile.metrics["pressure.brake_pipe"] + 0.08 * math.sin(0.16 * t + phase * 0.7),
+        0.0,
+        6.0,
+    )
+    values["pressure.oil"] = _clamp(
+        profile.metrics["pressure.oil"] + 0.07 * math.sin(0.13 * t + phase * 0.4),
+        0.0,
+        8.0,
+    )
+
+    values["electrical.traction_voltage"] = _clamp(
+        profile.metrics["electrical.traction_voltage"] + 18.0 * math.sin(0.09 * t + phase),
+        0.0,
+        3000.0,
+    )
+    values["electrical.traction_current"] = _clamp(
+        profile.metrics["electrical.traction_current"] + 22.0 * math.sin(0.12 * t + phase * 1.1),
+        0.0,
+        2000.0,
+    )
+    values["electrical.battery_voltage"] = _clamp(
+        profile.metrics["electrical.battery_voltage"] + 0.25 * math.sin(0.08 * t + phase * 0.6),
+        0.0,
+        120.0,
+    )
 
     return values
 

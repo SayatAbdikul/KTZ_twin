@@ -10,6 +10,31 @@ interface ReplayChartProps {
   currentTimestamp: number | null
 }
 
+function getValueAtTimestamp(points: ReplayPoint[], currentTimestamp: number | null): number | undefined {
+  if (points.length === 0) return undefined
+  if (currentTimestamp === null) return points[points.length - 1]?.value
+
+  // Find the latest sample at or before the replay cursor so the header tracks playback.
+  let left = 0
+  let right = points.length - 1
+  let matchIndex = -1
+
+  while (left <= right) {
+    const mid = Math.floor((left + right) / 2)
+    const midTimestamp = points[mid]?.timestamp ?? 0
+
+    if (midTimestamp <= currentTimestamp) {
+      matchIndex = mid
+      left = mid + 1
+    } else {
+      right = mid - 1
+    }
+  }
+
+  if (matchIndex >= 0) return points[matchIndex]?.value
+  return points[0]?.value
+}
+
 function getThresholdLines(definition: MetricDefinition, currentTimestamp: number | null) {
   const lines: Array<Record<string, unknown>> = []
 
@@ -59,8 +84,8 @@ function getThresholdLines(definition: MetricDefinition, currentTimestamp: numbe
 }
 
 export function ReplayChart({ definition, points, currentTimestamp }: ReplayChartProps) {
-  const latestValue = points[points.length - 1]?.value
-  const severity = latestValue === undefined ? 'normal' : getMetricSeverity(latestValue, definition)
+  const currentValue = getValueAtTimestamp(points, currentTimestamp)
+  const severity = currentValue === undefined ? 'normal' : getMetricSeverity(currentValue, definition)
   const stroke =
     severity === 'critical' ? '#f87171' : severity === 'warning' ? '#fbbf24' : '#60a5fa'
   const thresholdLines = getThresholdLines(definition, currentTimestamp)
@@ -131,7 +156,7 @@ export function ReplayChart({ definition, points, currentTimestamp }: ReplayChar
         </div>
         <div className="text-right">
           <div className="font-mono text-xl font-semibold text-slate-100">
-            {latestValue.toFixed(definition.precision)}
+            {(currentValue ?? points[points.length - 1]?.value ?? 0).toFixed(definition.precision)}
           </div>
           <div className="text-xs text-slate-500">{definition.unit}</div>
         </div>

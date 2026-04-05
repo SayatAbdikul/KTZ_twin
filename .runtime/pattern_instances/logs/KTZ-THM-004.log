@@ -1,32 +1,47 @@
-INFO:     Started server process [251690]
+INFO:     Started server process [29961]
 INFO:     Waiting for application startup.
-2026-04-05 04:32:38,519  INFO      app.main — Initialising KTZ Locomotive Telemetry Server…
-2026-04-05 04:32:38,523  WARNING   aiokafka — Unable to request metadata from "localhost:9092": KafkaConnectionError: Connection at localhost:9092 closed
-2026-04-05 04:32:40,526  WARNING   aiokafka — Unable to request metadata from "localhost:9092": KafkaConnectionError: Connection at localhost:9092 closed
-2026-04-05 04:32:42,529  WARNING   aiokafka — Unable to request metadata from "localhost:9092": KafkaConnectionError: Connection at localhost:9092 closed
-2026-04-05 04:32:44,554  INFO      app.broker — Kafka topic ensured: topic=ktz.locomotive.events partitions=100 replication_factor=1
-2026-04-05 04:32:44,555  INFO      app.broker — Kafka topic partitioning ready: topic=ktz.locomotive.events current_partitions=100 target_partitions=100
-2026-04-05 04:32:44,605  INFO      app.broker — Kafka producer started: localhost:9092, topic=ktz.locomotive.events
-2026-04-05 04:32:44,610  INFO      app.main — Initial telemetry frame and health index generated.
-2026-04-05 04:32:44,610  INFO      app.main — 6 background tasks started.
+2026-04-05 07:44:30,871  INFO      app.main — Initialising KTZ Locomotive Telemetry Server…
+2026-04-05 07:44:30,876  WARNING   aiokafka — Unable to request metadata from "localhost:9092": KafkaConnectionError: Connection at localhost:9092 closed
+2026-04-05 07:44:32,899  INFO      app.broker — Kafka topic ensured: topic=ktz.locomotive.events partitions=100 replication_factor=1
+2026-04-05 07:44:34,982  INFO      app.broker — Kafka topic ensured: topic=ktz.locomotive.events partitions=100 replication_factor=1
+2026-04-05 07:44:34,984  INFO      app.broker — Kafka topic partitioning ready: topic=ktz.locomotive.events current_partitions=100 target_partitions=100
+2026-04-05 07:44:34,993  INFO      app.broker — Kafka producer started: localhost:9092, topic=ktz.locomotive.events
+2026-04-05 07:44:34,996  INFO      app.main — Initial telemetry frame and health index generated.
+2026-04-05 07:44:34,996  INFO      app.main — 6 background tasks started.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:3104 (Press CTRL+C to quit)
-2026-04-05 04:32:44,614  WARNING   aiokafka.producer.sender — Got error produce response on topic-partition TopicPartition(topic='ktz.locomotive.events', partition=79), retrying. Error: <class 'aiokafka.errors.NotLeaderForPartitionError'>
-2026-04-05 04:32:44,716  WARNING   aiokafka.producer.sender — Got error produce response on topic-partition TopicPartition(topic='ktz.locomotive.events', partition=79), retrying. Error: <class 'aiokafka.errors.NotLeaderForPartitionError'>
-2026-04-05 04:32:44,818  WARNING   aiokafka.producer.sender — Got error produce response on topic-partition TopicPartition(topic='ktz.locomotive.events', partition=79), retrying. Error: <class 'aiokafka.errors.NotLeaderForPartitionError'>
-2026-04-05 04:32:44,919  WARNING   aiokafka.producer.sender — Got error produce response on topic-partition TopicPartition(topic='ktz.locomotive.events', partition=79), retrying. Error: <class 'aiokafka.errors.NotLeaderForPartitionError'>
-2026-04-05 04:32:45,019  WARNING   aiokafka.producer.sender — Got error produce response on topic-partition TopicPartition(topic='ktz.locomotive.events', partition=79), retrying. Error: <class 'aiokafka.errors.NotLeaderForPartitionError'>
-2026-04-05 04:32:45,121  WARNING   aiokafka.producer.sender — Got error produce response on topic-partition TopicPartition(topic='ktz.locomotive.events', partition=79), retrying. Error: <class 'aiokafka.errors.NotLeaderForPartitionError'>
-2026-04-05 04:32:45,223  WARNING   aiokafka.producer.sender — Got error produce response on topic-partition TopicPartition(topic='ktz.locomotive.events', partition=79), retrying. Error: <class 'aiokafka.errors.NotLeaderForPartitionError'>
-2026-04-05 04:34:01,503  INFO      app.broker — Kafka producer published 100 messages to topic=ktz.locomotive.events
-2026-04-05 04:35:17,676  INFO      app.broker — Kafka producer published 200 messages to topic=ktz.locomotive.events
-2026-04-05 04:36:34,655  INFO      app.broker — Kafka producer published 300 messages to topic=ktz.locomotive.events
-2026-04-05 04:37:49,974  INFO      app.broker — Kafka producer published 400 messages to topic=ktz.locomotive.events
-2026-04-05 04:39:06,132  INFO      app.broker — Kafka producer published 500 messages to topic=ktz.locomotive.events
-2026-04-05 04:40:22,277  INFO      app.broker — Kafka producer published 600 messages to topic=ktz.locomotive.events
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-2026-04-05 04:40:37,686  INFO      app.main — Shutting down background tasks…
-2026-04-05 04:40:37,687  INFO      app.main — Shutdown complete.
-INFO:     Application shutdown complete.
-INFO:     Finished server process [251690]
+2026-04-05 07:44:58,821  INFO      app.broker — Kafka producer published 100 messages to topic=ktz.locomotive.events
+2026-04-05 07:45:22,656  INFO      app.broker — Kafka producer published 200 messages to topic=ktz.locomotive.events
+2026-04-05 07:45:45,942  INFO      app.broker — Kafka producer published 300 messages to topic=ktz.locomotive.events
+2026-04-05 07:46:09,753  INFO      app.broker — Kafka producer published 400 messages to topic=ktz.locomotive.events
+2026-04-05 07:46:33,452  INFO      app.broker — Kafka producer published 500 messages to topic=ktz.locomotive.events
+2026-04-05 07:46:56,889  INFO      app.broker — Kafka producer published 600 messages to topic=ktz.locomotive.events
+2026-04-05 07:47:20,557  INFO      app.broker — Kafka producer published 700 messages to topic=ktz.locomotive.events
+2026-04-05 07:47:44,408  INFO      app.broker — Kafka producer published 800 messages to topic=ktz.locomotive.events
+2026-04-05 07:48:07,869  INFO      app.broker — Kafka producer published 900 messages to topic=ktz.locomotive.events
+2026-04-05 07:48:31,699  INFO      app.broker — Kafka producer published 1000 messages to topic=ktz.locomotive.events
+2026-04-05 07:48:55,492  INFO      app.broker — Kafka producer published 1100 messages to topic=ktz.locomotive.events
+2026-04-05 07:49:19,143  INFO      app.broker — Kafka producer published 1200 messages to topic=ktz.locomotive.events
+2026-04-05 07:49:42,915  INFO      app.broker — Kafka producer published 1300 messages to topic=ktz.locomotive.events
+2026-04-05 07:50:06,231  INFO      app.broker — Kafka producer published 1400 messages to topic=ktz.locomotive.events
+2026-04-05 07:50:30,329  INFO      app.broker — Kafka producer published 1500 messages to topic=ktz.locomotive.events
+2026-04-05 07:50:54,198  INFO      app.broker — Kafka producer published 1600 messages to topic=ktz.locomotive.events
+2026-04-05 07:51:17,405  INFO      app.broker — Kafka producer published 1700 messages to topic=ktz.locomotive.events
+2026-04-05 07:51:41,298  INFO      app.broker — Kafka producer published 1800 messages to topic=ktz.locomotive.events
+2026-04-05 07:52:05,138  INFO      app.broker — Kafka producer published 1900 messages to topic=ktz.locomotive.events
+2026-04-05 07:52:28,652  INFO      app.broker — Kafka producer published 2000 messages to topic=ktz.locomotive.events
+2026-04-05 07:52:52,145  INFO      app.broker — Kafka producer published 2100 messages to topic=ktz.locomotive.events
+2026-04-05 07:53:15,713  INFO      app.broker — Kafka producer published 2200 messages to topic=ktz.locomotive.events
+2026-04-05 07:53:39,397  INFO      app.broker — Kafka producer published 2300 messages to topic=ktz.locomotive.events
+2026-04-05 07:54:03,030  INFO      app.broker — Kafka producer published 2400 messages to topic=ktz.locomotive.events
+2026-04-05 07:54:26,213  INFO      app.broker — Kafka producer published 2500 messages to topic=ktz.locomotive.events
+2026-04-05 07:54:49,846  INFO      app.broker — Kafka producer published 2600 messages to topic=ktz.locomotive.events
+2026-04-05 07:55:13,238  INFO      app.broker — Kafka producer published 2700 messages to topic=ktz.locomotive.events
+2026-04-05 07:55:36,604  INFO      app.broker — Kafka producer published 2800 messages to topic=ktz.locomotive.events
+2026-04-05 07:56:00,216  INFO      app.broker — Kafka producer published 2900 messages to topic=ktz.locomotive.events
+2026-04-05 07:56:23,503  INFO      app.broker — Kafka producer published 3000 messages to topic=ktz.locomotive.events
+2026-04-05 07:56:47,083  INFO      app.broker — Kafka producer published 3100 messages to topic=ktz.locomotive.events
+2026-04-05 07:57:11,168  INFO      app.broker — Kafka producer published 3200 messages to topic=ktz.locomotive.events
+2026-04-05 07:57:34,981  INFO      app.broker — Kafka producer published 3300 messages to topic=ktz.locomotive.events
+2026-04-05 07:57:58,334  INFO      app.broker — Kafka producer published 3400 messages to topic=ktz.locomotive.events
+2026-04-05 07:58:21,828  INFO      app.broker — Kafka producer published 3500 messages to topic=ktz.locomotive.events

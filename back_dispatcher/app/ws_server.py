@@ -48,7 +48,7 @@ async def _enqueue_client_message(
     if client is None:
         return False
     wire = await _build_wire(msg_type, payload, locomotive_id=locomotive_id)
-    return state.enqueue_message(client, msg_type, wire)
+    return state.enqueue_message(client, msg_type, wire, locomotive_id=locomotive_id)
 
 
 async def broadcast_message(msg_type: str, payload: object, locomotive_id: str | None = None) -> None:
@@ -58,7 +58,7 @@ async def broadcast_message(msg_type: str, payload: object, locomotive_id: str |
     failed = 0
     for client in state.matching_clients(locomotive_id):
         attempted += 1
-        if not state.enqueue_message(client, msg_type, wire):
+        if not state.enqueue_message(client, msg_type, wire, locomotive_id=locomotive_id):
             failed += 1
 
     state.note_broadcast(msg_type, attempted_deliveries=attempted, failed_deliveries=failed)

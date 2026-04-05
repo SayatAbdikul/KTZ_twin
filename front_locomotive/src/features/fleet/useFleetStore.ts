@@ -86,14 +86,7 @@ function deriveHealthStatus(healthIndex: HealthIndex): FleetLocomotiveSummary['h
 }
 
 function sortLocomotives(locomotives: Record<string, FleetLocomotiveSummary>) {
-  return Object.values(locomotives).sort((a, b) => {
-    const statusOrder = { critical: 0, warning: 1, normal: 2, unknown: 3 }
-    const byStatus = statusOrder[a.healthStatus] - statusOrder[b.healthStatus]
-    if (byStatus !== 0) return byStatus
-    const byScore = (a.healthScore ?? -1) - (b.healthScore ?? -1)
-    if (byScore !== 0) return byScore
-    return a.locomotiveId.localeCompare(b.locomotiveId)
-  })
+  return Object.values(locomotives).sort((a, b) => a.locomotiveId.localeCompare(b.locomotiveId))
 }
 
 export function getFleetLocomotiveOptions(locomotives: Record<string, FleetLocomotiveSummary>) {

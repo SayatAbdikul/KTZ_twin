@@ -33,8 +33,8 @@ class DispatcherClientRuntime:
     subscription: str | None = None
     sender_task: asyncio.Task[None] | None = None
     ordered_events: deque[str] = field(default_factory=deque)
-    latest_telemetry: str | None = None
-    latest_health: str | None = None
+    latest_telemetry_by_locomotive: dict[str, str] = field(default_factory=dict)
+    latest_health_by_locomotive: dict[str, str] = field(default_factory=dict)
     wake_event: asyncio.Event = field(default_factory=asyncio.Event)
     telemetry_drop_count: int = 0
     health_drop_count: int = 0
@@ -144,21 +144,29 @@ class DispatcherState:
             if client.subscription in (None, "*", locomotive_id)
         ]
 
-    def enqueue_message(self, client: DispatcherClientRuntime, msg_type: str, wire: str) -> bool:
+    def enqueue_message(
+        self,
+        client: DispatcherClientRuntime,
+        msg_type: str,
+        wire: str,
+        locomotive_id: str | None = None,
+    ) -> bool:
         if client.disconnect_reason is not None:
             return False
 
         if msg_type == "telemetry.frame":
-            if client.latest_telemetry is not None:
+            key = locomotive_id or "dispatcher"
+            if key in client.latest_telemetry_by_locomotive:
                 client.telemetry_drop_count += 1
-            client.latest_telemetry = wire
+            client.latest_telemetry_by_locomotive[key] = wire
             client.wake_event.set()
             return True
 
         if msg_type == "health.update":
-            if client.latest_health is not None:
+            key = locomotive_id or "dispatcher"
+            if key in client.latest_health_by_locomotive:
                 client.health_drop_count += 1
-            client.latest_health = wire
+            client.latest_health_by_locomotive[key] = wire
             client.wake_event.set()
             return True
 
@@ -174,13 +182,13 @@ class DispatcherState:
     def _next_wire(self, client: DispatcherClientRuntime) -> str | None:
         if client.ordered_events:
             return client.ordered_events.popleft()
-        if client.latest_telemetry is not None:
-            wire = client.latest_telemetry
-            client.latest_telemetry = None
+        if client.latest_telemetry_by_locomotive:
+            key = next(iter(client.latest_telemetry_by_locomotive))
+            wire = client.latest_telemetry_by_locomotive.pop(key)
             return wire
-        if client.latest_health is not None:
-            wire = client.latest_health
-            client.latest_health = None
+        if client.latest_health_by_locomotive:
+            key = next(iter(client.latest_health_by_locomotive))
+            wire = client.latest_health_by_locomotive.pop(key)
             return wire
         return None
 
@@ -235,8 +243,8 @@ class DispatcherState:
                 "clientId": client.client_id,
                 "subscription": client.subscription,
                 "queueDepth": client.queue_depth,
-                "telemetryPending": client.latest_telemetry is not None,
-                "healthPending": client.latest_health is not None,
+                "telemetryPending": len(client.latest_telemetry_by_locomotive) > 0,
+                "healthPending": len(client.latest_health_by_locomotive) > 0,
                 "telemetryDrops": client.telemetry_drop_count,
                 "healthDrops": client.health_drop_count,
                 "sendFailures": client.send_failure_count,
