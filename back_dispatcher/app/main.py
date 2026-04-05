@@ -17,7 +17,7 @@ from app.logging_db import install_database_logging
 from app.locomotive_client import connect_locomotive_forever, send_chat_to_locomotive
 from app.models import now_ms
 from app.repository import save_dispatcher_command
-from app.routes import admin_users, auth, health, locomotives
+from app.routes import admin_users, auth, config, health, locomotives
 from app.state import LocomotiveRuntime, state
 from app.ws_server import broadcast_message, send_connection_snapshot, send_locomotive_snapshot
 
@@ -106,6 +106,7 @@ app.middleware("http")(enforce_http_auth)
 
 app.include_router(auth.router)
 app.include_router(admin_users.router)
+app.include_router(config.router)
 app.include_router(health.router)
 app.include_router(locomotives.router)
 

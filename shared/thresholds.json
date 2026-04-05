@@ -1,63 +1,94 @@
 {
-  "healthStatus": {
-    "degraded": 60.0,
-    "normal": 80.0,
-    "warning": 40.0
-  },
-  "metrics": {
-    "electrical.battery_voltage": {
-      "criticalLow": 90.0,
-      "warningLow": 100.0
+    "edges": {
+        "fuelEfficiencyPenaltyPoints": 10.0,
+        "fuelPenaltyCruiseRateLph": 140.0,
+        "fuelPenaltyCruiseSpeedKmh": 50.0,
+        "fuelPenaltyHighSpeedRateLph": 220.0,
+        "fuelPenaltyLowSpeedKmh": 20.0,
+        "fuelPenaltyLowSpeedRateLph": 80.0,
+        "hardBrakeMainBar": 6.8,
+        "hardBrakePipeBar": 4.3,
+        "highCurrentA": 700.0,
+        "highCurrentALowAccel": 650.0,
+        "highSpeedFactorMinKmh": 40.0,
+        "highSpeedMinKmh": 60.0,
+        "lowAccelMps2": 0.05,
+        "lowSpeedFactorMaxKmh": 10.0,
+        "notBrakingMainBar": 7.8,
+        "notBrakingPipeBar": 4.8,
+        "overallWeightBraking": 0.4,
+        "overallWeightFault": 0.15,
+        "overallWeightPowertrain": 0.2,
+        "overallWeightThermal": 0.25,
+        "pneumaticDropMainBar": 0.2,
+        "pneumaticDropPipeBar": 0.25,
+        "speedCapForLowAccelKmh": 70.0,
+        "speedFactorHigh": 1.5,
+        "speedFactorLow": 0.5,
+        "speedFactorNominal": 1.0,
+        "veryHighCurrentA": 900.0,
+        "weakBrakeResponseMinDropKmh3s": 5.0,
+        "weakBrakeResponseMinSpeedKmh": 40.0
     },
-    "electrical.traction_current": {
-      "criticalHigh": 1800.0,
-      "warningHigh": 1600.0
+    "healthStatus": {
+        "degraded": 60.0,
+        "normal": 80.0,
+        "warning": 40.0
     },
-    "electrical.traction_voltage": {
-      "criticalHigh": 3000.0,
-      "criticalLow": 2400.0,
-      "warningHigh": 2900.0,
-      "warningLow": 2600.0
+    "metrics": {
+        "electrical.battery_voltage": {
+            "criticalLow": 90.0,
+            "warningLow": 100.0
+        },
+        "electrical.traction_current": {
+            "criticalHigh": 1800.0,
+            "warningHigh": 1600.0
+        },
+        "electrical.traction_voltage": {
+            "criticalHigh": 3000.0,
+            "criticalLow": 2400.0,
+            "warningHigh": 2900.0,
+            "warningLow": 2600.0
+        },
+        "fuel.consumption_rate": {
+            "warningHigh": 400.0
+        },
+        "fuel.level": {
+            "criticalLow": 10.0,
+            "warningLow": 20.0
+        },
+        "motion.speed": {
+            "criticalHigh": 160.0,
+            "warningHigh": 140.0
+        },
+        "pressure.brake_main": {
+            "criticalLow": 5.0,
+            "warningLow": 7.0
+        },
+        "pressure.brake_pipe": {
+            "criticalLow": 4.0,
+            "warningLow": 4.5
+        },
+        "pressure.oil": {
+            "criticalLow": 2.0,
+            "warningLow": 3.0
+        },
+        "thermal.coolant_temp": {
+            "criticalHigh": 105.0,
+            "warningHigh": 95.0,
+            "warningLow": 10.0
+        },
+        "thermal.exhaust_temp": {
+            "criticalHigh": 650.0,
+            "warningHigh": 550.0
+        },
+        "thermal.oil_temp": {
+            "criticalHigh": 130.0,
+            "warningHigh": 110.0
+        }
     },
-    "fuel.consumption_rate": {
-      "warningHigh": 400.0
-    },
-    "fuel.level": {
-      "criticalLow": 10.0,
-      "warningLow": 20.0
-    },
-    "motion.speed": {
-      "criticalHigh": 160.0,
-      "warningHigh": 140.0
-    },
-    "pressure.brake_main": {
-      "criticalLow": 5.0,
-      "warningLow": 7.0
-    },
-    "pressure.brake_pipe": {
-      "criticalLow": 4.0,
-      "warningLow": 4.5
-    },
-    "pressure.oil": {
-      "criticalLow": 2.0,
-      "warningLow": 3.0
-    },
-    "thermal.coolant_temp": {
-      "criticalHigh": 105.0,
-      "warningHigh": 95.0,
-      "warningLow": 10.0
-    },
-    "thermal.exhaust_temp": {
-      "criticalHigh": 650.0,
-      "warningHigh": 550.0
-    },
-    "thermal.oil_temp": {
-      "criticalHigh": 130.0,
-      "warningHigh": 110.0
+    "penalties": {
+        "critical": 15.0,
+        "warning": 5.0
     }
-  },
-  "penalties": {
-    "critical": 15.0,
-    "warning": 5.0
-  }
 }

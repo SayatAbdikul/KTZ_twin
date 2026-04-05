@@ -2,12 +2,18 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from copy import deepcopy
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from threading import RLock
 from typing import Any
 
+from app.db import session_scope
+from app.db_models import RuntimeConfig
+
 THRESHOLDS_FILE = os.getenv("THRESHOLDS_FILE", "")
+THRESHOLDS_DB_KEY = os.getenv("THRESHOLDS_DB_KEY", "dispatcher.thresholds")
 THRESHOLD_KEYS = ("warningLow", "warningHigh", "criticalLow", "criticalHigh")
 
 STATIC_METRICS: dict[str, dict[str, float | None]] = {
@@ -46,6 +52,37 @@ DEFAULT_THRESHOLD_CONFIG = {
     },
     "penalties": {"warning": 5.0, "critical": 15.0},
     "healthStatus": {"normal": 80.0, "degraded": 60.0, "warning": 40.0},
+    "edges": {
+        "highSpeedMinKmh": 60.0,
+        "hardBrakePipeBar": 4.3,
+        "hardBrakeMainBar": 6.8,
+        "notBrakingPipeBar": 4.8,
+        "notBrakingMainBar": 7.8,
+        "highCurrentALowAccel": 650.0,
+        "highCurrentA": 700.0,
+        "veryHighCurrentA": 900.0,
+        "lowAccelMps2": 0.05,
+        "speedCapForLowAccelKmh": 70.0,
+        "weakBrakeResponseMinSpeedKmh": 40.0,
+        "weakBrakeResponseMinDropKmh3s": 5.0,
+        "pneumaticDropPipeBar": 0.25,
+        "pneumaticDropMainBar": 0.2,
+        "fuelPenaltyLowSpeedKmh": 20.0,
+        "fuelPenaltyCruiseSpeedKmh": 50.0,
+        "fuelPenaltyLowSpeedRateLph": 80.0,
+        "fuelPenaltyCruiseRateLph": 140.0,
+        "fuelPenaltyHighSpeedRateLph": 220.0,
+        "fuelEfficiencyPenaltyPoints": 10.0,
+        "lowSpeedFactorMaxKmh": 10.0,
+        "highSpeedFactorMinKmh": 40.0,
+        "speedFactorLow": 0.5,
+        "speedFactorNominal": 1.0,
+        "speedFactorHigh": 1.5,
+        "overallWeightBraking": 0.40,
+        "overallWeightThermal": 0.25,
+        "overallWeightPowertrain": 0.20,
+        "overallWeightFault": 0.15,
+    },
 }
 
 
@@ -91,6 +128,15 @@ def _merge_threshold_config(base: dict[str, Any], patch: dict[str, Any]) -> dict
                 raise ThresholdValidationError(f"Unsupported key '{key}' in '{root_key}'.")
             merged[root_key][key] = _coerce_number(value)
 
+    edges_patch = patch.get("edges")
+    if edges_patch is not None:
+        if not isinstance(edges_patch, dict):
+            raise ThresholdValidationError("'edges' must be an object.")
+        for key, value in edges_patch.items():
+            if key not in DEFAULT_THRESHOLD_CONFIG["edges"]:
+                raise ThresholdValidationError(f"Unsupported key '{key}' in 'edges'.")
+            merged["edges"][key] = _coerce_number(value)
+
     return merged
 
 
@@ -98,9 +144,10 @@ def _validate_config(config: dict[str, Any]) -> dict[str, Any]:
     metrics = config.get("metrics")
     penalties = config.get("penalties")
     health_status = config.get("healthStatus")
+    edges = config.get("edges")
 
-    if not isinstance(metrics, dict) or not isinstance(penalties, dict) or not isinstance(health_status, dict):
-        raise ThresholdValidationError("Threshold config must contain metrics, penalties, and healthStatus objects.")
+    if not isinstance(metrics, dict) or not isinstance(penalties, dict) or not isinstance(health_status, dict) or not isinstance(edges, dict):
+        raise ThresholdValidationError("Threshold config must contain metrics, penalties, healthStatus, and edges objects.")
 
     normalized_metrics: dict[str, dict[str, float | None]] = {}
     for metric_id, raw_thresholds in metrics.items():
@@ -146,6 +193,24 @@ def _validate_config(config: dict[str, Any]) -> dict[str, Any]:
     if not (0 <= warning_cutoff < degraded_cutoff < normal_cutoff <= 100):
         raise ThresholdValidationError("Health status thresholds must satisfy 0 <= warning < degraded < normal <= 100.")
 
+    normalized_edges: dict[str, float] = {}
+    for key in DEFAULT_THRESHOLD_CONFIG["edges"].keys():
+        value = _coerce_number(edges.get(key))
+        if value is None:
+            raise ThresholdValidationError(f"Edge '{key}' is required.")
+        normalized_edges[key] = float(value)
+
+    if normalized_edges["highCurrentA"] < normalized_edges["highCurrentALowAccel"]:
+        raise ThresholdValidationError("edges.highCurrentA must be >= edges.highCurrentALowAccel.")
+    if normalized_edges["veryHighCurrentA"] < normalized_edges["highCurrentA"]:
+        raise ThresholdValidationError("edges.veryHighCurrentA must be >= edges.highCurrentA.")
+    if normalized_edges["hardBrakePipeBar"] > normalized_edges["notBrakingPipeBar"]:
+        raise ThresholdValidationError("edges.hardBrakePipeBar must be <= edges.notBrakingPipeBar.")
+    if normalized_edges["hardBrakeMainBar"] > normalized_edges["notBrakingMainBar"]:
+        raise ThresholdValidationError("edges.hardBrakeMainBar must be <= edges.notBrakingMainBar.")
+    if normalized_edges["fuelPenaltyLowSpeedKmh"] > normalized_edges["fuelPenaltyCruiseSpeedKmh"]:
+        raise ThresholdValidationError("edges.fuelPenaltyLowSpeedKmh must be <= edges.fuelPenaltyCruiseSpeedKmh.")
+
     return {
         "metrics": normalized_metrics,
         "penalties": {"warning": warning_penalty, "critical": critical_penalty},
@@ -154,41 +219,132 @@ def _validate_config(config: dict[str, Any]) -> dict[str, Any]:
             "degraded": degraded_cutoff,
             "warning": warning_cutoff,
         },
+        "edges": normalized_edges,
     }
 
 
 class ThresholdConfigStore:
-    def __init__(self, path: str | None) -> None:
+    def __init__(self, path: str | None, db_key: str) -> None:
         self._path = Path(path).expanduser() if path else None
+        self._db_key = db_key
         self._lock = RLock()
         self._mtime_ns: int | None = None
+        self._next_db_check_s = 0.0
         self._config = _validate_config(deepcopy(DEFAULT_THRESHOLD_CONFIG))
         self._reload(force=True)
 
+    def _load_file_config(self) -> dict[str, Any]:
+        if self._path is None or not self._path.exists():
+            self._mtime_ns = None
+            return _validate_config(deepcopy(DEFAULT_THRESHOLD_CONFIG))
+
+        stat = self._path.stat()
+        raw = json.loads(self._path.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            raise ThresholdValidationError("Threshold file must contain a JSON object.")
+        merged = _merge_threshold_config(DEFAULT_THRESHOLD_CONFIG, raw)
+        validated = _validate_config(merged)
+        self._mtime_ns = stat.st_mtime_ns
+        return validated
+
+    def _load_db_patch(self) -> dict[str, Any] | None:
+        try:
+            with session_scope() as session:
+                row = session.query(RuntimeConfig).filter(RuntimeConfig.config_key == self._db_key).first()
+                if row is None:
+                    # Persist defaults once so DB has canonical initial values.
+                    seeded = _validate_config(deepcopy(DEFAULT_THRESHOLD_CONFIG))
+                    session.add(
+                        RuntimeConfig(
+                            config_key=self._db_key,
+                            payload=seeded,
+                            updated_at=int(time.time() * 1000),
+                        )
+                    )
+                    return seeded
+                if not isinstance(row.payload, dict):
+                    raise ThresholdValidationError("Database threshold payload must be a JSON object.")
+                return row.payload
+        except Exception:
+            return None
+
+    def _write_file(self, validated: dict[str, Any]) -> None:
+        if self._path is None:
+            return
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        with NamedTemporaryFile("w", encoding="utf-8", dir=self._path.parent, delete=False) as handle:
+            json.dump(validated, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+            temp_path = Path(handle.name)
+        temp_path.replace(self._path)
+        self._mtime_ns = self._path.stat().st_mtime_ns
+
+    def _write_db(self, validated: dict[str, Any]) -> None:
+        try:
+            now_ms = int(time.time() * 1000)
+            with session_scope() as session:
+                row = session.query(RuntimeConfig).filter(RuntimeConfig.config_key == self._db_key).first()
+                if row is None:
+                    session.add(RuntimeConfig(config_key=self._db_key, payload=validated, updated_at=now_ms))
+                else:
+                    row.payload = validated
+                    row.updated_at = now_ms
+        except Exception:
+            # DB persistence is best-effort; file persistence still keeps runtime configurability.
+            pass
+
     def _reload(self, *, force: bool = False) -> None:
         with self._lock:
-            if self._path is None or not self._path.exists():
-                self._config = _validate_config(deepcopy(DEFAULT_THRESHOLD_CONFIG))
-                self._mtime_ns = None
+            now_s = time.monotonic()
+            file_changed = force
+
+            if self._path is not None and self._path.exists():
+                current_mtime = self._path.stat().st_mtime_ns
+                file_changed = force or self._mtime_ns != current_mtime
+            elif self._mtime_ns is not None:
+                file_changed = True
+
+            db_due = force or now_s >= self._next_db_check_s
+            if not file_changed and not db_due:
                 return
 
-            stat = self._path.stat()
-            if not force and self._mtime_ns == stat.st_mtime_ns:
-                return
+            candidate = self._load_file_config()
 
-            raw = json.loads(self._path.read_text(encoding="utf-8"))
-            if not isinstance(raw, dict):
-                raise ThresholdValidationError("Threshold file must contain a JSON object.")
-            merged = _merge_threshold_config(DEFAULT_THRESHOLD_CONFIG, raw)
-            self._config = _validate_config(merged)
-            self._mtime_ns = stat.st_mtime_ns
+            if db_due:
+                self._next_db_check_s = now_s + 2.0
+                db_patch = self._load_db_patch()
+                if db_patch:
+                    candidate = _validate_config(_merge_threshold_config(candidate, db_patch))
+
+            self._config = candidate
 
     def get_config(self) -> dict[str, Any]:
         self._reload()
         return deepcopy(self._config)
 
+    def update(self, patch: dict[str, Any]) -> dict[str, Any]:
+        if not isinstance(patch, dict):
+            raise ThresholdValidationError("Threshold update payload must be a JSON object.")
 
-threshold_store = ThresholdConfigStore(THRESHOLDS_FILE)
+        with self._lock:
+            merged = _merge_threshold_config(self.get_config(), patch)
+            validated = _validate_config(merged)
+            self._write_file(validated)
+            self._write_db(validated)
+            self._config = validated
+            self._next_db_check_s = time.monotonic() + 2.0
+            return deepcopy(validated)
+
+
+threshold_store = ThresholdConfigStore(THRESHOLDS_FILE, THRESHOLDS_DB_KEY)
+
+
+def get_threshold_config() -> dict[str, Any]:
+    return threshold_store.get_config()
+
+
+def update_threshold_config(patch: dict[str, Any]) -> dict[str, Any]:
+    return threshold_store.update(patch)
 
 
 def get_metric_threshold(metric_id: str, key: str, fallback: float | None = None) -> float | None:
@@ -215,3 +371,8 @@ def get_health_status_thresholds() -> dict[str, float]:
         "degraded": float(config["healthStatus"]["degraded"]),
         "warning": float(config["healthStatus"]["warning"]),
     }
+
+
+def get_edges() -> dict[str, float]:
+    config = threshold_store.get_config()
+    return {key: float(value) for key, value in config["edges"].items()}

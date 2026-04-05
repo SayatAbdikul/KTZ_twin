@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import deque
 from typing import Any
 
-from app.thresholds import get_health_status_thresholds, get_metric_threshold
+from app.thresholds import get_edges, get_health_status_thresholds, get_metric_threshold
 
 WINDOW_1S_MS = 1_000
 WINDOW_5S_MS = 5_000
@@ -189,6 +189,37 @@ def evaluate_runtime(locomotive_id: str, frame: dict[str, Any], history: deque[d
     voltage_critical_low = get_metric_threshold("electrical.traction_voltage", "criticalLow", 2400.0) or 2400.0
     current_warning_high = get_metric_threshold("electrical.traction_current", "warningHigh", 1600.0) or 1600.0
     current_critical_high = get_metric_threshold("electrical.traction_current", "criticalHigh", 1800.0) or 1800.0
+    edges = get_edges()
+
+    high_speed_min_kmh = edges["highSpeedMinKmh"]
+    hard_brake_pipe_bar = edges["hardBrakePipeBar"]
+    hard_brake_main_bar = edges["hardBrakeMainBar"]
+    not_braking_pipe_bar = edges["notBrakingPipeBar"]
+    not_braking_main_bar = edges["notBrakingMainBar"]
+    high_current_low_accel_a = edges["highCurrentALowAccel"]
+    high_current_a = edges["highCurrentA"]
+    very_high_current_a = edges["veryHighCurrentA"]
+    low_accel_mps2 = edges["lowAccelMps2"]
+    speed_cap_for_low_accel_kmh = edges["speedCapForLowAccelKmh"]
+    weak_brake_response_min_speed_kmh = edges["weakBrakeResponseMinSpeedKmh"]
+    weak_brake_response_min_drop_kmh_3s = edges["weakBrakeResponseMinDropKmh3s"]
+    pneumatic_drop_pipe_bar = edges["pneumaticDropPipeBar"]
+    pneumatic_drop_main_bar = edges["pneumaticDropMainBar"]
+    fuel_penalty_low_speed_kmh = edges["fuelPenaltyLowSpeedKmh"]
+    fuel_penalty_cruise_speed_kmh = edges["fuelPenaltyCruiseSpeedKmh"]
+    fuel_penalty_low_speed_rate_lph = edges["fuelPenaltyLowSpeedRateLph"]
+    fuel_penalty_cruise_rate_lph = edges["fuelPenaltyCruiseRateLph"]
+    fuel_penalty_high_speed_rate_lph = edges["fuelPenaltyHighSpeedRateLph"]
+    fuel_efficiency_penalty_points = edges["fuelEfficiencyPenaltyPoints"]
+    low_speed_factor_max_kmh = edges["lowSpeedFactorMaxKmh"]
+    high_speed_factor_min_kmh = edges["highSpeedFactorMinKmh"]
+    speed_factor_low = edges["speedFactorLow"]
+    speed_factor_nominal = edges["speedFactorNominal"]
+    speed_factor_high = edges["speedFactorHigh"]
+    overall_weight_braking = edges["overallWeightBraking"]
+    overall_weight_thermal = edges["overallWeightThermal"]
+    overall_weight_powertrain = edges["overallWeightPowertrain"]
+    overall_weight_fault = edges["overallWeightFault"]
 
     speed_drop_3s = _speed_drop(history, now_ms, 3_000)
     speed_3s_ago = _value_at_or_before(history, now_ms, 3_000, "speed_kmh", sample["speed_kmh"])
@@ -196,39 +227,54 @@ def evaluate_runtime(locomotive_id: str, frame: dict[str, Any], history: deque[d
     brake_main_3s_ago = _value_at_or_before(history, now_ms, 3_000, "brake_main_bar", sample["brake_main_bar"])
 
     accel_3s_est = (sample["speed_kmh"] - speed_3s_ago) / 3.0 / 3.6
-    high_speed = speed_1s >= 60.0
+    high_speed = speed_1s >= high_speed_min_kmh
     brake_command = brake_pipe_1s < 4.6 or brake_main_1s < 7.4
-    hard_brake_command = brake_pipe_1s < 4.3 or brake_main_1s < 6.8
-    not_braking = brake_pipe_1s > 4.8 and brake_main_1s > 7.8
+    hard_brake_command = brake_pipe_1s < hard_brake_pipe_bar or brake_main_1s < hard_brake_main_bar
+    not_braking = brake_pipe_1s > not_braking_pipe_bar and brake_main_1s > not_braking_main_bar
 
-    high_current_low_accel = current_5s > 650.0 and accel_3s_est < 0.05 and not_braking and speed_1s < 70.0
-    weak_brake_response = hard_brake_command and speed_1s > 40.0 and speed_drop_3s < 5.0
-    pneumatic_response_gap = (
-        brake_pipe_3s_ago - brake_pipe_1s > 0.25
-        and brake_main_3s_ago - brake_main_1s < 0.2
-        and speed_1s > 40.0
+    high_current_low_accel = (
+        current_5s > high_current_low_accel_a
+        and accel_3s_est < low_accel_mps2
+        and not_braking
+        and speed_1s < speed_cap_for_low_accel_kmh
     )
-    high_current_duration_ms = _duration_ms(w30, lambda s: s["traction_current_a"] > 700.0)
-    very_high_current_duration_ms = _duration_ms(w30, lambda s: s["traction_current_a"] > 900.0)
+    weak_brake_response = (
+        hard_brake_command
+        and speed_1s > weak_brake_response_min_speed_kmh
+        and speed_drop_3s < weak_brake_response_min_drop_kmh_3s
+    )
+    pneumatic_response_gap = (
+        brake_pipe_3s_ago - brake_pipe_1s > pneumatic_drop_pipe_bar
+        and brake_main_3s_ago - brake_main_1s < pneumatic_drop_main_bar
+        and speed_1s > weak_brake_response_min_speed_kmh
+    )
+    high_current_duration_ms = _duration_ms(w30, lambda s: s["traction_current_a"] > high_current_a)
+    very_high_current_duration_ms = _duration_ms(w30, lambda s: s["traction_current_a"] > very_high_current_a)
     high_current_low_accel_duration_ms = _duration_ms(
         w30,
         lambda s: (
-            s["traction_current_a"] > 650.0
-            and s["accel_mps2"] < 0.05
-            and s["brake_pipe_bar"] > 4.8
-            and s["brake_main_bar"] > 7.8
-            and s["speed_kmh"] < 70.0
+            s["traction_current_a"] > high_current_low_accel_a
+            and s["accel_mps2"] < low_accel_mps2
+            and s["brake_pipe_bar"] > not_braking_pipe_bar
+            and s["brake_main_bar"] > not_braking_main_bar
+            and s["speed_kmh"] < speed_cap_for_low_accel_kmh
         ),
     )
     fuel_efficiency_penalty = 0.0
-    if speed_30s < 20.0 and fuel_rate_30s > 80.0:
-        fuel_efficiency_penalty = 10.0
-    elif 20.0 <= speed_30s < 50.0 and fuel_rate_30s > 140.0:
-        fuel_efficiency_penalty = 10.0
-    elif speed_30s >= 50.0 and fuel_rate_30s > 220.0:
-        fuel_efficiency_penalty = 10.0
+    if speed_30s < fuel_penalty_low_speed_kmh and fuel_rate_30s > fuel_penalty_low_speed_rate_lph:
+        fuel_efficiency_penalty = fuel_efficiency_penalty_points
+    elif fuel_penalty_low_speed_kmh <= speed_30s < fuel_penalty_cruise_speed_kmh and fuel_rate_30s > fuel_penalty_cruise_rate_lph:
+        fuel_efficiency_penalty = fuel_efficiency_penalty_points
+    elif speed_30s >= fuel_penalty_cruise_speed_kmh and fuel_rate_30s > fuel_penalty_high_speed_rate_lph:
+        fuel_efficiency_penalty = fuel_efficiency_penalty_points
 
-    speed_factor = 0.5 if speed_1s < 10.0 else 1.0 if speed_1s <= 40.0 else 1.5
+    speed_factor = (
+        speed_factor_low
+        if speed_1s < low_speed_factor_max_kmh
+        else speed_factor_nominal
+        if speed_1s <= high_speed_factor_min_kmh
+        else speed_factor_high
+    )
 
     braking_score = 100.0
     if brake_pipe_1s < 4.8 and speed_1s > 40.0:
@@ -288,10 +334,10 @@ def evaluate_runtime(locomotive_id: str, frame: dict[str, Any], history: deque[d
 
     overall = round(
         _clamp(
-            0.40 * braking_score
-            + 0.25 * thermal_score
-            + 0.20 * powertrain_score
-            + 0.15 * fault_score
+            overall_weight_braking * braking_score
+            + overall_weight_thermal * thermal_score
+            + overall_weight_powertrain * powertrain_score
+            + overall_weight_fault * fault_score
         )
     )
 

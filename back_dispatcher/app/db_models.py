@@ -170,3 +170,12 @@ class ApplicationLog(Base):
     message: Mapped[str] = mapped_column(Text)
     exception: Mapped[str | None] = mapped_column(Text, nullable=True)
     context: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+
+class RuntimeConfig(Base):
+    __tablename__ = "runtime_configs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    config_key: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    payload: Mapped[dict] = mapped_column(JSONB)
+    updated_at: Mapped[int] = mapped_column(BigInteger, index=True)
