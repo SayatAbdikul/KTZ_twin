@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import { X } from 'lucide-react'
 import { AlertFeed } from '@/components/alerts/AlertFeed'
-import { ExportMenu } from '@/components/common/ExportMenu'
 import { SectionHeader } from '@/components/common/SectionHeader'
 import { StatusBadge } from '@/components/common/StatusBadge'
 import { DispatcherInbox } from '@/components/messaging/DispatcherInbox'
@@ -10,21 +9,16 @@ import { HealthExplainer } from '@/components/metrics/HealthExplainer'
 import { HealthGauge } from '@/components/metrics/HealthGauge'
 import { SubsystemBar } from '@/components/metrics/SubsystemBar'
 import { PageContainer } from '@/components/layout/PageContainer'
-import { APP_CONFIG } from '@/config/app.config'
 import { METRIC_GROUPS } from '@/config/metrics.config'
 import { ROUTES } from '@/config/routes'
-import { useAlertStore } from '@/features/alerts/useAlertStore'
 import { useAuthStore } from '@/features/auth/useAuthStore'
 import { getFleetLocomotiveOptions, useFleetStore, type FleetLocomotiveSummary } from '@/features/fleet/useFleetStore'
 import { useHealthStore } from '@/features/health/useHealthStore'
 import { useMetricCatalog } from '@/features/telemetry/metricCatalog'
-import type { Alert } from '@/types/alerts'
-import type { HealthIndex, SubsystemPenalty } from '@/types/health'
+import type { HealthIndex } from '@/types/health'
 import type { MetricGroup } from '@/types/telemetry'
 import { cn } from '@/utils/cn'
-import { downloadCsv } from '@/utils/exportCsv'
-import { escapeHtml, printReport } from '@/utils/exportPdf'
-import { formatDate, relativeTime } from '@/utils/formatters'
+import { relativeTime } from '@/utils/formatters'
 
 const DASHBOARD_GROUPS: MetricGroup[] = [
   'motion',
@@ -36,74 +30,6 @@ const DASHBOARD_GROUPS: MetricGroup[] = [
 function formatCompactValue(value: number | null, suffix: string) {
   if (value === null || Number.isNaN(value)) return '--'
   return `${value.toFixed(0)} ${suffix}`
-}
-
-function formatMetricValueForReport(
-  metricId: string,
-  value: number,
-  definitions: ReturnType<typeof useMetricCatalog>
-) {
-  const definition = definitions.find((item) => item.metricId === metricId)
-  const precision = definition?.precision ?? 1
-  const unit = definition?.unit ?? ''
-  return `${value.toFixed(precision)}${unit ? ` ${unit}` : ''}`
-}
-
-function renderPrintTable(headers: string[], rows: string[][], emptyText: string) {
-  if (rows.length === 0) {
-    return `<div class="empty-state">${escapeHtml(emptyText)}</div>`
-  }
-
-  const headerHtml = headers.map((header) => `<th>${escapeHtml(header)}</th>`).join('')
-  const rowHtml = rows
-    .map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`)
-    .join('')
-
-  return `<table><thead><tr>${headerHtml}</tr></thead><tbody>${rowHtml}</tbody></table>`
-}
-
-function renderSubsystemRows(healthIndex: HealthIndex | null) {
-  if (!healthIndex) {
-    return []
-  }
-
-  return healthIndex.subsystems.map((subsystem) => [
-    subsystem.label,
-    subsystem.status,
-    subsystem.healthScore.toFixed(0),
-    String(subsystem.activeAlertCount),
-  ])
-}
-
-function renderTopFactorRows(
-  penalties: SubsystemPenalty[],
-  definitions: ReturnType<typeof useMetricCatalog>
-) {
-  return penalties.map((penalty) => {
-    const direction = penalty.thresholdType.endsWith('High') ? 'Above' : 'Below'
-    const thresholdLabel = penalty.thresholdType.startsWith('critical') ? 'Critical' : 'Warning'
-    return [
-      penalty.metricLabel,
-      formatMetricValueForReport(penalty.metricId, penalty.currentValue, definitions),
-      `${direction} ${thresholdLabel} (${formatMetricValueForReport(
-        penalty.metricId,
-        penalty.thresholdValue,
-        definitions
-      )})`,
-      `-${penalty.penaltyPoints.toFixed(0)}`,
-    ]
-  })
-}
-
-function renderAlertRows(alerts: Alert[]) {
-  return alerts.map((alert) => [
-    alert.severity,
-    alert.status,
-    alert.title,
-    alert.source,
-    formatDate(alert.triggeredAt),
-    alert.description,
-  ])
 }
 
 function FleetHealthCard({
@@ -247,17 +173,12 @@ function LocomotiveDetailPanel({
 }
 
 export function DashboardPage() {
-  const [isPrinting, setIsPrinting] = useState(false)
-  const [isExportingTelemetry, setIsExportingTelemetry] = useState(false)
-  const [isExportingAlerts, setIsExportingAlerts] = useState(false)
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
   const user = useAuthStore((s) => s.user)
   const locomotives = useFleetStore((s) => s.locomotives)
   const selectedLocomotiveId = useFleetStore((s) => s.selectedLocomotiveId)
   const selectLocomotive = useFleetStore((s) => s.selectLocomotive)
   const healthByLocomotive = useHealthStore((s) => s.byLocomotive)
-  const alertsByLocomotive = useAlertStore((s) => s.alertsByLocomotive)
-  const summaryByLocomotive = useAlertStore((s) => s.summaryByLocomotive)
   const metricDefinitions = useMetricCatalog()
 
   const isTrainUser = user?.role === 'regular_train'
@@ -278,97 +199,6 @@ export function DashboardPage() {
   const healthIndex = effectiveSelectedLocomotiveId
     ? healthByLocomotive[effectiveSelectedLocomotiveId] ?? null
     : null
-  const alerts = effectiveSelectedLocomotiveId ? alertsByLocomotive[effectiveSelectedLocomotiveId] ?? [] : []
-  const alertSummary = effectiveSelectedLocomotiveId
-    ? summaryByLocomotive[effectiveSelectedLocomotiveId] ?? { criticalCount: 0, warningCount: 0, infoCount: 0, totalActive: 0 }
-    : { criticalCount: 0, warningCount: 0, infoCount: 0, totalActive: 0 }
-  const activeAlerts = alerts.filter((alert) => alert.status !== 'resolved')
-  const canExportServiceCsv =
-    effectiveSelectedLocomotiveId === null || effectiveSelectedLocomotiveId === APP_CONFIG.LOCOMOTIVE_ID
-
-  async function handlePrintReport() {
-    setIsPrinting(true)
-    try {
-      await printReport({
-        title: 'KTZ Digital Twin Dashboard Report',
-        subtitle: 'Live operator dashboard snapshot prepared for browser print-to-PDF.',
-        meta: [
-          { label: 'Locomotive', value: selectedSummary?.locomotiveId ?? APP_CONFIG.LOCOMOTIVE_ID },
-          { label: 'Generated At', value: formatDate(Date.now()) },
-          {
-            label: 'Overall Health',
-            value: healthIndex ? `${healthIndex.overall.toFixed(0)} / 100` : 'Unavailable',
-          },
-        ],
-        sections: [
-          {
-            title: 'Subsystem Breakdown',
-            html: renderPrintTable(
-              ['Subsystem', 'Status', 'Health Score', 'Active Alerts'],
-              renderSubsystemRows(healthIndex),
-              'Health data is not currently available.'
-            ),
-          },
-          {
-            title: 'Top Contributing Factors',
-            html: renderPrintTable(
-              ['Metric', 'Current Value', 'Threshold Reference', 'Penalty'],
-              renderTopFactorRows(healthIndex?.topFactors ?? [], metricDefinitions),
-              'No active threshold penalties.'
-            ),
-          },
-          {
-            title: 'Active Alerts',
-            html: `
-              <div class="summary-grid">
-                <div class="summary-pill severity-critical">${alertSummary.criticalCount} critical</div>
-                <div class="summary-pill severity-warning">${alertSummary.warningCount} warning</div>
-                <div class="summary-pill severity-info">${alertSummary.infoCount} info</div>
-                <div class="summary-pill">${alertSummary.totalActive} total active</div>
-              </div>
-              ${renderPrintTable(
-                ['Severity', 'Status', 'Title', 'Source', 'Triggered At', 'Description'],
-                renderAlertRows(activeAlerts),
-                'No active alerts.'
-              )}
-            `,
-          },
-        ],
-      })
-    } catch (error) {
-      window.alert(error instanceof Error ? error.message : 'Failed to open the print report.')
-    } finally {
-      setIsPrinting(false)
-    }
-  }
-
-  async function handleTelemetryExport() {
-    setIsExportingTelemetry(true)
-    try {
-      await downloadCsv({
-        path: '/api/export/telemetry/csv',
-        fallbackFilename: 'telemetry.csv',
-      })
-    } catch (error) {
-      window.alert(error instanceof Error ? error.message : 'Failed to export telemetry CSV.')
-    } finally {
-      setIsExportingTelemetry(false)
-    }
-  }
-
-  async function handleAlertsExport() {
-    setIsExportingAlerts(true)
-    try {
-      await downloadCsv({
-        path: '/api/export/alerts/csv',
-        fallbackFilename: 'alerts.csv',
-      })
-    } catch (error) {
-      window.alert(error instanceof Error ? error.message : 'Failed to export alerts CSV.')
-    } finally {
-      setIsExportingAlerts(false)
-    }
-  }
 
   return (
     <PageContainer className="space-y-4">
@@ -385,35 +215,6 @@ export function DashboardPage() {
               <div className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs uppercase tracking-[0.24em] text-slate-400">
                 {visibleLocomotiveIds.length} active ids
               </div>
-              <ExportMenu
-                actions={[
-                  {
-                    id: 'dashboard-telemetry-csv',
-                    label: isExportingTelemetry ? 'Exporting Telemetry...' : 'Export Telemetry CSV',
-                    description: canExportServiceCsv
-                      ? 'Download the raw live telemetry history buffer as CSV.'
-                      : `CSV export is only available for ${APP_CONFIG.LOCOMOTIVE_ID}.`,
-                    disabled: isExportingTelemetry || !canExportServiceCsv,
-                    onSelect: handleTelemetryExport,
-                  },
-                  {
-                    id: 'dashboard-alerts-csv',
-                    label: isExportingAlerts ? 'Exporting Alerts...' : 'Export Alerts CSV',
-                    description: canExportServiceCsv
-                      ? 'Download the current alert feed as CSV.'
-                      : `CSV export is only available for ${APP_CONFIG.LOCOMOTIVE_ID}.`,
-                    disabled: isExportingAlerts || !canExportServiceCsv,
-                    onSelect: handleAlertsExport,
-                  },
-                  {
-                    id: 'dashboard-print',
-                    label: isPrinting ? 'Preparing Report...' : 'Print Report',
-                    description: 'Open a print-friendly dashboard report for Save as PDF.',
-                    disabled: isPrinting,
-                    onSelect: handlePrintReport,
-                  },
-                ]}
-              />
             </div>
           </div>
 

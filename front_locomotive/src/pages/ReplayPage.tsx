@@ -1,7 +1,9 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { History } from 'lucide-react'
 import { PageContainer } from '@/components/layout/PageContainer'
 import { TimeRangeSelector } from '@/components/charts/TimeRangeSelector'
+import { ExportMenu } from '@/components/common/ExportMenu'
+import { APP_CONFIG } from '@/config/app.config'
 import { useFleetStore } from '@/features/fleet/useFleetStore'
 import { PlaybackControls } from '@/components/replay/PlaybackControls'
 import { TimelineScrubber } from '@/components/replay/TimelineScrubber'
@@ -10,8 +12,13 @@ import { ReplaySnapshotSummary } from '@/components/replay/ReplaySnapshotSummary
 import { ReplayChart } from '@/components/replay/ReplayChart'
 import { REPLAY_SKIP_INTERVAL_MS, useReplayStore } from '@/features/replay/useReplayStore'
 import { useMetricCatalog } from '@/features/telemetry/metricCatalog'
+import type { Alert } from '@/types/alerts'
+import type { HealthIndex, SubsystemPenalty } from '@/types/health'
 import type { MetricDefinition } from '@/types/telemetry'
 import type { ReplayResolution } from '@/types/replay'
+import { downloadCsv } from '@/utils/exportCsv'
+import { escapeHtml, printReport } from '@/utils/exportPdf'
+import { formatDate } from '@/utils/formatters'
 
 const REPLAY_WINDOW_PRESETS = ['1m', '5m', '15m'] as const
 
@@ -48,6 +55,74 @@ function clampToBounds(value: number, lower: number, upper: number): number {
   return Math.min(upper, Math.max(lower, value))
 }
 
+function renderPrintTable(headers: string[], rows: string[][], emptyText: string) {
+  if (rows.length === 0) {
+    return `<div class="empty-state">${escapeHtml(emptyText)}</div>`
+  }
+
+  const headerHtml = headers.map((header) => `<th>${escapeHtml(header)}</th>`).join('')
+  const rowHtml = rows
+    .map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`)
+    .join('')
+
+  return `<table><thead><tr>${headerHtml}</tr></thead><tbody>${rowHtml}</tbody></table>`
+}
+
+function formatMetricValueForReport(
+  metricId: string,
+  value: number,
+  definitions: MetricDefinition[]
+) {
+  const definition = definitions.find((item) => item.metricId === metricId)
+  const precision = definition?.precision ?? 1
+  const unit = definition?.unit ?? ''
+  return `${value.toFixed(precision)}${unit ? ` ${unit}` : ''}`
+}
+
+function renderSubsystemRows(healthIndex: HealthIndex | null) {
+  if (!healthIndex) {
+    return []
+  }
+
+  return healthIndex.subsystems.map((subsystem) => [
+    subsystem.label,
+    subsystem.status,
+    subsystem.healthScore.toFixed(0),
+    String(subsystem.activeAlertCount),
+  ])
+}
+
+function renderTopFactorRows(
+  penalties: SubsystemPenalty[],
+  definitions: MetricDefinition[]
+) {
+  return penalties.map((penalty) => {
+    const direction = penalty.thresholdType.endsWith('High') ? 'Above' : 'Below'
+    const thresholdLabel = penalty.thresholdType.startsWith('critical') ? 'Critical' : 'Warning'
+    return [
+      penalty.metricLabel,
+      formatMetricValueForReport(penalty.metricId, penalty.currentValue, definitions),
+      `${direction} ${thresholdLabel} (${formatMetricValueForReport(
+        penalty.metricId,
+        penalty.thresholdValue,
+        definitions
+      )})`,
+      `-${penalty.penaltyPoints.toFixed(0)}`,
+    ]
+  })
+}
+
+function renderAlertRows(alerts: Alert[]) {
+  return alerts.map((alert) => [
+    alert.severity,
+    alert.status,
+    alert.title,
+    alert.source,
+    formatDate(alert.triggeredAt),
+    alert.description,
+  ])
+}
+
 function formatRangeLabel(earliest: number | null, latest: number | null): string {
   if (earliest === null || latest === null) return 'No replay history available yet'
 
@@ -63,6 +138,9 @@ function formatRangeLabel(earliest: number | null, latest: number | null): strin
 }
 
 export function ReplayPage() {
+  const [isPrinting, setIsPrinting] = useState(false)
+  const [isExportingTelemetry, setIsExportingTelemetry] = useState(false)
+  const [isExportingAlerts, setIsExportingAlerts] = useState(false)
   const selectedLocomotiveId = useFleetStore((s) => s.selectedLocomotiveId)
   const metricDefinitions = useMetricCatalog()
   const timeRange = useReplayStore((state) => state.timeRange)
@@ -110,6 +188,8 @@ export function ReplayPage() {
   )
 
   const hasReplayData = timeRange?.earliest !== null && timeRange?.latest !== null
+  const canExportServiceCsv =
+    selectedLocomotiveId === null || selectedLocomotiveId === APP_CONFIG.LOCOMOTIVE_ID
   const scrubberWindow = useMemo(() => {
     if (!loadedWindow) return null
     return {
@@ -182,6 +262,105 @@ export function ReplayPage() {
     void setSelectedMetricIds(selectedLocomotiveId, nextMetricIds)
   }
 
+  async function handleTelemetryExport() {
+    setIsExportingTelemetry(true)
+    try {
+      await downloadCsv({
+        path: '/api/export/telemetry/csv',
+        fallbackFilename: 'telemetry.csv',
+      })
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Failed to export telemetry CSV.')
+    } finally {
+      setIsExportingTelemetry(false)
+    }
+  }
+
+  async function handleAlertsExport() {
+    setIsExportingAlerts(true)
+    try {
+      await downloadCsv({
+        path: '/api/export/alerts/csv',
+        fallbackFilename: 'alerts.csv',
+      })
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Failed to export alerts CSV.')
+    } finally {
+      setIsExportingAlerts(false)
+    }
+  }
+
+  async function handlePrintReplayReport() {
+    setIsPrinting(true)
+    try {
+      const healthIndex = snapshot?.health ?? null
+      const alerts = snapshot?.alerts ?? []
+      const activeAlerts = alerts.filter((alert) => alert.status !== 'resolved')
+      const alertSummary = activeAlerts.reduce(
+        (summary, alert) => {
+          if (alert.severity === 'critical') summary.criticalCount += 1
+          else if (alert.severity === 'warning') summary.warningCount += 1
+          else summary.infoCount += 1
+          summary.totalActive += 1
+          return summary
+        },
+        { criticalCount: 0, warningCount: 0, infoCount: 0, totalActive: 0 }
+      )
+
+      await printReport({
+        title: 'KTZ Digital Twin Dashboard Report',
+        subtitle: 'Replay snapshot report at the current cursor (dashboard-style format).',
+        meta: [
+          { label: 'Locomotive', value: selectedLocomotiveId ?? APP_CONFIG.LOCOMOTIVE_ID },
+          { label: 'Replay Cursor', value: currentTimestamp ? formatDate(currentTimestamp) : 'Unavailable' },
+          {
+            label: 'Overall Health',
+            value: healthIndex ? `${healthIndex.overall.toFixed(0)} / 100` : 'Unavailable',
+          },
+          { label: 'Generated At', value: formatDate(Date.now()) },
+        ],
+        sections: [
+          {
+            title: 'Subsystem Breakdown',
+            html: renderPrintTable(
+              ['Subsystem', 'Status', 'Health Score', 'Active Alerts'],
+              renderSubsystemRows(healthIndex),
+              'Health data is not currently available at this replay timestamp.'
+            ),
+          },
+          {
+            title: 'Top Contributing Factors',
+            html: renderPrintTable(
+              ['Metric', 'Current Value', 'Threshold Reference', 'Penalty'],
+              renderTopFactorRows(healthIndex?.topFactors ?? [], metricDefinitions),
+              'No active threshold penalties at this replay timestamp.'
+            ),
+          },
+          {
+            title: 'Active Alerts',
+            html: `
+              <div class="summary-grid">
+                <div class="summary-pill severity-critical">${alertSummary.criticalCount} critical</div>
+                <div class="summary-pill severity-warning">${alertSummary.warningCount} warning</div>
+                <div class="summary-pill severity-info">${alertSummary.infoCount} info</div>
+                <div class="summary-pill">${alertSummary.totalActive} total active</div>
+              </div>
+              ${renderPrintTable(
+                ['Severity', 'Status', 'Title', 'Source', 'Triggered At', 'Description'],
+                renderAlertRows(activeAlerts),
+                'No active alerts at this replay timestamp.'
+              )}
+            `,
+          },
+        ],
+      })
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Failed to open replay report.')
+    } finally {
+      setIsPrinting(false)
+    }
+  }
+
   return (
     <PageContainer className="space-y-4">
       <div className="flex flex-col gap-2 xl:flex-row xl:items-end xl:justify-between">
@@ -197,14 +376,45 @@ export function ReplayPage() {
           </div>
         </div>
 
-        <TimeRangeSelector
-          value={visibleWindow}
-          options={[...REPLAY_WINDOW_PRESETS]}
-          onChange={(preset) => {
-            if (!selectedLocomotiveId) return
-            void setVisibleWindow(selectedLocomotiveId, preset)
-          }}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <TimeRangeSelector
+            value={visibleWindow}
+            options={[...REPLAY_WINDOW_PRESETS]}
+            onChange={(preset) => {
+              if (!selectedLocomotiveId) return
+              void setVisibleWindow(selectedLocomotiveId, preset)
+            }}
+          />
+          <ExportMenu
+            actions={[
+              {
+                id: 'replay-telemetry-csv',
+                label: isExportingTelemetry ? 'Exporting Telemetry...' : 'Export Telemetry CSV',
+                description: canExportServiceCsv
+                  ? 'Download telemetry history as CSV.'
+                  : `CSV export is only available for ${APP_CONFIG.LOCOMOTIVE_ID}.`,
+                disabled: isExportingTelemetry || !canExportServiceCsv,
+                onSelect: handleTelemetryExport,
+              },
+              {
+                id: 'replay-alerts-csv',
+                label: isExportingAlerts ? 'Exporting Alerts...' : 'Export Alerts CSV',
+                description: canExportServiceCsv
+                  ? 'Download alerts history as CSV.'
+                  : `CSV export is only available for ${APP_CONFIG.LOCOMOTIVE_ID}.`,
+                disabled: isExportingAlerts || !canExportServiceCsv,
+                onSelect: handleAlertsExport,
+              },
+              {
+                id: 'replay-print',
+                label: isPrinting ? 'Preparing Report...' : 'Print Report',
+                description: 'Open a print-friendly report from current replay snapshot.',
+                disabled: isPrinting,
+                onSelect: handlePrintReplayReport,
+              },
+            ]}
+          />
+        </div>
       </div>
 
       {error ? (
