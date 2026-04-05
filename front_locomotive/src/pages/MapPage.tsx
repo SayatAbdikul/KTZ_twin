@@ -16,6 +16,7 @@ import {
   parseOverpassSegments,
   RAILWAY_TILE_API,
   sampleRoute,
+  snapToRailway,
   type Coordinate,
   type RailSegment,
 } from '@/features/map/railMap'
@@ -46,9 +47,10 @@ interface RailState {
 }
 
 const SIMULATION_TICK_MS = 1000
-const ROUTE_FETCH_SAMPLE_STEP_KM = 80
-const ROUTE_ALIGNMENT_STEP_KM = 18
+const ROUTE_FETCH_SAMPLE_STEP_KM = 40
+const ROUTE_ALIGNMENT_STEP_KM = 8
 const TRAIL_POINT_LIMIT = 180
+const MAX_RAIL_SNAP_DISTANCE_KM = 6
 const DEFAULT_ROUTE_LENGTH_KM = getRouteLengthKm(FALLBACK_ROUTE)
 const TRAIN_SPACING_KM = DEFAULT_ROUTE_LENGTH_KM / 10
 const TRAIN_COLORS = [
@@ -109,6 +111,21 @@ function resolveSimulatedPosition(
     source,
     distanceKm: normalizedDistanceKm,
     timestamp,
+  }
+}
+
+function snapPositionToRail(position: PositionDetails, segments: RailSegment[]) {
+  const snapped = snapToRailway(position.lat, position.lon, segments)
+
+  if (!snapped || snapped.distanceKm > MAX_RAIL_SNAP_DISTANCE_KM) {
+    return position
+  }
+
+  return {
+    ...position,
+    lat: snapped.lat,
+    lon: snapped.lon,
+    source: `${position.source} + rail snap (${(snapped.distanceKm * 1000).toFixed(0)} m)`,
   }
 }
 
@@ -262,12 +279,15 @@ export function MapPage() {
           current.map((train) => {
             const routeProgress = previousRouteLengthKm > 0 ? train.distanceKm / previousRouteLengthKm : 0
             const distanceKm = alignedRouteLengthKm * routeProgress
-            const position = resolveSimulatedPosition(
-              distanceKm,
-              train.position.timestamp,
-              simulationRouteRef.current,
-              simulationRouteLengthRef.current,
-              simulationRouteSourceRef.current
+            const position = snapPositionToRail(
+              resolveSimulatedPosition(
+                distanceKm,
+                train.position.timestamp,
+                simulationRouteRef.current,
+                simulationRouteLengthRef.current,
+                simulationRouteSourceRef.current
+              ),
+              segments
             )
             return {
               ...train,
@@ -297,12 +317,15 @@ export function MapPage() {
             simulationRouteLengthRef.current > 0
               ? (train.distanceKm + (speedKmh * SIMULATION_TICK_MS) / 3_600_000) % simulationRouteLengthRef.current
               : 0
-          const nextPosition = resolveSimulatedPosition(
-            nextDistanceKm,
-            now,
-            simulationRouteRef.current,
-            simulationRouteLengthRef.current,
-            simulationRouteSourceRef.current
+          const nextPosition = snapPositionToRail(
+            resolveSimulatedPosition(
+              nextDistanceKm,
+              now,
+              simulationRouteRef.current,
+              simulationRouteLengthRef.current,
+              simulationRouteSourceRef.current
+            ),
+            railStateRef.current.segments
           )
           const nextCoordinate: Coordinate = [nextPosition.lat, nextPosition.lon]
           const previousCoordinate = train.trail[train.trail.length - 1]

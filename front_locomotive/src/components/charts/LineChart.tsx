@@ -1,6 +1,8 @@
 import { useRef, useEffect } from 'react'
 import ReactECharts from 'echarts-for-react'
 import type { EChartsOption } from 'echarts'
+import { useSettingsStore } from '@/features/settings/useSettingsStore'
+import { getChartTheme } from '@/utils/chartTheme'
 
 export interface LineChartSeries {
   name: string
@@ -36,6 +38,8 @@ export function LineChart({ series, height = 200, windowMs }: LineChartProps) {
   const isApplyingPresetRef = useRef(false)
   const manualZoomRef = useRef(false)
   const { earliest, latest } = getTimeBounds(series)
+  const theme = useSettingsStore((state) => state.theme)
+  const chartTheme = getChartTheme(theme)
 
   useEffect(() => {
     const chart = chartRef.current?.getEchartsInstance()
@@ -47,21 +51,21 @@ export function LineChart({ series, height = 200, windowMs }: LineChartProps) {
       grid: { top: 16, bottom: 64, left: 48, right: 16 },
       tooltip: {
         trigger: 'axis',
-        backgroundColor: '#1e2130',
-        borderColor: '#334155',
-        textStyle: { color: '#e2e8f0', fontSize: 11 },
+        backgroundColor: chartTheme.tooltipBackground,
+        borderColor: chartTheme.tooltipBorder,
+        textStyle: { color: chartTheme.text, fontSize: 11 },
       },
       xAxis: {
         type: 'time',
-        axisLine: { lineStyle: { color: '#334155' } },
-        axisLabel: { color: '#64748b', fontSize: 10 },
+        axisLine: { lineStyle: { color: chartTheme.axis } },
+        axisLabel: { color: chartTheme.axisLabel, fontSize: 10 },
         splitLine: { show: false },
       },
       yAxis: {
         type: 'value',
         axisLine: { show: false },
-        axisLabel: { color: '#64748b', fontSize: 10 },
-        splitLine: { lineStyle: { color: '#1e2130' } },
+        axisLabel: { color: chartTheme.axisLabel, fontSize: 10 },
+        splitLine: { lineStyle: { color: chartTheme.splitLine } },
       },
       dataZoom: [
         {
@@ -73,10 +77,10 @@ export function LineChart({ series, height = 200, windowMs }: LineChartProps) {
           xAxisIndex: 0,
           height: 20,
           bottom: 4,
-          borderColor: '#334155',
-          fillerColor: 'rgba(96,165,250,0.15)',
-          handleStyle: { color: '#60a5fa' },
-          textStyle: { color: '#64748b', fontSize: 10 },
+          borderColor: chartTheme.sliderBorder,
+          fillerColor: chartTheme.sliderFiller,
+          handleStyle: { color: chartTheme.sliderHandle },
+          textStyle: { color: chartTheme.axisLabel, fontSize: 10 },
           brushSelect: false,
         },
       ],
@@ -85,7 +89,7 @@ export function LineChart({ series, height = 200, windowMs }: LineChartProps) {
         type: 'line',
         data: s.data.map((p) => [p.timestamp, p.value]),
         symbol: 'none',
-        lineStyle: { color: s.color ?? '#60a5fa', width: 2 },
+        lineStyle: { color: s.color ?? chartTheme.info, width: 2 },
         smooth: true,
       })),
     }
@@ -94,7 +98,7 @@ export function LineChart({ series, height = 200, windowMs }: LineChartProps) {
       chart.setOption(option, { lazyUpdate: true })
     })
     return () => cancelAnimationFrame(frame)
-  }, [series])
+  }, [series, chartTheme])
 
   useEffect(() => {
     const chart = chartRef.current?.getEchartsInstance()

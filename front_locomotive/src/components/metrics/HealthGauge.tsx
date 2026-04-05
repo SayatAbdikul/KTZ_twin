@@ -1,6 +1,8 @@
 import { useRef, useEffect } from 'react'
 import ReactECharts from 'echarts-for-react'
 import type { EChartsOption } from 'echarts'
+import { useSettingsStore } from '@/features/settings/useSettingsStore'
+import { getChartTheme } from '@/utils/chartTheme'
 
 interface HealthGaugeProps {
   score: number
@@ -25,6 +27,8 @@ export function HealthGauge({ score, size = 200 }: HealthGaugeProps) {
   const chartRef = useRef<ReactECharts>(null)
   const color = scoreToColor(score)
   const label = scoreToLabel(score)
+  const theme = useSettingsStore((state) => state.theme)
+  const chartTheme = getChartTheme(theme)
 
   useEffect(() => {
     const chart = chartRef.current?.getEchartsInstance()
@@ -48,7 +52,7 @@ export function HealthGauge({ score, size = 200 }: HealthGaugeProps) {
             itemStyle: { color },
           },
           axisLine: {
-            lineStyle: { width: 12, color: [[1, '#1e2130']] },
+            lineStyle: { width: 12, color: [[1, chartTheme.gaugeTrack]] },
           },
           axisTick: { show: false },
           splitLine: { show: false },
@@ -57,7 +61,7 @@ export function HealthGauge({ score, size = 200 }: HealthGaugeProps) {
             valueAnimation: true,
             fontSize: 32,
             fontWeight: 700,
-            color: '#e2e8f0',
+            color: chartTheme.text,
             fontFamily: 'ui-monospace, monospace',
             offsetCenter: [0, '-5%'],
             formatter: '{value}',
@@ -78,7 +82,7 @@ export function HealthGauge({ score, size = 200 }: HealthGaugeProps) {
       chart.setOption(option, { lazyUpdate: true })
     })
     return () => cancelAnimationFrame(frame)
-  }, [score, color, label])
+  }, [score, color, label, chartTheme])
 
   return (
     <ReactECharts

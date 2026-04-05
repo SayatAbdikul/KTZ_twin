@@ -3,6 +3,8 @@ import type { EChartsOption } from 'echarts'
 import type { MetricDefinition } from '@/types/telemetry'
 import type { ReplayPoint } from '@/types/replay'
 import { getMetricSeverity } from '@/utils/thresholds'
+import { useSettingsStore } from '@/features/settings/useSettingsStore'
+import { getChartTheme } from '@/utils/chartTheme'
 
 interface ReplayChartProps {
   definition: MetricDefinition
@@ -35,39 +37,43 @@ function getValueAtTimestamp(points: ReplayPoint[], currentTimestamp: number | n
   return points[0]?.value
 }
 
-function getThresholdLines(definition: MetricDefinition, currentTimestamp: number | null) {
+function getThresholdLines(
+  definition: MetricDefinition,
+  currentTimestamp: number | null,
+  chartTheme: ReturnType<typeof getChartTheme>
+) {
   const lines: Array<Record<string, unknown>> = []
 
   if (definition.warningLow !== undefined) {
     lines.push({
       name: 'Нижнее предупреждение',
       yAxis: definition.warningLow,
-      lineStyle: { color: '#f59e0b', type: 'dashed', width: 1 },
-      label: { formatter: 'Пред. мин.', color: '#fbbf24' },
+      lineStyle: { color: chartTheme.warning, type: 'dashed', width: 1 },
+      label: { formatter: 'Пред. мин.', color: chartTheme.warning },
     })
   }
   if (definition.warningHigh !== undefined) {
     lines.push({
       name: 'Верхнее предупреждение',
       yAxis: definition.warningHigh,
-      lineStyle: { color: '#f59e0b', type: 'dashed', width: 1 },
-      label: { formatter: 'Пред. макс.', color: '#fbbf24' },
+      lineStyle: { color: chartTheme.warning, type: 'dashed', width: 1 },
+      label: { formatter: 'Пред. макс.', color: chartTheme.warning },
     })
   }
   if (definition.criticalLow !== undefined) {
     lines.push({
       name: 'Нижний критический порог',
       yAxis: definition.criticalLow,
-      lineStyle: { color: '#ef4444', type: 'dashed', width: 1 },
-      label: { formatter: 'Крит. мин.', color: '#f87171' },
+      lineStyle: { color: chartTheme.critical, type: 'dashed', width: 1 },
+      label: { formatter: 'Крит. мин.', color: chartTheme.critical },
     })
   }
   if (definition.criticalHigh !== undefined) {
     lines.push({
       name: 'Верхний критический порог',
       yAxis: definition.criticalHigh,
-      lineStyle: { color: '#ef4444', type: 'dashed', width: 1 },
-      label: { formatter: 'Крит. макс.', color: '#f87171' },
+      lineStyle: { color: chartTheme.critical, type: 'dashed', width: 1 },
+      label: { formatter: 'Крит. макс.', color: chartTheme.critical },
     })
   }
 
@@ -75,8 +81,8 @@ function getThresholdLines(definition: MetricDefinition, currentTimestamp: numbe
     lines.push({
       name: 'Текущий момент',
       xAxis: currentTimestamp,
-      lineStyle: { color: '#e2e8f0', type: 'solid', width: 1 },
-      label: { formatter: 'Сейчас', color: '#e2e8f0' },
+      lineStyle: { color: chartTheme.currentMarker, type: 'solid', width: 1 },
+      label: { formatter: 'Сейчас', color: chartTheme.currentMarker },
     })
   }
 
@@ -84,11 +90,17 @@ function getThresholdLines(definition: MetricDefinition, currentTimestamp: numbe
 }
 
 export function ReplayChart({ definition, points, currentTimestamp }: ReplayChartProps) {
+  const theme = useSettingsStore((state) => state.theme)
+  const chartTheme = getChartTheme(theme)
   const currentValue = getValueAtTimestamp(points, currentTimestamp)
   const severity = currentValue === undefined ? 'normal' : getMetricSeverity(currentValue, definition)
   const stroke =
-    severity === 'critical' ? '#f87171' : severity === 'warning' ? '#fbbf24' : '#60a5fa'
-  const thresholdLines = getThresholdLines(definition, currentTimestamp)
+    severity === 'critical'
+      ? chartTheme.critical
+      : severity === 'warning'
+        ? chartTheme.warning
+        : chartTheme.info
+  const thresholdLines = getThresholdLines(definition, currentTimestamp, chartTheme)
 
   if (points.length === 0) {
     return (
@@ -110,21 +122,21 @@ export function ReplayChart({ definition, points, currentTimestamp }: ReplayChar
     grid: { top: 18, right: 18, bottom: 36, left: 52 },
     tooltip: {
       trigger: 'axis',
-      backgroundColor: '#1e2130',
-      borderColor: '#334155',
-      textStyle: { color: '#e2e8f0', fontSize: 11 },
+      backgroundColor: chartTheme.tooltipBackground,
+      borderColor: chartTheme.tooltipBorder,
+      textStyle: { color: chartTheme.text, fontSize: 11 },
     },
     xAxis: {
       type: 'time',
-      axisLine: { lineStyle: { color: '#334155' } },
-      axisLabel: { color: '#64748b', fontSize: 10 },
+      axisLine: { lineStyle: { color: chartTheme.axis } },
+      axisLabel: { color: chartTheme.axisLabel, fontSize: 10 },
       splitLine: { show: false },
     },
     yAxis: {
       type: 'value',
       axisLine: { show: false },
-      axisLabel: { color: '#64748b', fontSize: 10 },
-      splitLine: { lineStyle: { color: '#1e2130' } },
+      axisLabel: { color: chartTheme.axisLabel, fontSize: 10 },
+      splitLine: { lineStyle: { color: chartTheme.splitLine } },
       min: definition.min,
       max: definition.max,
     },
