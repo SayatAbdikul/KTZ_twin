@@ -1,153 +1,148 @@
-# Stress Testing
+# Нагрузочное тестирование
 
-This repo currently exposes a websocket-heavy runtime:
+Система развёртывает WebSocket-тяжёлый рантайм с Kafka-инжестом:
 
-- `back_dispatcher` opens one upstream websocket per configured locomotive
-- each upstream emits `telemetry.frame` and optional events
-- dispatcher recomputes health in-process and fans results out to dispatcher clients
+- `back_dispatcher` потребляет события из Kafka и/или upstream WebSocket-подключений к локомотивным сервисам
+- Каждый upstream эмитит `telemetry.frame` и операционные события
+- Диспетчер пересчитывает здоровье in-process и фанаутит результаты клиентам через backpressure-очереди
 
-That means the main stress dimensions are:
+Основные измерения нагрузки:
 
-1. concurrent upstream locomotive connections
-2. inbound telemetry rate
-3. outbound fan-out to dispatcher websocket clients
-4. burst behavior, especially when many locomotives or stations spike together
+1. Конкурентные upstream-подключения локомотивов
+2. Входящая частота телеметрии
+3. Исходящий fan-out к диспетчерским WebSocket-клиентам
+4. Burst-поведение (массовые пики)
 
-## Mapping Business Volumes To Load
+## Маппинг бизнес-объёмов на нагрузку
 
-Given target functional volumes:
+Целевые функциональные объёмы:
 
-- `100k` wagon / locomotive / train operations per day
-- `160k` wagons
-- `1700` locomotives
-- `1k` trains per day on average in motion
-- `937` stations where operations occur
+- `1700` локомотивов
+- `160 000` вагонов
+- `1000` поездов в движении в среднем
+- `937` станций
+- `100 000` бизнес-операций в день
 
-For the current implementation, map them like this:
+Маппинг для текущей реализации:
 
-- `1700 locomotives` => `1700` concurrent upstream websocket connections to dispatcher
-- `1k trains in motion` => at least `1000` hot telemetry streams during normal daytime load
-- `100k ops/day` => average only `1.16 ops/s`, so peak tests must be burst-based, not average-based
-- `937 stations` => operations are not evenly distributed, so test concentrated bursts rather than flat daily rate
+| Метрика | Значение |
+| --- | --- |
+| Upstream-подключения | `1700` конкурентных к диспетчеру |
+| Hot-потоки телеметрии | ~`1000` в дневное время |
+| Бизнес-операции | В среднем `1.16 оп/с`, пиковые тесты должны быть burst-based |
+| Станции | Неравномерное распределение — тестировать концентрированные burst |
 
-Important limitation: wagon / station operations are not first-class contracts in the current backend. In stress tests they should be modeled as extra websocket events on top of telemetry, not as proof that business workflows are complete.
+Вагонные/станционные операции не являются first-class контрактами в текущем бэкенде. В стресс-тестах они моделируются как дополнительные WebSocket-события поверх телеметрии.
 
-## Raw Telemetry vs Operational Events
+## Сырая телеметрия vs операционные события
 
-Do not mix these into one rate.
+Не смешивать в одну частоту:
 
-- `100k ops/day` describes business operations such as wagon, train, and station events
-- telemetry sampling may be much higher and must be modeled separately
+- `100 000 оп/день` — бизнес-операции (вагоны, поезда, станции)
+- Телеметрическое сэмплирование — значительно выше, моделируется отдельно
 
-If telemetry is generated every `1 ms` per locomotive, then for `1700` locomotives the dispatcher-side ingest target becomes:
+При `1 мс` сэмплировании на `1700` локомотивов:
 
-- `1000 telemetry frames / second / locomotive`
-- about `1.7 million telemetry frames / second` total before fan-out
+- `1000` фреймов/с/локомотив
+- Около `1 700 000` фреймов/с суммарно до fan-out
 
-That is several orders of magnitude above the current websocket JSON design.
+Это на порядки выше текущего WebSocket JSON-дизайна.
 
-For the current codebase, this distinction matters:
+Для текущей кодовой базы:
 
-- raw telemetry sampling can exist at the locomotive edge or simulator layer
-- dispatcher should usually consume either batched samples or reduced operational frames
-- UI websocket fan-out should almost never receive every raw `1 ms` sample
+- Raw-сэмплирование существует на edge/simulator уровне
+- Диспетчер потребляет батчированные или reduced-фреймы
+- UI WebSocket fan-out никогда не получает каждый raw `1 мс` сэмпл
 
-If the real requirement is truly raw `1 ms` telemetry through dispatcher, then the current service is not just under-provisioned; it needs a different transport and processing architecture.
+См. [TARGET_TELEMETRY_ARCHITECTURE.md](./TARGET_TELEMETRY_ARCHITECTURE.md) для целевого дизайна.
 
-See [docs/TARGET_TELEMETRY_ARCHITECTURE.md](/home/martian/Documents/swe/KTZ_twin/docs/TARGET_TELEMETRY_ARCHITECTURE.md) for the proposed target design.
+## Текущая реализация backpressure
 
-## Current Bottleneck To Watch
+Диспетчерский fan-out реализован в `back_dispatcher/app/ws_server.py` с backpressure:
 
-Dispatcher fan-out is currently synchronous per websocket client in [back_dispatcher/app/ws_server.py](/home/martian/Documents/swe/KTZ_twin/back_dispatcher/app/ws_server.py). One slow client can therefore degrade broadcast throughput. Stress results should be judged with that in mind.
+- Per-client asyncio-очереди
+- Телеметрия: latest-wins / coalesced delivery (медленный клиент не задерживает быстрых)
+- Алерты/статусы: ordered, non-lossy queueing
+- Мониторинг глубины очередей, drop-метрик через `GET /api/health` → `runtimeStats`
+- Disconnect-политика для persistently slow клиентов
 
-## Tooling
+## Инструментарий
 
-Use [scripts/stress_dispatcher.py](/home/martian/Documents/swe/KTZ_twin/scripts/stress_dispatcher.py).
+Скрипт: `scripts/stress_dispatcher.py`
 
-It provides:
+Режимы:
 
-- `print-targets`: generate `LOCOMOTIVE_TARGETS` for thousands of synthetic locomotives
-- `mock-locomotives`: one websocket server that impersonates many locomotive backends
-- `subscribers`: many dispatcher websocket clients with throughput and latency reporting
+- `print-targets` — генерация `LOCOMOTIVE_TARGETS` для тысяч синтетических локомотивов
+- `mock-locomotives` — один WebSocket-сервер, имитирующий множество локомотивных бэкендов
+- `subscribers` — множество диспетчерских WebSocket-клиентов с репортингом throughput и latency
 
-## Recommended Test Profiles
+## Рекомендуемые профили тестирования
 
 ### 1. Upstream Baseline
 
-Goal: verify dispatcher can hold all configured locomotives online.
+Цель: верификация удержания всех сконфигурированных локомотивов online.
 
-- `1700` upstream locomotive connections
-- `1 telemetry.frame / second / locomotive`
-- `0` dispatcher clients
-- duration: `15-30 min`
+- `1700` upstream-подключений
+- `1 telemetry.frame/с/локомотив`
+- `0` диспетчерских клиентов
+- Длительность: `15–30 мин`
 
-Expected dispatcher ingest:
+Ожидаемый инжест: ~`1700 msg/с`.
 
-- about `1700 msg/s`
+### 1A. Raw Sampling (мысленный эксперимент)
 
-This profile assumes dispatcher consumes reduced telemetry, not raw `1 ms` sampling.
+Цель: оценка порядка величины при прямом форварде raw-телеметрии.
 
-### 1A. Raw Sampling Thought Experiment
+- `1700` upstream-подключений
+- Интервал `0.001 с`
+- Сначала без подписчиков, затем добавлять отдельно
 
-Goal: quantify the actual order of magnitude if raw telemetry is forwarded directly.
-
-- `1700` upstream locomotive connections
-- `0.001 s` telemetry interval
-- no subscribers first, then add subscribers separately
-
-Expected dispatcher ingest:
-
-- about `1,700,000 telemetry messages / second`
-
-For the current Python websocket implementation this should be treated as a capacity gap analysis, not as an expected pass condition.
+Ожидаемый инжест: ~`1 700 000 msg/с`. Для текущей Python WebSocket-реализации — анализ capacity gap, не ожидаемое прохождение.
 
 ### 2. Baseline Fan-Out
 
-Goal: verify steady-state dispatcher fan-out.
+Цель: верификация steady-state fan-out.
 
-- baseline upstream load from profile 1
-- `10-25` dispatcher clients subscribed to `all`
-- duration: `15 min`
+- Baseline upstream-нагрузка из профиля 1
+- `10–25` диспетчерских клиентов подписаны на `all`
+- Длительность: `15 мин`
 
-Expected dispatcher outbound message volume:
-
-- telemetry + health updates for each moving stream
-- if all clients subscribe to all locomotives, outbound grows linearly with client count
+Исходящий объём растёт линейно с количеством клиентов.
 
 ### 3. Peak Movement Burst
 
-Goal: verify service under compressed peak windows.
+Цель: верификация под сжатыми пиковыми окнами.
 
-- `1700` upstream locomotives
-- base telemetry `1/s`
-- every `300s`, burst to `2-3/s` for `60s`
-- `25-50` dispatcher clients subscribed to `all`
-- duration: `30 min`
+- `1700` upstream-локомотивов
+- Базовая телеметрия `1/с`
+- Каждые `300с` burst до `2–3/с` на `60с`
+- `25–50` диспетчерских клиентов на `all`
+- Длительность: `30 мин`
 
-This is a better proxy for operational peaks than daily averages.
+Лучший прокси для операционных пиков, чем дневные средние.
 
 ### 4. Station Operations Burst
 
-Goal: simulate concentrated station activity.
+Цель: симуляция концентрированной станционной активности.
 
-- baseline telemetry load
-- extra `wagon.operation` event every `10-15s` per active locomotive subset, or equivalent aggregate burst
-- station ids distributed across `937` stations
-- `10-25` dispatcher clients
+- Baseline телеметрическая нагрузка
+- Дополнительные `wagon.operation` события каждые `10–15с` от подмножества локомотивов
+- `937` станций
+- `10–25` диспетчерских клиентов
 
-This does not validate business correctness of station workflows. It only stresses the event path.
+Не валидирует бизнес-корректность workflow. Только стрессирует event path.
 
-### 5. Soak
+### 5. Soak Test
 
-Goal: catch memory growth, reconnect churn, and slow degradation.
+Цель: выявление утечек памяти, reconnect-чурна, медленной деградации.
 
-- baseline upstream load
-- `5-10` dispatcher clients
-- duration: `8-24h`
+- Baseline upstream-нагрузка
+- `5–10` диспетчерских клиентов
+- Длительность: `8–24ч`
 
-## Example Run
+## Пример запуска
 
-Start mock locomotive backends:
+Запуск mock-локомотивных бэкендов:
 
 ```bash
 python3 scripts/stress_dispatcher.py mock-locomotives \
@@ -157,7 +152,7 @@ python3 scripts/stress_dispatcher.py mock-locomotives \
   --report-interval-s 5
 ```
 
-Generate `LOCOMOTIVE_TARGETS` for dispatcher:
+Генерация `LOCOMOTIVE_TARGETS`:
 
 ```bash
 export LOCOMOTIVE_TARGETS="$(python3 scripts/stress_dispatcher.py print-targets \
@@ -166,14 +161,14 @@ export LOCOMOTIVE_TARGETS="$(python3 scripts/stress_dispatcher.py print-targets 
   --id-prefix KTZ)"
 ```
 
-Start dispatcher:
+Запуск диспетчера:
 
 ```bash
 cd back_dispatcher
 uvicorn app.main:app --host 0.0.0.0 --port 3010
 ```
 
-Start dispatcher-side subscribers:
+Запуск подписчиков:
 
 ```bash
 python3 scripts/stress_dispatcher.py subscribers \
@@ -185,7 +180,7 @@ python3 scripts/stress_dispatcher.py subscribers \
   --report-interval-s 5
 ```
 
-Peak burst example:
+Peak burst:
 
 ```bash
 python3 scripts/stress_dispatcher.py mock-locomotives \
@@ -197,7 +192,7 @@ python3 scripts/stress_dispatcher.py mock-locomotives \
   --burst-multiplier 3
 ```
 
-Raw-sampling experiment:
+Raw-sampling эксперимент:
 
 ```bash
 python3 scripts/stress_dispatcher.py mock-locomotives \
@@ -206,34 +201,35 @@ python3 scripts/stress_dispatcher.py mock-locomotives \
   --telemetry-interval-s 0.001
 ```
 
-Use this only to find failure points. It is not a realistic success target for the current dispatcher implementation.
+Использовать только для нахождения точек отказа.
 
-## Runtime Metrics
+## Runtime-метрики
 
-During a run, inspect [back_dispatcher/app/routes/health.py](/home/martian/Documents/swe/KTZ_twin/back_dispatcher/app/routes/health.py):
+Во время теста инспектировать:
 
-- `GET /api/health`
+```bash
+GET /api/health
+```
 
-It now returns `runtimeStats` with:
+Возвращает `runtimeStats`:
 
-- websocket accepts / disconnects / peak clients
-- total inbound messages by type
-- total broadcast calls by type
-- broadcast delivery attempts and failed deliveries
+- WebSocket accepts / disconnects / peak clients
+- Суммарные входящие сообщения по типу
+- Суммарные broadcast-вызовы по типу
+- Попытки доставки и неудачные доставки
+- Per-client queue depth и telemetry drops
 
-This is enough for first-pass load triage without adding Prometheus.
+## Критерии прохождения / неудачи
 
-## Pass / Fail Suggestions
+Профиль считается неудачным, если:
 
-Treat the profile as failed if any of the following happen:
+- Диспетчер не может удерживать все ожидаемые upstream-подключения стабильно
+- Latency подписчиков монотонно растёт при steady-state нагрузке
+- Неудачные broadcast-доставки продолжают расти при нормальных сетевых условиях
+- Reconnect-штормы после коротких burst-ов
+- Память или CPU непрерывно растут при soak-тесте
 
-- dispatcher cannot keep all expected upstream locomotive connections stable
-- subscriber latency grows monotonically during steady-state load
-- broadcast delivery failures keep increasing under normal network conditions
-- reconnect storms appear after short bursts
-- memory or CPU grows continuously during soak
+Практическая первая цель:
 
-For websocket UX, a practical first target is:
-
-- dispatcher envelope lag `p95 < 500 ms` in baseline fan-out
-- no sustained backlog growth after burst windows end
+- Dispatcher envelope lag `p95 < 500 мс` при baseline fan-out
+- Отсутствие sustained backlog growth после окончания burst-окон

@@ -1,312 +1,262 @@
-# Synthetic Locomotive Telemetry Seeding
+# Сидинг синтетической телеметрии локомотивов
 
-## Purpose
+## Назначение
 
-This document describes the rules used by `generate_synthetic_telemetry.py` to seed raw locomotive telemetry for a hackathon demo. The script generates only raw telemetry. It does not generate:
+Документ описывает правила, используемые `generate_synthetic_telemetry.py` для генерации сырой телеметрии локомотивов для хакатон-демо. Скрипт генерирует только сырую телеметрию. Он не генерирует:
 
 - `health_index`
 - `health_band`
-- derived alerts tables
-- dispatcher commands tables
-- external API calls
-- LLM calls
+- Таблицы деривированных алертов
+- Таблицы диспетчерских команд
+- Внешние API-вызовы
 
-The output is intended for a realtime-style digital twin dashboard and backend experimentation.
+Выходные данные предназначены для дашборда цифрового двойника реального времени и бэкенд-экспериментов.
 
-## Output Files
+## Выходные файлы
 
-The script writes a single telemetry dataset to:
+Скрипт записывает единый датасет телеметрии:
 
 - `synthetic_output/telemetry.csv`
 - `synthetic_output/telemetry.jsonl`
-- optional `synthetic_output/telemetry.parquet` if parquet support is available
+- Опционально: `synthetic_output/telemetry.parquet` (если доступна поддержка parquet)
 
-It also prints:
+Также выводит: общее количество строк, строки на локомотив, min/max timestamps, типы локомотивов.
 
-- total row count
-- rows per locomotive
-- min and max timestamps
-- locomotive types present
+## Масштаб датасета
 
-## Dataset Scope
+- Ровно `3` локомотива
+- Целевое количество строк: около `1 000 000`
+- Частота: `1000 Гц`
+- Шаг: `1 мс`
+- Timestamps строго возрастают внутри каждого потока
+- Данные генерируются локомотив за локомотивом, затем конкатенируются
 
-- Exactly `3` locomotives
-- Total rows target: about `1,000,000`
-- Frequency: `1000 Hz`
-- Step size: `1 ms`
-- Timestamps are strictly increasing within each locomotive stream
-- Data is generated locomotive-by-locomotive, then concatenated
+## Сидируемые локомотивы
 
-## Locomotives Seeded
+| # | ID | Тип |
+| --- | --- | --- |
+| 1 | `KZ8A-001` | `KZ8A` (электрический) |
+| 2 | `TE33A-002` | `TE33A` (дизель-электрический) |
+| 3 | `KZ8A-003` | `KZ8A` (электрический) |
 
-The default seed script creates:
+Гарантируется: минимум один `KZ8A`, минимум один `TE33A`.
 
-1. `KZ8A-001` of type `KZ8A`
-2. `TE33A-002` of type `TE33A`
-3. `KZ8A-003` of type `KZ8A`
+## Правила географии
 
-This guarantees:
+Три правдоподобных маршрута между крупными городами Казахстана:
 
-- at least one `KZ8A`
-- at least one `TE33A`
-- the third locomotive is valid per the hackathon requirement
+1. Алматы → Конаев → Балхаш → Караганда → Астана
+2. Шымкент → Туркестан → Кызылорда → Шалкар → Актобе
+3. Алматы → Талдыкорган → Аягоз → Семей → Усть-Каменогорск
 
-## Geography Rules
+Правила генерации:
 
-Three plausible route-like paths are defined between major Kazakhstan cities:
+- GPS остаётся в пределах Казахстана
+- Движение следует интерполированной геометрии маршрута
+- Никаких случайных точечных прыжков
+- Heading деривируется из направления маршрута и сглаживается
+- Каждый локомотив стартует с определённой позиции на своём коридоре
 
-1. Almaty -> Konaev -> Balkhash -> Karaganda -> Astana
-2. Shymkent -> Turkistan -> Kyzylorda -> Shalkar -> Aktobe
-3. Almaty -> Taldykorgan -> Ayagoz -> Semey -> Oskemen
+## Детерминизм
 
-Generation rules:
+Генератор детерминирован:
 
-- GPS stays within Kazakhstan bounding limits
-- Movement follows interpolated route geometry
-- No random point jumps
-- Heading is derived from route direction and then smoothed
-- Each locomotive starts partway along its assigned corridor using a route start fraction
+- Глобальный seed: `RANDOM_SEED = 42`
+- Per-locomotive seed: `RANDOM_SEED + index × 10_000`
 
-## Determinism
+Повторные запуски с тем же скриптом и зависимостями дают идентичную телеметрию.
 
-The generator is deterministic.
+## Модель движения
 
-- Global seed constant: `RANDOM_SEED = 42`
-- Each locomotive gets a derived seed: `RANDOM_SEED + index * 10_000`
+Модель движения — не column-independent random noise. Каждый локомотив циклически проходит фазы:
 
-This means repeated runs with the same script and dependencies should produce the same telemetry.
+1. `idle` — холостой ход
+2. `acceleration` — ускорение
+3. `cruise` — крейсерский ход
+4. `braking` — торможение
+5. `stop` — остановка
 
-## Motion Model Rules
+Правила:
 
-The motion model is not column-independent random noise. Each locomotive progresses through repeated operating phases:
+- Скорость строится из фазовых целей и сглаживается
+- Ускорение деривируется из скорости по времени
+- Дистанция интегрируется из скорости
+- Позиция на маршруте из кумулятивной дистанции
+- Heading меняется плавно (непрерывная интерполяция маршрута)
+- Фазы остановки принуждают скорость к ~0
 
-1. `idle`
-2. `acceleration`
-3. `cruise`
-4. `braking`
-5. `stop`
+## Правила нагрузки и термики
 
-Rules:
+Внутренний сигнал нагрузки деривируется из:
 
-- Speed is built from phase targets and then smoothed
-- Acceleration is derived from speed over time
-- Distance is integrated from speed
-- Route position comes from cumulative distance along the assigned corridor
-- Heading changes gradually because route interpolation is continuous
-- Stopped phases force near-zero speed rather than exact random jitter
+- Скорости
+- Положительного ускорения
+- Синтетического фактора уклона маршрута
 
-## Load And Thermal Rules
-
-An internal load signal is derived from:
-
-- speed
-- positive acceleration
-- synthetic route grade factor
-
-This load signal drives multiple dependent channels:
+Этот сигнал нагрузки управляет:
 
 - `traction_current_a`
 - `traction_motor_temp_c`
 - `bearing_temp_c`
-- diesel engine behavior for `TE33A`
-- transformer behavior for `KZ8A`
+- Поведением дизеля (для TE33A)
+- Поведением трансформатора (для KZ8A)
 
-Rules:
+Правила:
 
-- Higher acceleration and load increase traction current
-- Braking suppresses traction current
-- Motor temperature responds faster to sustained load
-- Bearing temperature responds more slowly than motor temperature
-- Battery voltage sags slightly under load
+- Высокое ускорение и нагрузка увеличивают ток тяги
+- Торможение подавляет ток тяги
+- Температура мотора быстрее реагирует на sustained нагрузку
+- Температура подшипника реагирует медленнее
+- Напряжение батареи немного проседает под нагрузкой
 
-## Brake Rules
+## Правила торможения
 
-Braking state is inferred from negative acceleration.
+Состояние торможения выводится из отрицательного ускорения:
 
-Rules:
+- При торможении `brake_cylinder_pressure_bar` растёт
+- При росте давления цилиндра `brake_pipe_pressure_bar` падает
+- Торможение совпадает с падением скорости
 
-- During braking, `brake_cylinder_pressure_bar` rises
-- As brake cylinder pressure rises, `brake_pipe_pressure_bar` drops
-- Braking coincides with falling speed
+## Правила KZ8A (электрический)
 
-## KZ8A Rules
+Генерируемые поля:
 
-Applies only to electric locomotives.
+- `catenary_voltage_kv` — напряжение контактной сети
+- `transformer_temp_c` — температура трансформатора
 
-Generated fields:
+Правила:
 
-- `catenary_voltage_kv`
-- `transformer_temp_c`
+- Напряжение контактной сети стабильно (~номинал) с умеренным шумом
+- Высокая sustained нагрузка повышает температуру трансформатора
+- Электрические поля заполнены только для KZ8A
+- Дизельные поля — null
 
-Rules:
+### Аномальные окна KZ8A
 
-- Catenary voltage is fairly stable around nominal overhead supply with moderate noise
-- Higher sustained traction load increases transformer temperature
-- Electric fields are populated only for `KZ8A`
-- Diesel-only fields are not applicable and are stored as nulls in outputs
+- Просадка напряжения контактной сети
+- Перегрев трансформатора
 
-### KZ8A anomaly windows
+Эффекты: `catenary_voltage_kv` падает, `transformer_temp_c` растёт выше тренда, `fault_code` устанавливается.
 
-The script injects sustained anomaly windows such as:
+## Правила TE33A (дизель-электрический)
 
-- catenary voltage dip
-- transformer overheating
+Генерируемые поля:
 
-Typical effects:
+- `engine_rpm` — обороты дизеля
+- `coolant_temp_c` — температура охлаждающей жидкости
+- `oil_pressure_bar` — давление масла
+- `fuel_level_l` — уровень топлива
+- `fuel_rate_lph` — расход топлива
 
-- `catenary_voltage_kv` drops for several seconds
-- `transformer_temp_c` rises above normal trend
-- `fault_code` is set during the anomaly window
+Правила:
 
-## TE33A Rules
+- RPM коррелирует с движением и нагрузкой
+- Расход топлива растёт с нагрузкой и RPM
+- Уровень топлива монотонно убывает
+- Температура coolant реагирует на sustained высокую нагрузку
+- Давление масла масштабируется с RPM, деградирует при аномалиях
+- Электрические поля — null
 
-Applies only to diesel-electric locomotives.
+### Аномальные окна TE33A
 
-Generated fields:
+- Низкое давление масла
+- Повышенная температура coolant
 
-- `engine_rpm`
-- `coolant_temp_c`
-- `oil_pressure_bar`
-- `fuel_level_l`
-- `fuel_rate_lph`
+Эффекты: `oil_pressure_bar` падает, `coolant_temp_c` растёт, `fuel_rate_lph` может увеличиться, `fault_code` устанавливается.
 
-Rules:
+## Правила связи
 
-- Engine RPM correlates with motion and load
-- Fuel rate rises with load and RPM
-- Fuel level declines monotonically over time
-- Coolant temperature responds to sustained high load
-- Oil pressure scales with RPM and degrades under some anomaly windows
-- Electric-only fields are not applicable and are stored as nulls in outputs
+- `comms_status` обычно `online`
+- Короткие окна `degraded` и `offline` инжектируются
+- Fault codes могут присоединяться при отсутствии более специфичной аномалии
 
-### TE33A anomaly windows
+## Семантика null
 
-The script injects sustained anomaly windows such as:
+Type-specific поля, не применимые к данному типу, хранятся как `np.nan`:
 
-- low oil pressure
-- elevated coolant temperature
+- В JSONL — `null`
+- В CSV — пустые ячейки
+- Семантика: «не применимо», не «ноль»
 
-Typical effects:
+Примеры: KZ8A — null для дизельных полей; TE33A — null для электрических полей.
 
-- `oil_pressure_bar` drops for several seconds
-- `coolant_temp_c` climbs above normal trend
-- `fuel_rate_lph` may increase during stressed operation
-- `fault_code` is set during the anomaly window
+## Ограничения качества
 
-## Communications Rules
+Скрипт валидирует:
 
-Communications quality is mostly healthy.
+- Широта в пределах Казахстана
+- Долгота в пределах Казахстана
+- `t_ms` увеличивается ровно на 1 на локомотив
+- Timestamps строго возрастают на локомотив
+- `fuel_level_l` никогда не растёт для TE33A
 
-Rules:
+Клиппинг предотвращает невозможные значения: отрицательная скорость, отрицательный ток, отрицательное давление, неправдоподобные температуры/напряжения.
 
-- `comms_status` is usually `online`
-- Short windows of `degraded` status are injected
-- Shorter `offline` windows are also injected
-- Fault codes may be attached during those windows if no more specific anomaly is already present
+## Схема телеметрии
 
-## Null Semantics
+| Колонка | Тип | Nullable | Тип лок. | Описание |
+| --- | --- | --- | --- | --- |
+| `timestamp` | `TIMESTAMP(3)` | Нет | все | Время события (мс точность) |
+| `t_ms` | `BIGINT` | Нет | все | Относительное время (мс от старта) |
+| `locomotive_id` | `VARCHAR(32)` | Нет | все | Идентификатор локомотива |
+| `locomotive_type` | `VARCHAR(16)` | Нет | все | `KZ8A` или `TE33A` |
+| `latitude` | `DOUBLE PRECISION` | Нет | все | GPS широта |
+| `longitude` | `DOUBLE PRECISION` | Нет | все | GPS долгота |
+| `speed_kmh` | `REAL` | Нет | все | Скорость (км/ч) |
+| `acceleration_mps2` | `REAL` | Нет | все | Продольное ускорение (м/с²) |
+| `heading_deg` | `REAL` | Нет | все | Heading (0–360°) |
+| `traction_current_a` | `REAL` | Нет | все | Ток тяги (А) |
+| `battery_voltage_v` | `REAL` | Нет | все | Напряжение батареи |
+| `brake_pipe_pressure_bar` | `REAL` | Нет | все | Давление тормозной магистрали |
+| `brake_cylinder_pressure_bar` | `REAL` | Нет | все | Давление тормозного цилиндра |
+| `traction_motor_temp_c` | `REAL` | Нет | все | Температура тягового мотора |
+| `bearing_temp_c` | `REAL` | Нет | все | Температура подшипника |
+| `fault_code` | `VARCHAR(64)` | Да | все | Код неисправности |
+| `comms_status` | `VARCHAR(16)` | Нет | все | `online` / `degraded` / `offline` |
+| `catenary_voltage_kv` | `REAL` | Да | KZ8A | Напряжение контактной сети |
+| `transformer_temp_c` | `REAL` | Да | KZ8A | Температура трансформатора |
+| `engine_rpm` | `REAL` | Да | TE33A | Обороты дизеля |
+| `coolant_temp_c` | `REAL` | Да | TE33A | Температура охлаждающей жидкости |
+| `oil_pressure_bar` | `REAL` | Да | TE33A | Давление масла |
+| `fuel_level_l` | `REAL` | Да | TE33A | Уровень топлива |
+| `fuel_rate_lph` | `REAL` | Да | TE33A | Расход топлива |
 
-Type-specific fields that do not apply are stored as `np.nan` during generation so pandas keeps numeric column types.
-
-Effective output behavior:
-
-- In `JSONL`, these become `null`
-- In `CSV`, these usually appear as empty cells
-- Semantically, they mean "not applicable", not "zero"
-
-Examples:
-
-- `KZ8A` rows have null diesel fields
-- `TE33A` rows have null electric fields
-
-## Quality Constraints Enforced
-
-The script validates:
-
-- latitude within Kazakhstan-safe bounds
-- longitude within Kazakhstan-safe bounds
-- `t_ms` increases by exactly `1` per locomotive
-- timestamps are strictly increasing per locomotive
-- `fuel_level_l` never increases for `TE33A`
-
-Additional clipping prevents impossible values such as:
-
-- negative speed
-- negative traction current
-- negative brake pressures
-- implausible temperature or voltage excursions outside configured limits
-
-## Telemetry Schema
-
-This is the raw telemetry schema produced by the generator.
-
-| Column | Type | Nullable | Applies To | Description |
-|---|---|---:|---|---|
-| `timestamp` | `TIMESTAMP(3)` or text ISO 8601 | No | all | Event time with millisecond precision |
-| `t_ms` | `BIGINT` | No | all | Relative time in milliseconds from locomotive stream start |
-| `locomotive_id` | `VARCHAR(32)` | No | all | Stable locomotive identifier |
-| `locomotive_type` | `VARCHAR(16)` or enum | No | all | `KZ8A` or `TE33A` |
-| `latitude` | `DOUBLE PRECISION` | No | all | GPS latitude in Kazakhstan |
-| `longitude` | `DOUBLE PRECISION` | No | all | GPS longitude in Kazakhstan |
-| `speed_kmh` | `REAL` | No | all | Speed in km/h |
-| `acceleration_mps2` | `REAL` | No | all | Longitudinal acceleration in m/s^2 |
-| `heading_deg` | `REAL` | No | all | Heading in degrees 0-360 |
-| `traction_current_a` | `REAL` | No | all | Traction current in amps |
-| `battery_voltage_v` | `REAL` | No | all | Auxiliary battery voltage |
-| `brake_pipe_pressure_bar` | `REAL` | No | all | Brake pipe pressure |
-| `brake_cylinder_pressure_bar` | `REAL` | No | all | Brake cylinder pressure |
-| `traction_motor_temp_c` | `REAL` | No | all | Traction motor temperature |
-| `bearing_temp_c` | `REAL` | No | all | Bearing temperature |
-| `fault_code` | `VARCHAR(64)` | Yes | all | Optional raw fault/anomaly code |
-| `comms_status` | `VARCHAR(16)` or enum | No | all | `online`, `degraded`, `offline` |
-| `catenary_voltage_kv` | `REAL` | Yes | KZ8A only | Overhead supply voltage |
-| `transformer_temp_c` | `REAL` | Yes | KZ8A only | Transformer temperature |
-| `engine_rpm` | `REAL` | Yes | TE33A only | Diesel engine RPM |
-| `coolant_temp_c` | `REAL` | Yes | TE33A only | Engine coolant temperature |
-| `oil_pressure_bar` | `REAL` | Yes | TE33A only | Engine oil pressure |
-| `fuel_level_l` | `REAL` | Yes | TE33A only | Remaining fuel volume |
-| `fuel_rate_lph` | `REAL` | Yes | TE33A only | Fuel burn rate |
-
-## Recommended Relational Table Shape
-
-If you want one raw telemetry table, this structure fits the generator cleanly:
+## Рекомендуемая реляционная таблица
 
 ```sql
-create table telemetry_raw (
-    timestamp timestamptz not null,
-    t_ms bigint not null,
-    locomotive_id varchar(32) not null,
-    locomotive_type varchar(16) not null,
-    latitude double precision not null,
-    longitude double precision not null,
-    speed_kmh real not null,
-    acceleration_mps2 real not null,
-    heading_deg real not null,
-    traction_current_a real not null,
-    battery_voltage_v real not null,
-    brake_pipe_pressure_bar real not null,
-    brake_cylinder_pressure_bar real not null,
-    traction_motor_temp_c real not null,
-    bearing_temp_c real not null,
-    fault_code varchar(64) null,
-    comms_status varchar(16) not null,
-    catenary_voltage_kv real null,
-    transformer_temp_c real null,
-    engine_rpm real null,
-    coolant_temp_c real null,
-    oil_pressure_bar real null,
-    fuel_level_l real null,
-    fuel_rate_lph real null,
-    primary key (locomotive_id, timestamp)
+CREATE TABLE telemetry_raw (
+    timestamp TIMESTAMPTZ NOT NULL,
+    t_ms BIGINT NOT NULL,
+    locomotive_id VARCHAR(32) NOT NULL,
+    locomotive_type VARCHAR(16) NOT NULL,
+    latitude DOUBLE PRECISION NOT NULL,
+    longitude DOUBLE PRECISION NOT NULL,
+    speed_kmh REAL NOT NULL,
+    acceleration_mps2 REAL NOT NULL,
+    heading_deg REAL NOT NULL,
+    traction_current_a REAL NOT NULL,
+    battery_voltage_v REAL NOT NULL,
+    brake_pipe_pressure_bar REAL NOT NULL,
+    brake_cylinder_pressure_bar REAL NOT NULL,
+    traction_motor_temp_c REAL NOT NULL,
+    bearing_temp_c REAL NOT NULL,
+    fault_code VARCHAR(64) NULL,
+    comms_status VARCHAR(16) NOT NULL,
+    catenary_voltage_kv REAL NULL,
+    transformer_temp_c REAL NULL,
+    engine_rpm REAL NULL,
+    coolant_temp_c REAL NULL,
+    oil_pressure_bar REAL NULL,
+    fuel_level_l REAL NULL,
+    fuel_rate_lph REAL NULL,
+    PRIMARY KEY (locomotive_id, timestamp)
 );
 ```
 
-## Suggested Constraints
+## Рекомендуемые ограничения
 
-Useful table constraints:
-
-- `locomotive_type in ('KZ8A', 'TE33A')`
-- `comms_status in ('online', 'degraded', 'offline')`
+- `locomotive_type IN ('KZ8A', 'TE33A')`
+- `comms_status IN ('online', 'degraded', 'offline')`
 - `speed_kmh >= 0`
 - `traction_current_a >= 0`
 - `battery_voltage_v > 0`
@@ -315,20 +265,16 @@ Useful table constraints:
 - `bearing_temp_c > -50`
 - `traction_motor_temp_c > -50`
 
-Optional locomotive-type consistency checks:
+Проверки консистентности по типу: KZ8A — null для дизельных полей; TE33A — null для электрических полей.
 
-- `KZ8A` rows should have null diesel fields
-- `TE33A` rows should have null electric fields
+## Известные упрощения моделирования
 
-## Known Modeling Simplifications
+Генератор реалистичен для дашбордов и бэкенд-демо, но остаётся синтетическим. Упрощения:
 
-The generator is realistic enough for dashboards and backend demos, but it is still synthetic. It simplifies:
+- Точная ж/д ГИС-геометрия
+- Точная физика и кривые тягового усилия
+- Детальная динамика тормозной системы
+- Настоящая asset-specific логика управления
+- Fleet-specific словари неисправностей
 
-- exact railway GIS geometry
-- exact physics and tractive effort curves
-- detailed brake system dynamics
-- true asset-specific control logic
-- fleet-specific fault dictionaries
-
-It is intended for plausible telemetry continuity, not engineering certification or operations-grade simulation.
-
+Предназначен для правдоподобной непрерывности телеметрии, а не для инженерной сертификации или operations-grade симуляции.

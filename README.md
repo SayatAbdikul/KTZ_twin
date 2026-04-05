@@ -1,37 +1,36 @@
 # KTZ Digital Twin
 
-KTZ Digital Twin is a hackathon project for locomotive telemetry visualization, operator awareness, dispatcher monitoring, and historical replay. The current implemented system uses a FastAPI-based locomotive simulator for live telemetry, a dispatcher service with Kafka and TimescaleDB for aggregation and replay, and a single React frontend with role-based train, dispatcher, and admin workflows.
+Цифровой двойник локомотива: система мониторинга и визуализации телеметрии в реальном времени для казахстанской железной дороги. Проект включает симулятор телеметрии, диспетчерский сервис с Kafka и TimescaleDB для агрегации и воспроизведения истории, и единый React-фронтенд с ролевыми интерфейсами для машиниста, диспетчера и администратора.
 
-## What Is In This Repo
+## Структура репозитория
 
-| Path | Purpose |
+| Путь | Назначение |
 | --- | --- |
-| `back_locomotive/` | Live locomotive backend: telemetry simulator, health generation, alerts, messages, export routes, and operator-facing REST/WS APIs |
-| `back_dispatcher/` | Dispatcher backend: Kafka/WS ingest, TimescaleDB replay storage, replay APIs, dispatcher WS fan-out, and runtime health |
-| `front_locomotive/` | Unified frontend: operator dashboard, dispatcher console, alerts, messages, replay, map, and admin user management |
-| `front_dispatcher/` | Legacy standalone dispatcher frontend, no longer started by the default Docker stack |
-| `docs/` | Supporting docs for Docker, seeding, health rules, stress testing, and design notes |
-| `scripts/` | Helper scripts, including the Docker microservices launcher |
-| `shared/` | Shared runtime assets such as `thresholds.json` mounted into both backends |
-| `map_gis/` | Optional Leaflet-based map view for geospatial monitoring experiments |
-| `generate_synthetic_telemetry.py` | Rich synthetic telemetry generator |
-| `generate_core_synthetic_telemetry.py` | Reduced “core telemetry” generator used by the docs/demo flow |
-| `architecture.md` | Current architecture deep-dive and runtime contract notes |
-| `IMPLEMENTATION_PLAN.md` | Phase-by-phase delivery plan and hackathon gap analysis |
+| `back_locomotive/` | Бэкенд локомотива: симулятор телеметрии, генерация здоровья, алерты, сообщения, экспорт, REST/WS API |
+| `back_dispatcher/` | Бэкенд диспетчера: Kafka/WS инжест, TimescaleDB для replay, dispatcher WS fan-out, rule engine, аутентификация |
+| `front_locomotive/` | Единый фронтенд: дашборд оператора, диспетчерская консоль, алерты, сообщения, replay, карта, управление пользователями |
+| `front_dispatcher/` | Устаревший автономный диспетчерский фронтенд, не запускается в текущем Docker-стеке |
+| `docs/` | Документация: Docker, сидинг, правила здоровья, нагрузочное тестирование, архитектурные заметки |
+| `scripts/` | Вспомогательные скрипты, включая запуск Docker-стека и нагрузочное тестирование |
+| `shared/` | Общие ресурсы: `thresholds.json`, монтируемый в оба бэкенда |
+| `map_gis/` | Опциональный Leaflet-вид для геопространственного мониторинга |
+| `generate_synthetic_telemetry.py` | Расширенный генератор синтетической телеметрии |
+| `generate_core_synthetic_telemetry.py` | Сокращённый генератор core-телеметрии |
+| `architecture.md` | Детальное описание архитектуры и рантайм-контрактов |
+| `IMPLEMENTATION_PLAN.md` | Пофазный план разработки |
 
-## Tech Stack
+## Стек технологий
 
-| Area | Technologies |
+| Область | Технологии |
 | --- | --- |
-| Frontend | React 19, TypeScript, Vite, Zustand, TanStack Query, ECharts, Tailwind CSS |
-| Locomotive backend | FastAPI, Python 3.12, in-memory simulator, WebSocket broadcasting, Kafka producer |
-| Dispatcher backend | FastAPI, Python 3.12, Kafka consumer, TimescaleDB/PostgreSQL, Alembic |
-| Streaming and storage | Kafka, TimescaleDB |
-| Packaging and runtime | Docker Compose, Nginx, `.env.microservices` |
+| Фронтенд | React 19, TypeScript, Vite 8, Zustand 5, TanStack Query 5, ECharts 6, Leaflet, Tailwind CSS 4 |
+| Бэкенд локомотива | FastAPI, Python 3.12, in-memory симулятор, WebSocket broadcasting, Kafka producer |
+| Бэкенд диспетчера | FastAPI, Python 3.12, Kafka consumer, TimescaleDB/PostgreSQL, Alembic, Argon2, JWT |
+| Потоковая обработка | Apache Kafka (KRaft mode) |
+| Хранение данных | TimescaleDB |
+| Развёртывание | Docker Compose, Nginx, `.env.microservices` |
 
-## Current Runtime Architecture
-
-The repo contains older target-architecture notes, but the current implemented stack is the Docker microservices setup below:
+## Текущая рантайм-архитектура
 
 ```text
 front_locomotive --REST/WS--> back_locomotive --Kafka--> back_dispatcher --TimescaleDB
@@ -39,27 +38,24 @@ front_locomotive --Replay REST---------------> back_dispatcher
 front_locomotive --Dispatcher WS-------------> back_dispatcher
 ```
 
-- `back_locomotive` is the live simulator and operator API surface.
-- `back_dispatcher` ingests locomotive events from Kafka and/or outbound locomotive WS connections, computes dispatcher-side runtime state, and persists replay history in TimescaleDB.
-- `front_locomotive` is the single frontend entrypoint. It uses live REST/WS against the locomotive backend and replay/auth/dispatcher APIs against the dispatcher backend in the Docker stack.
+- `back_locomotive` — симулятор телеметрии и API-поверхность оператора, Kafka producer.
+- `back_dispatcher` — инжест событий из Kafka и/или WS, rule engine для здоровья и алертов, персистенция replay-истории в TimescaleDB, аутентификация и управление пользователями.
+- `front_locomotive` — единая точка входа фронтенда. REST/WS к бэкенду локомотива и replay/auth/dispatcher API к бэкенду диспетчера.
 
-Deep-dive docs:
+Детальная документация:
 - [architecture.md](./architecture.md)
 - [docs/MICROSERVICES_DOCKER.md](./docs/MICROSERVICES_DOCKER.md)
 - [back_dispatcher/README.md](./back_dispatcher/README.md)
-- [map_gis/README.md](./map_gis/README.md)
 
-## Quick Start
+## Быстрый старт
 
-### Recommended: Docker stack
-
-From the repo root:
+### Docker-стек (рекомендуется)
 
 ```bash
 ./scripts/start_microservices.sh up
 ```
 
-Helpful commands:
+Полезные команды:
 
 ```bash
 ./scripts/start_microservices.sh ps
@@ -67,164 +63,134 @@ Helpful commands:
 ./scripts/start_microservices.sh down
 ```
 
-### Service URLs
+### URL-ы сервисов
 
-The current documented defaults come from `.env.microservices` and `docker-compose.microservices.yml`:
-
-| Service | URL / Port |
+| Сервис | URL / Порт |
 | --- | --- |
-| Locomotive backend | `http://localhost:3001` |
-| Dispatcher backend | `http://localhost:3010` |
-| Frontend | `http://localhost:5183` |
+| Бэкенд локомотива | `http://localhost:3001` |
+| Бэкенд диспетчера | `http://localhost:3010` |
+| Фронтенд | `http://localhost:5183` |
 | Kafka | `localhost:9092` |
 | TimescaleDB | `localhost:5433` |
 
-### Auth
+### Аутентификация
 
-Most runtime endpoints are protected in the current stack:
+Большинство эндпоинтов защищены:
 
-- REST requests require `X-API-Key`
-- WebSocket connections require `?apiKey=...`
-- `/ping` remains public
+- REST-запросы требуют `X-API-Key`
+- WebSocket-подключения требуют `?apiKey=...` или JWT-токен `?token=...`
+- `/ping` остаётся публичным
 
-Current demo key in `.env.microservices`:
+Демо-ключ в `.env.microservices`:
 
 ```text
 ktz-demo-key
 ```
 
-### Local development
+### Локальная разработка
 
-If you want to run pieces outside Docker, use the service-level docs instead of duplicating the full setup here:
+Для запуска отдельных сервисов без Docker:
 
 - [front_locomotive/README.md](./front_locomotive/README.md)
 - [back_dispatcher/README.md](./back_dispatcher/README.md)
 - [docs/MICROSERVICES_DOCKER.md](./docs/MICROSERVICES_DOCKER.md)
 
-Note: code-level fallback URLs do not always match the Docker stack defaults, so use the compose env values as the source of truth when running the full project.
+## API: Бэкенд локомотива (`back_locomotive`)
 
-## Operator and Replay API Summary
-
-### Locomotive backend (`back_locomotive`)
-
-Public health check:
+Публичный health check:
 
 - `GET /ping`
 
-Protected operator routes:
+Защищённые маршруты оператора:
 
-| Route | Purpose |
+| Маршрут | Назначение |
 | --- | --- |
-| `GET /api/telemetry/current` | Current live telemetry frame |
-| `GET /api/telemetry/metrics` | Effective metric definitions and thresholds |
-| `GET /api/telemetry/history/{metric_id}` | Short in-memory history for one metric |
-| `GET /api/health` | Current overall/subsystem health |
-| `GET /api/alerts` | Alert feed |
-| `POST /api/alerts/{alert_id}/acknowledge` | Acknowledge an alert |
-| `GET /api/messages` | Dispatcher/operator message feed |
-| `POST /api/messages/{message_id}/read` | Mark message as read |
-| `POST /api/messages/{message_id}/acknowledge` | Acknowledge message |
-| `GET /api/connection/status` | Locomotive connection/runtime status |
-| `GET /api/config/thresholds` | Read shared threshold config |
-| `PUT /api/config/thresholds` | Update shared threshold config |
-| `GET /api/export/telemetry/csv` | Export raw live telemetry history as CSV |
-| `GET /api/export/alerts/csv` | Export current alerts as CSV |
-| `GET /api/replay/snapshot` | Legacy in-memory snapshot route |
+| `GET /api/telemetry/current` | Текущий фрейм телеметрии |
+| `GET /api/telemetry/metrics` | Определения метрик и пороги |
+| `GET /api/telemetry/history/{metric_id}` | Короткая in-memory история метрики |
+| `GET /api/health` | Текущий индекс здоровья подсистем |
+| `GET /api/alerts` | Лента алертов |
+| `POST /api/alerts/{alert_id}/acknowledge` | Подтверждение алерта |
+| `GET /api/messages` | Лента сообщений |
+| `POST /api/messages/{message_id}/read` | Отметить сообщение как прочитанное |
+| `POST /api/messages/{message_id}/acknowledge` | Подтвердить сообщение |
+| `GET /api/connection/status` | Статус подключения |
+| `GET /api/config/thresholds` | Текущие пороговые значения |
+| `PUT /api/config/thresholds` | Обновить пороги без перезапуска |
+| `GET /api/export/telemetry/csv` | Экспорт телеметрии в CSV |
+| `GET /api/export/alerts/csv` | Экспорт алертов в CSV |
+| `GET /api/replay/snapshot` | In-memory снимок replay |
 
-Live operator WebSocket:
+WebSocket оператора:
 
 - `WS /ws?apiKey=...`
 
-Main outbound message families:
+Типы исходящих сообщений: `telemetry.frame`, `health.update`, `alert.new`, `alert.update`, `alert.resolved`, `message.new`, `connection.heartbeat`
 
-- `telemetry.frame`
-- `health.update`
-- `alert.new`
-- `alert.update`
-- `alert.resolved`
-- `message.new`
-- `connection.heartbeat`
+## API: Бэкенд диспетчера (`back_dispatcher`)
 
-### Dispatcher backend replay/API surface (`back_dispatcher`)
-
-Public health check:
+Публичный health check:
 
 - `GET /ping`
 
-Protected REST routes:
+Защищённые REST-маршруты:
 
-| Route | Purpose |
+| Маршрут | Назначение |
 | --- | --- |
-| `GET /api/health` | Dispatcher health, runtime stats, and backpressure visibility |
-| `GET /api/locomotives` | Configured locomotive targets and connection state |
-| `GET /api/locomotives/{locomotive_id}/latest-telemetry` | Latest ingested telemetry snapshot |
-| `GET /api/locomotives/{locomotive_id}/chat` | Dispatcher chat history |
-| `GET /api/locomotives/{locomotive_id}/telemetry/recent` | Recent persisted telemetry slice |
-| `GET /api/locomotives/{locomotive_id}/replay/time-range` | Earliest/latest persisted replay timestamps |
-| `GET /api/locomotives/{locomotive_id}/replay/range` | Historical replay series with resolution control |
-| `GET /api/locomotives/{locomotive_id}/replay/snapshot` | Telemetry/health/alerts at a selected timestamp |
+| `GET /api/health` | Здоровье сервиса, runtime-статистика, backpressure |
+| `GET /api/locomotives` | Сконфигурированные локомотивы и их статус подключения |
+| `GET /api/locomotives/{id}/latest-telemetry` | Последний полученный фрейм телеметрии |
+| `GET /api/locomotives/{id}/chat` | История чата диспетчера |
+| `GET /api/locomotives/{id}/telemetry/recent` | Недавняя персистированная телеметрия |
+| `GET /api/locomotives/{id}/replay/time-range` | Временной диапазон доступных replay-данных |
+| `GET /api/locomotives/{id}/replay/range` | Исторические серии с контролем разрешения |
+| `GET /api/locomotives/{id}/replay/snapshot` | Полный снимок состояния на выбранный момент |
+| `POST /api/auth/login` | Аутентификация |
+| `POST /api/auth/refresh` | Обновление JWT-токена |
+| `GET /api/auth/me` | Текущий пользователь |
+| `POST /api/auth/change-password` | Смена пароля |
+| `GET /api/admin/users` | Список пользователей (admin) |
+| `POST /api/admin/users` | Создание пользователя (admin) |
 
-Dispatcher WebSocket:
+WebSocket диспетчера:
 
 - `WS /ws?apiKey=...`
 
-Key dispatcher message families:
+Типы исходящих сообщений: `dispatcher.snapshot`, `dispatcher.locomotive_status`, `telemetry.frame`, `health.update`, `alert.new`, `alert.update`, `alert.resolved`, `message.new`
 
-- `dispatcher.snapshot`
-- `dispatcher.locomotive_status`
-- `telemetry.frame`
-- `health.update`
-- `alert.new`
-- `alert.update`
-- `alert.resolved`
-- `message.new`
+Входящие действия клиента: `subscribe`, `dispatcher.chat`
 
-Main incoming client action:
+## Интерфейсы фронтенда
 
-- `dispatcher.chat`
+Единый UI в [front_locomotive](./front_locomotive) включает:
 
-## Frontend Surfaces
+- Дашборд: здоровье парка, contributing factors, алерты, live-метрики, экспорт
+- Телеметрия: сглаживание, live-тренды, пресеты зума, CSV-экспорт
+- Алерты: лента с CSV-экспортом
+- Сообщения: диспетчерские сообщения
+- Схема: интерактивная SVG-схема локомотива TE33A
+- Карта: Leaflet-карта Казахстана с 10 симулированными поездами на реальных ж/д путях
+- Replay: воспроизведение истории из TimescaleDB с timeline, playback и snapshot
+- Диспетчерская консоль: мониторинг парка и двусторонний чат
+- Управление пользователями: CRUD пользователей (admin)
+- Аутентификация: логин, смена пароля, JWT-сессия
 
-### Unified UI
+## Маппинг критериев хакатона
 
-The frontend in [front_locomotive](./front_locomotive) currently includes:
-
-- Dashboard with health, contributing factors, alerts, live metrics, and export actions
-- Telemetry page with smoothing, live trends, zoom presets, and CSV export
-- Alerts page with CSV export
-- Messages page
-- Diagram page
-- Replay page backed by dispatcher replay APIs and TimescaleDB data
-- Dispatcher console for multi-locomotive monitoring and dispatcher chat
-- Admin user management for admin accounts
-
-## Hackathon Evaluation Mapping
-
-| Criteria | Current implemented coverage |
+| Критерий | Текущее покрытие |
 | --- | --- |
-| Realtime visualization (35%) | Live telemetry streaming, health updates, smoothing, trend charts, subsystem views, alerts, messages |
-| UI/UX (30%) | Multi-page operator UI, explainable health factors, replay UI, export actions, map prototype, interactive charts |
-| Backend architecture (25%) | FastAPI APIs, configurable thresholds, API-key auth, Kafka ingest, TimescaleDB replay, Docker Compose stack |
-| Demo quality (10%) | Root docs, architecture deep-dive, Docker startup flow, replay persistence, CSV export, print-friendly reporting |
+| Визуализация реального времени (35%) | WebSocket-стриминг, health-обновления, сглаживание, тренд-графики, подсистемные виды, алерты, сообщения |
+| UI/UX (30%) | 11 страниц, объяснимый health, replay UI, экспорт, карта, интерактивные графики с зумом |
+| Архитектура бэкенда (25%) | FastAPI API, конфигурируемые пороги, API-key + JWT auth, Kafka инжест, TimescaleDB replay, Docker Compose |
+| Качество демо (10%) | Документация, архитектурное описание, Docker one-command запуск, 10 паттернов неисправностей, CSV/PDF экспорт |
 
-## Related Docs
+## Связанная документация
 
 - [front_locomotive/README.md](./front_locomotive/README.md)
 - [back_dispatcher/README.md](./back_dispatcher/README.md)
 - [docs/MICROSERVICES_DOCKER.md](./docs/MICROSERVICES_DOCKER.md)
 - [docs/HEALTH_INDEX_RULES.md](./docs/HEALTH_INDEX_RULES.md)
 - [docs/STRESS_TESTING.md](./docs/STRESS_TESTING.md)
+- [docs/PRESENTATION.md](./docs/PRESENTATION.md)
 - [architecture.md](./architecture.md)
 - [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md)
-
-## Screenshots
-
-Screenshot set not committed yet.
-
-Recommended additions for a follow-up docs pass:
-
-- operator dashboard
-- telemetry live trends
-- replay page
-- dispatcher console
-- optional map view

@@ -1,112 +1,119 @@
-# Docker Microservices Stack
+# Docker Microservices стек
 
-This stack simulates the current microservice split:
+Стек развёртывает полную микросервисную систему:
 
-- `kafka`: message broker for service-to-service event streaming
-- `timescaledb`: operational datastore for dispatcher commands, messages, and alert events
-- `back_locomotive`: generates synthetic telemetry and streams frontend frames over WebSocket
-- `back_dispatcher`: consumes the locomotive WebSocket stream, keeps latest locomotive state, streams dispatcher updates over WebSocket
-- `front_locomotive`: browser UI for locomotive telemetry
-- `front_dispatcher`: browser UI for dispatcher monitoring
+- **kafka** — брокер сообщений для межсервисного стриминга событий (KRaft mode, без ZooKeeper)
+- **timescaledb** — хранилище данных для replay-телеметрии, health snapshots, алертов, аутентификации
+- **back_locomotive** — генерация синтетической телеметрии, публикация в Kafka, WebSocket broadcasting для фронтенда
+- **back_dispatcher** — потребление из Kafka/WS, rule engine здоровья и алертов, replay API, аутентификация, fan-out
+- **front_locomotive** — единый браузерный UI для оператора, диспетчера и администратора
 
-## Files
+## Файлы
 
-- Compose file: `docker-compose.microservices.yml`
-- Start script: `scripts/start_microservices.sh`
-- Env file: `.env.microservices`
+- Compose-файл: `docker-compose.microservices.yml`
+- Скрипт запуска: `scripts/start_microservices.sh`
+- Переменные окружения: `.env.microservices`
 
-## Usage
+## Использование
 
-Bring the full stack up:
+Запуск полного стека:
 
 ```bash
 ./scripts/start_microservices.sh up
 ```
 
-Tail logs:
+Просмотр логов:
 
 ```bash
 ./scripts/start_microservices.sh logs
 ```
 
-Stop everything:
+Остановка:
 
 ```bash
 ./scripts/start_microservices.sh down
 ```
 
-## Exposed Ports
+Статус:
 
-- `9092`: `kafka`
-- `5432`: `timescaledb`
-- `9092`: `kafka`
-- `3001`: `back_locomotive`
-- `3010`: `back_dispatcher`
-- `5183`: `front_locomotive`
-- `5174`: `front_dispatcher`
+```bash
+./scripts/start_microservices.sh ps
+```
 
-## Configuration
+## Порты
 
-The start script passes `.env.microservices` to Docker Compose explicitly.
+| Сервис | Порт |
+| --- | --- |
+| kafka | `9092` (внешний: из `.env.microservices`) |
+| timescaledb | `5433` |
+| back_locomotive | `3001` |
+| back_dispatcher | `3010` |
+| front_locomotive | `5183` |
 
-Update that file if you need to change:
+## Конфигурация
 
-- backend ports and CORS origins
-- dispatcher target WebSocket URLs
-- ingest mode (`INGEST_MODE=ws|kafka|hybrid`)
-- Kafka connection and topic settings
-- database credentials and `DATABASE_URL`
-- telemetry retention settings (`TELEMETRY_RETENTION_HOURS`)
-- frontend build-time API / WebSocket endpoints
+Скрипт запуска передаёт `.env.microservices` в Docker Compose.
 
-## Dispatcher DB Slice
+Основные настройки:
 
-Dispatcher persists the following entities to TimescaleDB/PostgreSQL:
+- Порты и CORS origins бэкендов
+- `INGEST_MODE` — режим инжеста диспетчера (`ws`, `kafka`, `hybrid`)
+- Kafka: bootstrap servers, топик, партиции, replication factor
+- TimescaleDB: `DATABASE_URL`, credentials
+- `TELEMETRY_RETENTION_HOURS` — время хранения телеметрии
+- `RECENT_TELEMETRY_MAX_MINUTES` — максимум минут для recent API
+- Аутентификация: `API_KEY`, `AUTH_TOKEN_SECRET`, TTL токенов, demo-пользователи
+- `PATTERN_FLEET_ENABLED` — включение 10 паттернов неисправностей
+- Фронтенд: build-time API/WS endpoints (`VITE_*`)
 
-- dispatcher commands (`dispatcher_commands`)
-- incoming locomotive messages (`incoming_messages`)
-- alert lifecycle events (`alert_events`)
-- short-term telemetry points (`telemetry_points`)
+## Слой данных диспетчера
 
-Telemetry retention is controlled via `TELEMETRY_RETENTION_HOURS` (recommended 24-72).
+Диспетчер сохраняет в TimescaleDB:
 
-Recent telemetry API for dashboards:
+| Таблица | Назначение |
+| --- | --- |
+| `telemetry_points` | Временные ряды всех метрик |
+| `health_snapshots` | Снимки индекса здоровья |
+| `alert_events` | Полный лог жизненного цикла алертов |
+| `incoming_messages` | Сообщения от локомотивов |
+| `dispatcher_commands` | Команды диспетчера |
+| `users` | Пользователи |
+| `auth_sessions` | JWT-сессии |
 
-- `GET /api/locomotives/{locomotive_id}/telemetry/recent?minutes=5`
-- `GET /api/locomotives/{locomotive_id}/telemetry/recent?minutes=15&metricId=motion.speed`
+Retention контролируется через `TELEMETRY_RETENTION_HOURS` (рекомендуется 24–72).
 
-The `minutes` query is bounded by `RECENT_TELEMETRY_MAX_MINUTES` (default 15).
+API недавней телеметрии:
 
-Alembic baseline files are in `back_dispatcher/app/alembic`.
+- `GET /api/locomotives/{id}/telemetry/recent?minutes=5`
+- `GET /api/locomotives/{id}/telemetry/recent?minutes=15&metricId=motion.speed`
 
-Run migrations locally from `back_dispatcher` (after installing requirements):
+Параметр `minutes` ограничен `RECENT_TELEMETRY_MAX_MINUTES` (по умолчанию 15).
+
+Миграции Alembic в `back_dispatcher/app/alembic`. Запуск миграций:
 
 ```bash
 alembic -c app/alembic.ini upgrade head
 ```
-- Kafka topic partitioning for expected locomotive / train streams
-- frontend build-time API / WebSocket endpoints
 
-Current Kafka partitioning rule:
+## Kafka партицирование
 
-- topic key: `locomotive_id`
-- default topic partitions: `100`
+- Ключ партиции: `locomotive_id`
+- Партиций по умолчанию: `100`
 
-This keeps one locomotive stream ordered within one partition while distributing about `1700` expected train streams across at most `100` partitions, or roughly `17` streams per partition on average.
+Это сохраняет порядок потока одного локомотива внутри одной партиции, распределяя ~1700 ожидаемых потоков по 100 партициям (~17 потоков на партицию).
 
-Important: Kafka can increase topic partitions but cannot shrink them. If you already created the topic with more than `100` partitions, changing env config alone will not reduce it; recreate the topic or use a new topic name.
+Kafka может увеличивать количество партиций, но не может уменьшать. Если топик уже создан с большим количеством партиций, изменение env не уменьшит их.
 
-## Notes
+## Примечания
 
-- Frontends are built into static bundles and served by `nginx`.
-- Browser WebSocket targets are set at image build time:
-  - locomotive frontend -> `ws://localhost:3001/ws`
-  - dispatcher frontend -> `ws://localhost:3010/ws`
-- Backend-to-backend traffic uses the Docker network alias `back_locomotive`.
+- Фронтенд собирается в статические файлы и раздаётся через Nginx
+- WebSocket/API-key подставляются при сборке образа
+- Межсервисный трафик идёт через Docker-сеть
+- `shared/thresholds.json` монтируется как volume в оба бэкенда — единая конфигурация порогов
 
-## Event Contract v1
+## Event Envelope V1
 
-Backend WS envelopes now include optional `event` metadata for producer/consumer validation:
+Все WS-конверты включают метаданные `event` для валидации producer/consumer:
 
 ```json
 {
@@ -119,9 +126,9 @@ Backend WS envelopes now include optional `event` metadata for producer/consumer
 }
 ```
 
-Dispatcher validates incoming locomotive stream envelopes in both WS and Kafka paths and rejects frames when:
+Диспетчер валидирует входящие конверты в WS и Kafka путях и отклоняет фреймы, если:
 
-- `event` is missing
-- `schema_version` is not `1.0`
-- `event_type` differs from transport `type`
-- `locomotive_id` does not match the configured target stream
+- отсутствует `event`
+- `schema_version` не `1.0`
+- `event_type` не совпадает с транспортным `type`
+- `locomotive_id` не совпадает с целевым потоком

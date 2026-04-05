@@ -1,136 +1,136 @@
-# Target Telemetry Architecture
+# Целевая телеметрическая архитектура
 
-This document describes a target architecture for the case where locomotive telemetry may be sampled at up to `1 ms` intervals.
+Документ описывает целевую архитектуру для случая, когда телеметрия локомотива может сэмплироваться с интервалом до `1 мс`.
 
-It is intentionally different from the current runtime in this repo.
+Это намеренно отличается от текущего рантайма в репозитории.
 
-The current implementation is:
+Текущая реализация:
 
-- Python `FastAPI` services
-- websocket ingestion from locomotive simulators
-- in-process health calculation
-- websocket fan-out to UIs
+- Python FastAPI сервисы
+- WebSocket/Kafka инжест от симуляторов
+- In-process вычисление здоровья
+- WebSocket fan-out к UI с backpressure
 
-That design is acceptable for low-rate demo traffic. It is not a defensible target for raw `1 ms` telemetry across `1700` locomotives.
+Такой дизайн приемлем для демо-трафика с низкой частотой. Он не является защитимой целевой архитектурой для raw `1 мс` телеметрии на `1700` локомотивов.
 
-## 1. Design Premise
+## 1. Проектная предпосылка
 
-There are two very different traffic classes:
+Существуют два принципиально разных класса трафика:
 
-1. raw telemetry samples
-2. operational events
+1. Сырые телеметрические сэмплы
+2. Операционные события
 
-They must not share the same pipeline end-to-end.
+Они не должны разделять один и тот же pipeline end-to-end.
 
-Raw telemetry characteristics:
+Характеристики сырой телеметрии:
 
-- high frequency
-- ordered by source
-- append-only
-- mostly machine-consumed
-- suitable for batching and stream processing
+- Высокая частота
+- Упорядоченность по источнику
+- Только добавление (append-only)
+- Преимущественно машинное потребление
+- Подходит для батчинга и потоковой обработки
 
-Operational event characteristics:
+Характеристики операционных событий:
 
-- much lower volume
-- business-facing
-- directly relevant to dispatchers and workflows
-- suitable for API and UI exposure
+- Значительно меньший объём
+- Бизнес-ориентированность
+- Прямая релевантность для диспетчеров и рабочих процессов
+- Подходит для API и UI
 
-## 2. Reference Volumes
+## 2. Справочные объёмы
 
-Assumptions from the requirement discussion:
+Исходные данные из обсуждения требований:
 
-- `1700` locomotives
-- `160k` wagons
-- `1000` trains in motion on average
-- `937` stations
-- `100k` business operations per day
-- telemetry sampling can reach `1 ms`
+- `1700` локомотивов
+- `160 000` вагонов
+- `1000` поездов в движении в среднем
+- `937` станций
+- `100 000` бизнес-операций в день
+- Сэмплирование телеметрии до `1 мс`
 
-If raw telemetry is emitted every `1 ms` per locomotive:
+При эмиссии сырой телеметрии каждую `1 мс` на локомотив:
 
-- `1000` telemetry messages / second / locomotive
-- about `1.7 million` messages / second across `1700` locomotives
+- `1000` телеметрических сообщений / секунда / локомотив
+- Около `1,7 миллиона` сообщений / секунда на `1700` локомотивов
 
-Even before fan-out, this is too high for:
+Даже до fan-out это слишком много для:
 
-- one websocket per locomotive into a Python app
-- JSON per sample
-- synchronous per-client broadcast
-- UI delivery of all samples
+- Одного WebSocket на локомотив в Python-приложение
+- JSON на каждый сэмпл
+- Синхронного per-client broadcast
+- UI-доставки всех сэмплов
 
-## 3. Core Architecture Decision
+## 3. Ключевое архитектурное решение
 
-The dispatcher service should not ingest and forward every raw sample individually.
+Диспетчерский сервис не должен инжестировать и форвардить каждый raw-сэмпл индивидуально.
 
-Instead, the target system should have four layers:
+Вместо этого целевая система должна иметь четыре слоя:
 
-1. edge acquisition
-2. stream ingestion
-3. stream processing and state materialization
-4. API and UI delivery
-
-```text
-Locomotive sensors
-  -> Edge collector on locomotive / depot gateway
-  -> Batched binary publish to broker
-  -> Stream processors / rule engines
-  -> Hot state store + operational event store
-  -> Dispatcher API / UI feed
-```
-
-## 4. Target Logical Topology
+1. Edge-сбор
+2. Потоковый инжест
+3. Потоковая обработка и материализация состояния
+4. API и UI-доставка
 
 ```text
-locomotive sensors
-  -> edge-collector
-  -> Kafka / Redpanda
-  -> telemetry-normalizer
-  -> stream processors
-  -> hot state store
-  -> dispatcher-api
-  -> websocket gateway for UI
-
-operational systems
-  -> operations-api
-  -> operations topic / database
-  -> dispatcher-api
-  -> websocket gateway for UI
+Датчики локомотива
+  → Edge-коллектор на локомотиве / депо-шлюзе
+  → Батчированная бинарная публикация в брокер
+  → Потоковые процессоры / rule engines
+  → Hot state store + хранилище операционных событий
+  → API диспетчера / UI-фид
 ```
 
-## 5. Service Responsibilities
+## 4. Целевая логическая топология
 
-### 5.1 Edge Collector
+```text
+Датчики локомотива
+  → edge-collector
+  → Kafka / Redpanda
+  → telemetry-normalizer
+  → stream processors
+  → hot state store
+  → dispatcher-api
+  → websocket gateway для UI
 
-Deploy close to the telemetry source.
+Операционные системы
+  → operations-api
+  → operations topic / база данных
+  → dispatcher-api
+  → websocket gateway для UI
+```
 
-Responsibilities:
+## 5. Ответственности сервисов
 
-- read raw sensor frames
-- timestamp as close to source as possible
-- buffer for short network interruptions
-- batch samples into frames, for example `50 ms`, `100 ms`, or `250 ms`
-- encode in compact binary format
-- publish to broker with locomotive-scoped partition key
+### 5.1 Edge-коллектор
 
-It should not:
+Развёртывается рядом с источником телеметрии.
 
-- do UI fan-out
-- expose raw sensor rate directly to browsers
+Обязанности:
 
-### 5.2 Broker
+- Чтение raw-сенсорных фреймов
+- Timestamping как можно ближе к источнику
+- Буферизация при коротких перебоях сети
+- Батчирование сэмплов во фреймы (например, `50 мс`, `100 мс`, `250 мс`)
+- Кодирование в компактный бинарный формат
+- Публикация в брокер с ключом партиции по locomotive_id
 
-Use Kafka-compatible streaming infrastructure.
+Не должен:
 
-Responsibilities:
+- Делать UI fan-out
+- Выставлять raw-сенсорную частоту напрямую в браузеры
 
-- durable ordered log
-- partitioned horizontal scale
-- replay support
-- decoupling between producers and consumers
+### 5.2 Брокер
 
-Topic families:
+Kafka-совместимая потоковая инфраструктура.
+
+Обязанности:
+
+- Устойчивый упорядоченный лог
+- Горизонтальное масштабирование через партицирование
+- Поддержка replay
+- Развязка между продюсерами и консьюмерами
+
+Семейства топиков:
 
 - `telemetry.raw`
 - `telemetry.aggregated.1s`
@@ -140,304 +140,251 @@ Topic families:
 - `operations.events`
 - `dispatcher.messages`
 
-Partitioning rule:
-
-- partition by `locomotive_id`
-
-That preserves per-locomotive ordering and makes stateful processing tractable.
+Правило партицирования: по `locomotive_id` — сохраняет per-locomotive упорядоченность.
 
 ### 5.3 Telemetry Normalizer
 
-Responsibilities:
+Обязанности:
 
-- validate edge payloads
-- reject malformed frames
-- attach metadata such as schema version, source id, ingestion timestamp
-- convert transport framing into canonical internal schema
+- Валидация edge-пейлоадов
+- Отклонение malformed фреймов
+- Прикрепление метаданных (schema version, source id, ingestion timestamp)
+- Конвертация транспортного фрейминга в каноническую внутреннюю схему
 
-This is where schema evolution should be controlled.
+Здесь должна контролироваться эволюция схемы.
 
-### 5.4 Stream Processing Layer
+### 5.4 Слой потоковой обработки
 
-Responsibilities:
+Обязанности:
 
-- compute rolling windows
-- derive health scores
-- generate alerts
-- detect anomalies
-- create lower-rate aggregates for APIs and UI
+- Вычисление роллинг-окон
+- Деривация health scores
+- Генерация алертов
+- Детекция аномалий
+- Создание агрегатов более низкой частоты для API и UI
 
-Outputs:
+Выходы:
 
-- `1 s` locomotive summary for live dashboarding
-- `5 s` or `10 s` aggregates for trend widgets
-- alert and health events
-- retained operational state
+- `1с` сводка по локомотиву для live-дашборда
+- `5с` или `10с` агрегаты для трендовых виджетов
+- Алерты и health-события
+- Сохранённое операционное состояние
 
-Technology options:
+Варианты технологий:
 
 - Kafka Streams
 - Flink
 - Spark Structured Streaming
-- custom consumers only if the rule set stays simple
-
-For this workload, a real stream processing runtime is the safer default.
+- Кастомные консьюмеры (только если rule set остаётся простым)
 
 ### 5.5 Hot State Store
 
-Responsibilities:
+Обязанности:
 
-- latest state by locomotive
-- recent alert state
-- recent message state
-- latest station / train operational view
+- Последнее состояние по локомотиву
+- Недавние алерты
+- Недавние сообщения
+- Последний вид станций/поездов
 
-Typical fit:
+Типичный выбор:
 
-- Redis for very hot ephemeral state
-- ClickHouse or TimescaleDB for queryable recent history
-- object storage for long-term raw archives
+- Redis — для hot эфемерного состояния
+- ClickHouse или TimescaleDB — для queryable недавней истории
+- Object storage — для долгосрочных raw-архивов
 
-### 5.6 Dispatcher API
+### 5.6 API диспетчера
 
-Responsibilities:
+Обязанности:
 
-- serve current state
-- serve recent history
-- expose dispatcher actions
-- join operational data with telemetry-derived state
+- Отдача текущего состояния
+- Отдача недавней истории
+- Диспетчерские действия
+- Join операционных данных с телеметрическим состоянием
 
-This service should work from materialized state, not from raw telemetry firehose.
+Работает от материализованного состояния, а не от raw firehose.
 
 ### 5.7 WebSocket Gateway
 
-Responsibilities:
+Обязанности:
 
-- push low-rate UI updates
-- manage subscriptions by locomotive, train, station, or region
-- apply rate limits and backpressure
-- disconnect slow clients cleanly
+- Push low-rate UI-обновлений
+- Управление подписками по локомотиву, поезду, станции, региону
+- Rate limits и backpressure
+- Чистое отключение медленных клиентов
 
-Target UI feed rates:
+Целевые частоты UI-фида:
 
-- live cards and maps: typically `1 Hz` to `2 Hz`
-- fast operator screen: maybe `5 Hz`
-- never raw `1 ms` per sample to browser clients
+- Live-карточки и карты: обычно `1–2 Гц`
+- Быстрый экран оператора: возможно `5 Гц`
+- Никогда raw `1 мс` на сэмпл в браузерные клиенты
 
-## 6. Data Contracts
+## 6. Контракты данных
 
-Define at least three telemetry contracts.
+Определить минимум три телеметрических контракта.
 
 ### 6.1 Raw Edge Batch
 
-Purpose:
+Назначение: транспорт от edge-коллектора к брокеру.
 
-- transport from edge collector to broker
+Свойства:
 
-Properties:
+- Бинарный
+- Батчированный
+- Schema-versioned
+- Сжатый (по возможности)
 
-- binary
-- batched
-- schema-versioned
-- compressed when possible
-
-Payload shape should contain:
+Пейлоад содержит:
 
 - `locomotive_id`
 - `source_timestamp_min`
 - `source_timestamp_max`
-- repeated samples
-- sequence range
-- schema version
+- Массив сэмплов
+- Диапазон sequence
+- Schema version
 
 ### 6.2 Operational Live Summary
 
-Purpose:
+Назначение: потребление API и UI.
 
-- API and UI consumption
+Свойства:
 
-Properties:
+- JSON допустим
+- Низкая частота
+- Одна запись на локомотив за интервал
 
-- JSON is acceptable
-- low rate
-- one record per locomotive per interval
-
-Fields should contain:
-
-- speed
-- traction
-- brake state
-- fuel
-- temperatures
-- derived health
-- active alert count
-- connectivity status
+Поля: скорость, тяга, тормозное состояние, топливо, температуры, деривированное здоровье, количество активных алертов, статус связи.
 
 ### 6.3 Business Event
 
-Purpose:
+Назначение: рабочие процессы станций, вагонов, поездов.
 
-- station, wagon, and train workflow
+Примеры: прибытие, отправление, маневрирование, осмотр, назначение локомотива, изменение состава.
 
-Examples:
+Эти события должны оставаться явными и бизнес-читаемыми.
 
-- arrival
-- departure
-- shunting
-- inspection
-- locomotive assignment
-- consist change
+## 7. Выбор транспорта
 
-These events should stay explicit and business-readable.
+Для сырой телеметрии:
 
-## 7. Transport Choices
+- Избегать WebSocket как основной транспорт инжеста
+- Избегать JSON на каждый сэмпл
+- Предпочтительно: gRPC streaming, TCP бинарный фрейминг, MQTT, специализированный протокол коллектора
 
-For raw telemetry:
+Для inter-service транспорта:
 
-- avoid websocket as primary ingestion transport
-- avoid JSON per sample
-- prefer gRPC streaming, TCP binary framing, MQTT, or a dedicated collector protocol into the edge layer
+- Kafka-совместимый брокер
 
-For service-to-service event transport:
+Для браузерной доставки:
 
-- prefer Kafka-compatible broker
+- WebSocket или SSE допустимы, но только для reduced-state потоков
 
-For browser delivery:
+## 8. Стратегия backpressure
 
-- websocket or SSE is fine, but only for reduced state streams
-
-## 8. Backpressure Strategy
-
-Backpressure must exist at every boundary.
+Backpressure должен существовать на каждой границе.
 
 ### Edge
 
-- local buffer with bounded retention
-- batch before publish
-- downsample non-critical metrics if retention risk is exceeded
+- Локальный буфер с ограниченным retention
+- Батчирование перед публикацией
+- Downsampling некритичных метрик при риске переполнения
 
-### Broker
+### Брокер
 
-- producer retry and idempotence
-- consumer lag monitoring
-- partition rebalancing
+- Producer retry и идемпотентность
+- Мониторинг consumer lag
+- Перебалансировка партиций
 
-### Processing
+### Обработка
 
-- bounded state windows
-- separate raw and aggregate consumers
-- dead-letter path for malformed records
+- Ограниченные state windows
+- Раздельные raw и aggregate консьюмеры
+- Dead-letter path для malformed записей
 
 ### UI Gateway
 
-- per-client send queues
-- max queue depth
-- drop policy for outdated telemetry snapshots
-- disconnect policy for persistently slow clients
+- Per-client очереди отправки
+- Максимальная глубина очереди
+- Drop-политика для устаревших телеметрических снапшотов
+- Disconnect-политика для persistently slow клиентов
 
-## 9. Storage Strategy
+## 9. Стратегия хранения
 
-Use different stores for different access patterns.
+Разные хранилища для разных паттернов доступа.
 
-Raw archive:
+| Назначение | Хранилище |
+| --- | --- |
+| Raw-архив | Object storage (Parquet/колоночный формат) |
+| Недавняя queryable телеметрия | ClickHouse или TimescaleDB |
+| Текущее live-состояние | Redis или аналог |
+| Бизнес-состояние | Реляционная БД |
 
-- object storage by date and locomotive
-- Parquet or similar columnar format
+Не пытаться обслуживать все use cases из одного хранилища.
 
-Recent queryable telemetry:
+## 10. Партицирование и масштабирование
 
-- ClickHouse or TimescaleDB
+Направление:
 
-Current live state:
+- Партицирование по `locomotive_id`
+- Достаточное количество партиций для горизонтального масштабирования консьюмеров
+- Гарантии упорядоченности только где действительно необходимо
 
-- Redis or equivalent in-memory store
+Бенчмаркинг-сценарии:
 
-Business state:
+- `1с` батчированная публикация от всех локомотивов
+- `100 мс` батчированная публикация от всех локомотивов
+- Worst-case reconnect storm
+- Replay и backfill нагрузка
 
-- relational database for transactional workflows
+Если бизнес настаивает на сохранении `1 мс` raw-сэмплов, система должна переносить их как батчированные записи, а не как индивидуальные JSON WebSocket-сообщения.
 
-Do not try to satisfy all use cases from one store.
+## 11. Требования надёжности
 
-## 10. Partitioning and Scale Guidance
+Минимальные рекомендуемые гарантии:
 
-The exact partition count depends on hardware and retention, but the direction is clear:
+- At-least-once delivery на инжесте
+- Идемпотентные ключи обработки (где возможны дубликаты)
+- Реплейабельный raw-телеметрический лог
+- Материализованное latest-state, восстанавливаемое из потока
+- Генерация алертов устойчива к рестарту процессора
 
-- partition by `locomotive_id`
-- provision enough partitions to scale consumers horizontally
-- keep ordering guarantees only where actually needed
+## 12. Безопасность и governance
 
-At this requirement level, start by benchmarking:
+Необходимые контроли:
 
-- `1 s` batched publish from all locomotives
-- `100 ms` batched publish from all locomotives
-- worst-case reconnect storm
-- replay and backfill load
+- Аутентифицированные продюсеры на edge
+- ACL на топики
+- Schema registry и проверки версий
+- Audit trail для действий диспетчера
+- Retention-политика по классу данных
 
-If the business still insists on preserving `1 ms` raw samples, the system should carry them as batched records, not individual websocket JSON messages.
+## 13. Практическая миграция из текущего репозитория
 
-## 11. Reliability Requirements
+**Фаза 1** — Текущий симулятор сохраняется. Заменить прямой WS-инжест на публикацию в брокер. Диспетчер потребляет reduced-телеметрический топик вместо raw per-locomotive WS.
+> Частично реализовано: Kafka producer в `back_locomotive`, Kafka consumer в `back_dispatcher`, гибридный режим инжеста.
 
-Recommended minimum guarantees:
+**Фаза 2** — Выделенный stream processor для деривации здоровья и алертов. Материализация latest-state вне памяти диспетчера.
 
-- at-least-once delivery on ingestion
-- idempotent processing keys where duplicates are possible
-- replayable raw telemetry log
-- materialized latest state rebuildable from stream
-- alert generation resilient to processor restart
+**Фаза 3** — Разделить UI WebSocket gateway от бизнес-API диспетчера. Per-client очереди и subscription fan-out workers.
+> Частично реализовано: backpressure fan-out с per-client очередями в `ws_server.py`.
 
-## 12. Security and Governance
+**Фаза 4** — Raw-архив и replay pipeline. Онбординг настоящих edge-коллекторов вместо in-process симулятора.
+> Частично реализовано: TimescaleDB для replay-персистенции, Replay API с 5 уровнями resolution.
 
-Needed controls:
+## 14. Что это значит для текущего кода
 
-- authenticated producers at edge
-- topic ACLs
-- schema registry and version checks
-- audit trail for dispatcher actions
-- retention policy by data class
+Пути текущего кода, не масштабируемые до целевой архитектуры:
 
-## 13. Practical Migration From Current Repo
+- JSON `telemetry.frame` на каждый raw-сэмпл
+- Health-вычисление inline с receive loop
+- In-memory only latest state (частично решено — TimescaleDB)
 
-Phase 1:
+Приемлемо для демо и функционального прототипирования. Не следует рассматривать как финальную архитектуру для `1 мс` телеметрии.
 
-- keep current simulator
-- replace dispatcher direct websocket ingest with broker publish
-- make dispatcher consume reduced telemetry topic instead of raw per-locomotive websocket
+## 15. Рекомендуемое решение
 
-Phase 2:
+Для данного домена и объёмов рекомендуется вариант:
 
-- introduce dedicated stream processor for health and alert derivation
-- move latest-state materialization out of dispatcher memory
+- `Диспетчер потребляет raw-батчи, но отдаёт UI только reduced state`
+- или `Диспетчер полностью исключён из raw-пути и читает только материализованное состояние`
 
-Phase 3:
-
-- split UI websocket gateway from dispatcher business API
-- add per-client queues and subscription fan-out workers
-
-Phase 4:
-
-- introduce raw archive and replay pipeline
-- onboard true edge collectors instead of in-process simulator
-
-## 14. What This Means For The Current Code
-
-Current code paths that do not scale to the target:
-
-- one outbound websocket connection per locomotive in dispatcher
-- JSON `telemetry.frame` per raw sample
-- health computation inline with websocket receive loop
-- synchronous fan-out in dispatcher websocket broadcast
-- in-memory only latest state
-
-Those are acceptable for demo and functional prototyping.
-
-They should not be treated as the final architecture for `1 ms` telemetry.
-
-## 15. Recommended Immediate Decision
-
-Choose one of these explicitly:
-
-1. `Dispatcher consumes reduced telemetry only`
-2. `Dispatcher consumes raw telemetry batches but serves reduced state to UI`
-3. `Dispatcher is removed from raw telemetry path entirely and only reads materialized state`
-
-For this domain and volume, option `2` or `3` is usually the correct direction.
+Это избегает coupling фронтенд-контрактов напрямую к raw-контрактам хранения.

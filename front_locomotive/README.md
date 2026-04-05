@@ -1,64 +1,74 @@
 # front_locomotive
 
-Operator-facing React application for the KTZ Digital Twin project.
+Единое React-приложение оператора для проекта KTZ Digital Twin.
 
-This app renders the live locomotive cockpit, replay workspace, alerts, telemetry trends, health explainability, and export actions. For the full project overview and Docker-first startup flow, start with the root [README](../README.md).
+Приложение отображает дашборд состояния парка, мониторинг телеметрии в реальном времени, replay-воспроизведение истории, интерактивную SVG-схему локомотива, карту, алерты, диспетчерскую консоль и управление пользователями. Полный обзор проекта и Docker-запуск описаны в корневом [README](../README.md).
 
-## What This App Covers
+## Возможности приложения
 
-- dashboard with overall health, subsystem status, contributing factors, alerts, live metrics, and export actions
-- telemetry page with smoothing, live trend zoom presets, and telemetry CSV export
-- alerts page with alert CSV export
-- messages/inbox view
-- locomotive diagram page
-- replay page backed by dispatcher replay APIs
+- **Дашборд** — здоровье парка, подсистемы, contributing factors, алерты, live-метрики, экспорт CSV/PDF
+- **Телеметрия** — карточки метрик с sparkline, EMA-сглаживание, тренд-графики с dataZoom, пресеты временных окон, CSV-экспорт
+- **Алерты** — лента алертов с жизненным циклом (active/acknowledged/resolved), CSV-экспорт
+- **Сообщения** — диспетчерские сообщения с отметкой прочтения
+- **Схема** — интерактивная SVG-схема тепловоза TE33A с 8 зонами подсистем, hover-tooltip, click-детали
+- **Карта** — Leaflet + OpenRailwayMap, 10 поездов на реальных ж/д путях Казахстана
+- **Replay** — воспроизведение истории из TimescaleDB: timeline scrubber, playback 1x–10x, snapshot, 5 уровней resolution
+- **Диспетчерская консоль** — мониторинг всех локомотивов, двусторонний чат (роли admin/dispatcher)
+- **Управление пользователями** — CRUD пользователей (роль admin)
+- **Аутентификация** — логин, JWT-сессия, принудительная смена пароля
 
-## Runtime Configuration
+## Стек
 
-Important build/runtime inputs:
+- React 19 + TypeScript + Vite 8
+- Tailwind CSS 4
+- Zustand 5 (10 сторов)
+- TanStack Query 5
+- ECharts 6 (echarts-for-react)
+- Leaflet
+- Lucide React (иконки)
+- MSW (mock mode)
 
-- `VITE_WS_URL`
-- `VITE_API_BASE_URL`
-- `VITE_REPLAY_API_BASE_URL`
-- `VITE_API_KEY`
-- `VITE_ENABLE_MOCKS`
+## Конфигурация
 
-In the Docker stack, these values are injected from `.env.microservices` through `docker-compose.microservices.yml`. That Docker configuration is the source of truth for the full system.
+Build-time переменные окружения:
 
-## Local Run
+| Переменная | Назначение |
+| --- | --- |
+| `VITE_WS_URL` | WebSocket URL диспетчера |
+| `VITE_API_BASE_URL` | REST API бэкенда локомотива |
+| `VITE_REPLAY_API_BASE_URL` | REST API бэкенда диспетчера (replay) |
+| `VITE_AUTH_API_BASE_URL` | REST API аутентификации |
+| `VITE_ENABLE_MOCKS` | Включить MSW mock mode (`true`/`false`) |
 
-Install dependencies:
+В Docker-стеке эти значения подставляются из `.env.microservices` через `docker-compose.microservices.yml`.
+
+## Локальный запуск
 
 ```bash
 npm ci
-```
-
-Start the dev server:
-
-```bash
 npm run dev
 ```
 
-Build for production:
+Сборка для продакшена:
 
 ```bash
 npm run build
 ```
 
-Lint:
+Линтинг:
 
 ```bash
 npm run lint
 ```
 
-## Notes
+## Примечания
 
-- Live REST calls target the locomotive backend.
-- Replay HTTP calls target the dispatcher backend.
-- WebSocket/API-key wiring depends on the configured env values.
-- Mock mode is available through `VITE_ENABLE_MOCKS=true`.
+- Live REST-запросы идут к бэкенду локомотива (`back_locomotive`)
+- Replay HTTP-запросы идут к бэкенду диспетчера (`back_dispatcher`)
+- WebSocket подключается к диспетчерскому WS (`back_dispatcher`)
+- Mock mode доступен через `VITE_ENABLE_MOCKS=true` — полный набор MSW-handlers для автономной разработки
 
-See also:
+## Ссылки
 
 - [../README.md](../README.md)
 - [../docs/MICROSERVICES_DOCKER.md](../docs/MICROSERVICES_DOCKER.md)

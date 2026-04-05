@@ -1,127 +1,162 @@
-# Front Locomotive: Design Description and Spec Check
+# Фронтенд локомотива: описание и проверка спецификации
 
-## 1) Purpose
-`front_locomotive` is a realtime operator-facing cockpit UI for one locomotive.
-It combines:
-- WebSocket live updates for telemetry, health, alerts, and dispatcher messages
-- REST bootstrap/history endpoints
-- Local client state (Zustand) for high-frequency UI rendering
+## 1. Назначение
 
-## 2) Technical Stack
-- React 19 + TypeScript + Vite
-- Tailwind CSS v4 for styling
-- Zustand for client-side stores
-- TanStack Query for REST fetching/caching
-- ECharts (via echarts-for-react) for charts
-- React Router for page navigation
-- MSW for mock mode support (`VITE_ENABLE_MOCKS=true`)
+`front_locomotive` — единый UI реального времени для оператора локомотива, диспетчера и администратора.
 
-## 3) Runtime Architecture
+Совмещает:
+- WebSocket live-обновления для телеметрии, здоровья, алертов и сообщений
+- REST-запросы для bootstrapping, истории, replay, аутентификации и управления пользователями
+- Клиентский стейт (Zustand) для высокочастотного рендеринга UI
 
-### 3.1 App Composition
-- Entry: `src/main.tsx` bootstraps mocks (optional) and mounts app.
-- Providers: `src/app/providers.tsx` sets QueryClient defaults.
-- Routing: `src/app/App.tsx` configures pages inside a common shell.
-- Layout: `src/components/layout/AppShell.tsx` + sidebar + topbar.
+## 2. Стек технологий
 
-### 3.2 Data Flow
-1. On app mount, `useWebSocketLifecycle` connects to backend WS.
-2. WS client (`src/services/websocket/wsClient.ts`) subscribes to channels.
-3. Incoming events are parsed/routed in `wsMessageRouter.ts`.
-4. Routed payloads are adapted (`src/services/adapters/*`) and committed to Zustand stores.
-5. UI components read store slices and re-render.
-6. Initial REST data is fetched via Query hooks in feature modules.
+- React 19 + TypeScript + Vite 8
+- Tailwind CSS v4
+- Zustand 5 — 10 клиентских сторов
+- TanStack Query 5 — REST кэширование
+- ECharts 6 (echarts-for-react) — графики и gauge
+- Leaflet — карта
+- React Router — навигация
+- Lucide React — иконки
+- MSW — mock mode (`VITE_ENABLE_MOCKS=true`)
 
-### 3.3 State Domains
-- Connection store: backend/dispatcher status, heartbeat latency, reconnect attempts
-- Telemetry store: latest metric readings + short sparkline buffers
-- Health store: overall health index + subsystem statuses
-- Alerts store: active alerts + severity summary
-- Dispatcher messages store: inbox + unread counters
+## 3. Рантайм-архитектура
 
-### 3.4 Realtime Resilience
-Implemented:
-- Reconnect with exponential backoff (`WS_RECONNECT_BASE_MS` → `WS_RECONNECT_MAX_MS`)
-- Explicit connection status indicators in top bar
+### 3.1 Композиция приложения
+
+- Entry: `src/main.tsx` — bootstrap mocks (опционально) и mount
+- Providers: `src/app/providers.tsx` — QueryClient
+- Routing: `src/app/App.tsx` — страницы внутри AppShell
+- Layout: `src/components/layout/AppShell.tsx` + Sidebar + TopBar
+
+### 3.2 Поток данных
+
+1. При монтировании `useWebSocketLifecycle` подключается к WS диспетчера
+2. WS-клиент (`wsClient.ts`) подписывается на каналы
+3. Входящие события маршрутизируются в `wsMessageRouter.ts`
+4. Пейлоады адаптируются через 5 адаптеров (`services/adapters/*`) и записываются в Zustand-сторы
+5. UI-компоненты читают сторы и ре-рендерятся
+6. REST-данные загружаются через TanStack Query хуки
+
+### 3.3 Домены стейта
+
+| Стор | Назначение |
+| --- | --- |
+| `useConnectionStore` | Статус WS, heartbeat latency, реконнект |
+| `useTelemetryStore` | Текущие и сглаженные показания, sparkline + trend буферы |
+| `useHealthStore` | Индекс здоровья по локомотивам |
+| `useAlertStore` | Жизненный цикл алертов, severity summary |
+| `useMessageStore` | Диспетчерские сообщения, непрочитанные |
+| `useFleetStore` | Реестр локомотивов, сводки |
+| `useReplayStore` | Состояние воспроизведения истории |
+| `useSettingsStore` | Настройки (сглаживание, alpha) |
+| `useDispatchConsoleStore` | Чат-история диспетчерской консоли |
+| `useAuthStore` | Сессия, токены, роль |
+
+### 3.4 Устойчивость соединения
+
+- Реконнект с exponential backoff
+- Индикатор статуса соединения в TopBar
 - Heartbeat latency tracking
+- EMA-сглаживание для устранения визуального дрожания
+- Автоотключение при невалидном токене (WS код 1008)
 
-Not implemented yet:
-- Client-side deduplication
-- Noise smoothing (EMA/median)
-- Burst buffering strategy for x10 event storms
+## 4. Страницы UI
 
-## 4) UI Information Design
-Main pages:
-- Dashboard: health gauge, subsystem bars, alert feed, key metrics, dispatcher inbox
-- Telemetry: grouped metric cards by domain (motion/fuel/thermal/pressure/electrical)
-- Alerts: active alert list with severity summary
-- Messages: dispatcher message list + acknowledge action
-- Replay: placeholder only (not yet functional)
+### Dashboard (Панель состояния парка)
+- Fleet Health Cards — здоровье, скорость, топливо, алерты для каждого локомотива
+- Health Gauge — анимированный ECharts gauge (0–100)
+- Subsystem Bars — индексы 6 подсистем
+- Health Explainer — Top-5 Contributing Factors
+- Alert Feed — последние алерты
+- Live Metrics — карточки метрик по группам
+- Dispatcher Inbox — сообщения
+- Export Menu — CSV телеметрии, CSV алертов, PDF-отчёт
 
-Visual language:
-- Dark industrial palette
-- Dense control-panel layout
-- Compact sidebar navigation with badge counters
+### Телеметрия
+- DynamicMetricRenderer с sparkline
+- EMA-сглаживание (toggle в TopBar)
+- LineChart с dataZoom (inside + slider)
+- TimeRangeSelector — пресеты 1м/5м/15м/1ч/All
+- CSV-экспорт
 
-## 5) Health Index in Current Frontend
-Current frontend only renders backend-calculated health index and subsystems.
-There is no client-visible formula UI yet for:
-- parameter weights
-- normalization rules
-- alert penalties
-- top-5 contributors/explainability panel
+### Схема локомотива (Diagram)
+- Интерактивная SVG-схема TE33A с 8 зонами
+- Hover — tooltip с метриками и статусом
+- Click — детальная боковая панель
+- Цветовая кодировка по health status
+- Escape — закрытие панели
 
-## 6) Requirement-by-Requirement Check
+### Карта (Map)
+- Leaflet + OpenStreetMap + OpenRailwayMap
+- 10 поездов с уникальными цветами
+- Rail-aligned routing через Overpass API
+- Trail полилинии, popup, боковая панель
 
-### 6.1 Frontend (UI/UX)
-- Unified cockpit with large health widget: **PARTIAL** (Dashboard exists, health gauge visible)
-- Required panels (speed/fuel/pressure-temp/electrical/alerts/trends): **PARTIAL**
-  - speed/fuel/thermal/pressure/electrical and alerts are present
-  - explicit trends dashboard section is limited
-- Interactive charts with autoscale/tooltips/zoom last N min: **PARTIAL**
-  - charts exist, but full zoom/time-window controls are not consistently exposed
-- Route/track map with position/restrictions: **MISSING**
-- Light/dark theme + responsive 24" and laptop: **PARTIAL**
-  - responsive layout exists, no explicit theme switch
-- Accessibility (contrast/font size/hints): **PARTIAL**
+### Алерты (Alerts)
+- Жизненный цикл: active → acknowledged → resolved
+- Severity: critical/warning/info
+- CSV-экспорт
 
-### 6.2 Realtime & Data
-- WS/SSE 1Hz+: **DONE** (WS at 1Hz telemetry in backend)
-- Buffering/smoothing/dedup/validation: **PARTIAL** (basic buffering only)
-- Reconnect/backoff/no-connection indicator: **DONE**
+### Сообщения (Messages)
+- Диспетчерские сообщения
+- Прочтение / подтверждение
+- Badge непрочитанных в sidebar
 
-### 6.3 Health Index
-- Transparent formula with weights/penalties: **MISSING (frontend explanation)**
-- Category labels (Норма/Внимание/Критично): **PARTIAL**
-  - score shown; category wording may not be consistently explicit in UI
-- Explainability top-5 factors: **MISSING**
+### Replay (История)
+- TimelineScrubber — полоса прокрутки
+- PlaybackControls — Play/Pause, 1x/2x/5x/10x, skip ±10с
+- ReplayChart с маркером текущего момента
+- ReplayMetricSelector — выбор метрик
+- ReplaySnapshotSummary — здоровье + алерты на момент времени
+- Resolution: raw, 1s, 10s, 1m, 5m
+- CSV и PDF экспорт
 
-### 6.4 Backend & Architecture (as visible from integration points)
-- Microservice style telemetry pipeline: **PARTIAL** (modular single service)
-- Event bus/queue: **PARTIAL (simulated internal broadcaster)**
-- REST for history/threshold config + WS online: **PARTIAL**
-  - history endpoint exists
-  - threshold config API not exposed in frontend integration
-- Short-term storage 24–72h: **PARTIAL** (in-memory ring buffer)
-- Configurable thresholds without recompilation: **PARTIAL** (config-driven but static file)
-- Logs/metrics/health-check: **PARTIAL** (health route/logging present, limited metrics)
+### Диспетчерская консоль
+- Список локомотивов с телеметрией
+- Двусторонний чат
+- Загрузка истории чата
+- Роли: admin, dispatcher
 
-### 6.5 Non-functional
-- UI latency <500 ms in demo: **LIKELY**, not benchmarked in frontend docs
-- Highload x10 without UI degradation: **NOT VERIFIED**
-- Basic auth/restricted settings: **MISSING**
-- OpenAPI/arch diagram: **PARTIAL** (backend likely exposes OpenAPI, no consolidated arch diagram in frontend docs)
+### Управление пользователями
+- CRUD пользователей (admin)
+- Роли: admin, dispatcher, regular_train
+- Привязка к locomotive_id
+- Деактивация/активация
 
-## 7) Highest-Priority Gaps
-1. Replay/history UX is placeholder only.
-2. Map/track visualization is absent.
-3. Health explainability (formula + top contributors) is absent.
-4. Highload controls (smoothing/dedup/backpressure) are incomplete on frontend side.
-5. Auth and settings access control are absent.
+### Аутентификация
+- Login Page
+- Change Password Page (принудительная смена при первом входе)
+- JWT access + refresh (httpOnly cookie)
 
-## 8) Suggested Roadmap
-- Phase A: complete replay UI (5–15 min scrub + event markers + CSV export)
-- Phase B: health explainability panel (weights, penalties, top-5 contributors)
-- Phase C: route map widget with position + restriction overlays
-- Phase D: robustness features (EMA/median, dedup keys, burst buffering)
-- Phase E: auth + role-gated threshold/settings screens
+## 5. Проверка требований
+
+### Визуализация реального времени (35%)
+- WS/SSE 1Hz: **Реализовано** — WebSocket 1 Hz телеметрия + 5с health
+- Буферизация/сглаживание: **Реализовано** — EMA сглаживание, sparkline + trend буферы
+- Reconnect/индикатор: **Реализовано** — exponential backoff, ConnectionIndicator
+
+### UI/UX (30%)
+- Единый дашборд с health: **Реализовано** — Fleet Health Cards + HealthGauge
+- Интерактивные графики: **Реализовано** — ECharts dataZoom, TimeRangeSelector
+- Карта: **Реализовано** — Leaflet + OpenRailwayMap + rail alignment
+- Тема: **Реализовано** — ThemeToggle (тёмная/светлая)
+- Replay: **Реализовано** — полная страница с TimescaleDB
+
+### Health Index (35%)
+- Формула с весами/штрафами: **Реализовано** — backend + frontend explainability
+- Метки категорий: **Реализовано** — normal/degraded/warning/critical
+- Top-5 contributing factors: **Реализовано** — HealthExplainer с штрафами
+
+### Архитектура бэкенда (25%)
+- Микросервисная архитектура: **Реализовано** — 5 Docker-сервисов
+- Event bus: **Реализовано** — Kafka
+- REST + WS: **Реализовано** — 25+ REST + 2 WS
+- Конфигурируемые пороги: **Реализовано** — `PUT /api/config/thresholds`
+- Аутентификация: **Реализовано** — JWT + Argon2 + RBAC
+
+### Качество демо (10%)
+- Экспорт: **Реализовано** — CSV + PDF
+- Архитектурная документация: **Реализовано** — architecture.md, docs/
+- Docker: **Реализовано** — one-command deploy

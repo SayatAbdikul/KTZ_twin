@@ -1,153 +1,100 @@
-# KTZ Twin Architecture
+# Архитектура KTZ Digital Twin
 
-This document describes the system as it exists in the current codebase.
+Документ описывает текущую систему в кодовой базе: ответственности сервисов, рантайм-топологию, HTTP- и WebSocket-контракты, телеметрический и health-контракты.
 
-It covers:
+## 1. Обзор системы
 
-- service responsibilities
-- runtime topology
-- HTTP contracts
-- WebSocket contracts
-- telemetry and health contracts
-- known mismatches between the current implementation and the intended target architecture
+Текущие сервисы (Docker Compose):
 
-## 1. System Overview
+1. `kafka` — брокер сообщений (KRaft mode, без ZooKeeper)
+2. `timescaledb` — хранилище временных рядов
+3. `back_locomotive` — симулятор телеметрии, Kafka producer, REST/WS API
+4. `back_dispatcher` — Kafka/WS инжест, rule engine, TimescaleDB, аутентификация, fan-out
+5. `front_locomotive` — единый React UI (оператор, диспетчер, администратор)
 
-Current services:
-
-1. `back_locomotive`
-2. `back_dispatcher`
-3. `front_locomotive`
-4. `front_dispatcher`
-
-Current implemented topology:
+Рантайм-топология:
 
 ```text
-front_locomotive  --WS-->  back_dispatcher  --WS-->  back_locomotive
-front_dispatcher  --WS-->  back_dispatcher
-
-front_locomotive  --HTTP--> back_locomotive   (legacy / partial)
-
-Optional stream path:
-
-back_locomotive --Kafka--> back_dispatcher
+front_locomotive --REST/WS--> back_locomotive --Kafka--> back_dispatcher --TimescaleDB
+front_locomotive --Replay REST---------------> back_dispatcher
+front_locomotive --Dispatcher WS-------------> back_dispatcher
 ```
 
-Important: the codebase still contains two different architectural ideas:
+`front_dispatcher` — устаревший автономный диспетчерский фронтенд, не используется в текущем Docker-стеке.
 
-- the intended target architecture:
-  - raw telemetry seeded to CSV
-  - locomotive replay service
-  - dispatcher computes health and alerts from raw telemetry rules
-- the currently implemented runtime:
-  - `back_locomotive` is still an in-memory simulator
-  - `back_dispatcher` connects to locomotive services over WebSocket and/or Kafka
-
-So this document separates "current implementation" from "target contracts".
-
-## 2. Service Responsibilities
+## 2. Ответственности сервисов
 
 ### 2.1 `back_locomotive`
 
-Path: [back_locomotive](/home/martian/Documents/swe/KTZ_twin/back_locomotive)
+Путь: `back_locomotive/`
 
-Current responsibility:
+Текущие обязанности:
 
-- simulate locomotive telemetry in memory
-- generate health updates in memory
-- generate random alerts and messages
-- expose REST endpoints
-- broadcast telemetry, health, alerts, messages, and heartbeat over WebSocket
+- Физический симулятор телеметрии (14 метрик, 5 групп, 4-фазный цикл движения)
+- 10 детерминированных профилей неисправностей (KTZ-BRK-001 ... KTZ-MIX-010)
+- Генерация здоровья подсистем с SubsystemPenalty и top-5 contributing factors
+- Генерация алертов и сообщений
+- Kafka producer с идемпотентностью и автосозданием топика
+- REST API (8 роутеров, 16+ эндпоинтов)
+- WebSocket broadcasting телеметрии, здоровья, алертов, сообщений, heartbeat
+- Экспорт CSV телеметрии и алертов
 
-It is not currently:
-
-- replaying `telemetry.csv`
-- publishing Kafka events
-- emitting the reduced raw telemetry schema from `generate_core_synthetic_telemetry.py`
+6 фоновых задач при старте:
+1. Телеметрия — каждую 1с
+2. Здоровье — каждые 5с
+3. Heartbeat — каждые 10с
+4. Случайные алерты
+5. Случайные сообщения
+6. Kafka producer
 
 ### 2.2 `back_dispatcher`
 
-Path: [back_dispatcher](/home/martian/Documents/swe/KTZ_twin/back_dispatcher)
+Путь: `back_dispatcher/`
 
-Current responsibility:
+Текущие обязанности:
 
-- open one outbound WebSocket client per configured locomotive target
-- ingest `telemetry.frame` and `message.new` from each locomotive backend
-- derive rule-based `health.update` and alert events from incoming telemetry
-- keep per-locomotive in-memory state
-- expose dispatcher WebSocket for frontends
-- expose small HTTP inspection endpoints
+- **Двойной режим инжеста**: WebSocket, Kafka или гибридный (`INGEST_MODE=ws|kafka|hybrid`)
+- **Kafka consumer**: потребление событий из Kafka с валидацией Event Envelope V1 и дедупликацией (LRU 20 000 event_ids)
+- **WebSocket клиенты**: подключение к каждому локомотивному бэкенду с exponential backoff
+- **Rule Engine**: вычисление здоровья 6 подсистем с временными окнами (1с/5с/30с/10мин) и 11 правил алертов
+- **Backpressure fan-out**: per-client очереди, latest-wins для телеметрии, ordered delivery для алертов
+- **TimescaleDB**: хранение телеметрии, health snapshots, alert events, сообщений, команд
+- **Replay API**: воспроизведение с 5 уровнями resolution (raw, 1s, 10s, 1m, 5m) и snapshot на момент времени
+- **JWT-аутентификация**: Argon2 хеширование, access + refresh токены, RBAC (admin/dispatcher/regular_train)
+- **Управление пользователями**: CRUD через admin API, seed demo-пользователей при старте
+- **Диспетчерский чат**: двусторонняя связь с машинистами, персистенция команд
+- **Runtime-статистика**: метрики подключений, инжеста, broadcast, backpressure через `GET /api/health`
 
 ### 2.3 `front_locomotive`
 
-Path: [front_locomotive](/home/martian/Documents/swe/KTZ_twin/front_locomotive)
+Путь: `front_locomotive/`
 
-Current responsibility:
+Единое React-приложение (11 страниц):
 
-- connect to a single websocket endpoint
-- subscribe to one configured locomotive
-- render:
-  - live telemetry cards
-  - subsystem health
-  - locomotive diagram
-  - alerts
-  - dispatcher messages
+- **Dashboard** — здоровье парка, подсистемы, contributing factors, алерты, live-метрики, экспорт
+- **Телеметрия** — карточки метрик с sparkline, EMA-сглаживание, тренд-графики с dataZoom
+- **Алерты** — лента с жизненным циклом, CSV-экспорт
+- **Сообщения** — диспетчерские сообщения с прочтением/подтверждением
+- **Схема** — интерактивная SVG-схема TE33A с 8 зонами
+- **Карта** — Leaflet + OpenRailwayMap, 10 поездов на ж/д путях Казахстана
+- **Replay** — воспроизведение из TimescaleDB с timeline, playback 1x–10x, snapshot
+- **Диспетчерская консоль** — мониторинг парка и двусторонний чат
+- **Управление пользователями** — CRUD (admin)
+- **Логин** — JWT-аутентификация
+- **Смена пароля** — принудительная смена при первом входе
 
-Current defaults:
+Конфигурация:
+- `VITE_WS_URL` — WebSocket URL диспетчера
+- `VITE_API_BASE_URL` — REST API бэкенда локомотива
+- `VITE_REPLAY_API_BASE_URL` — REST API бэкенда диспетчера (replay)
+- `VITE_AUTH_API_BASE_URL` — REST API аутентификации
+- `VITE_ENABLE_MOCKS` — MSW mock mode
 
-- `WS_URL`: `ws://localhost:3010/ws`
-- `API_BASE_URL`: `http://localhost:3001`
-- `LOCOMOTIVE_ID`: `KTZ-2001`
+10 Zustand-сторов: Connection, Telemetry, Health, Alert, Message, Fleet, Replay, Settings, DispatchConsole, Auth.
 
-This means the locomotive UI currently expects dispatcher to be the live WS source.
+## 3. Стандартный WebSocket-конверт
 
-### 2.4 `front_dispatcher`
-
-Path: [front_dispatcher](/home/martian/Documents/swe/KTZ_twin/front_dispatcher)
-
-Current responsibility:
-
-- connect to dispatcher websocket
-- render multi-locomotive telemetry list
-- show dispatcher chat stream
-
-Important current inconsistency:
-
-- default `WS_URL` in [front_dispatcher/src/config.ts](/home/martian/Documents/swe/KTZ_twin/front_dispatcher/src/config.ts) is `ws://localhost:3001/ws`
-- that points to `back_locomotive`, not `back_dispatcher`
-- this only works correctly if build-time env overrides it
-
-## 3. Current Runtime Topology
-
-### 3.1 Back Dispatcher Startup
-
-Entrypoint: [back_dispatcher/app/main.py](/home/martian/Documents/swe/KTZ_twin/back_dispatcher/app/main.py)
-
-Startup flow:
-
-1. parse `LOCOMOTIVE_TARGETS`
-2. create one `LocomotiveRuntime` per target
-3. spawn `connect_locomotive_forever(...)` task per target
-4. accept frontend websocket clients on `/ws`
-
-### 3.2 Back Locomotive Startup
-
-Entrypoint: [back_locomotive/app/main.py](/home/martian/Documents/swe/KTZ_twin/back_locomotive/app/main.py)
-
-Startup flow:
-
-1. generate initial telemetry frame
-2. generate initial health index
-3. start background tasks:
-   - telemetry every 1s
-   - health every 5s
-   - heartbeat every 10s
-   - random alert generation
-   - random message generation
-
-## 4. Standard WebSocket Envelope
-
-Used by both backends:
+Используется обоими бэкендами:
 
 ```json
 {
@@ -158,17 +105,15 @@ Used by both backends:
 }
 ```
 
-Fields:
+Поля:
+- `type` — тип сообщения
+- `payload` — тело сообщения
+- `timestamp` — время отправки (epoch ms)
+- `sequenceId` — монотонный счётчик на процесс
 
-- `type`: message type string
-- `payload`: message body
-- `timestamp`: server send time in epoch ms
-- `sequenceId`: monotonic per-process sequence counter
+### 3.1 Event Envelope V1
 
-### 4.1 Event Contract v1 (Producer/Consumer)
-
-For service-to-service streaming (and now also attached to WS envelopes for compatibility),
-the event metadata contract is:
+Для inter-service стриминга (Kafka и WS) все конверты включают метаданные `event`:
 
 ```json
 {
@@ -181,93 +126,67 @@ the event metadata contract is:
 }
 ```
 
-Required fields:
+Обязательные поля:
+- `event_id` — UUID для дедупликации и трейсинга
+- `event_type` — логический тип (должен совпадать с `type` транспортного конверта)
+- `source` — имя сервиса-продюсера
+- `locomotive_id` — ключ сущности для роутинга и упорядочивания
+- `occurred_at` — время создания события (epoch ms)
+- `schema_version` — версия контракта, сейчас `1.0`
 
-- `event_id`: UUID identifier for deduplication and tracing
-- `event_type`: logical event type (must match transport envelope `type`)
-- `source`: producer service name
-- `locomotive_id`: entity key used for ordering and routing
-- `occurred_at`: event production time in epoch ms
-- `schema_version`: contract version, currently `1.0`
+Правила валидации:
+- Продюсер всегда эмитит `event` с `schema_version=1.0`
+- Консьюмер отклоняет фреймы без `event`
+- Консьюмер отклоняет неподдерживаемые `schema_version`
+- Консьюмер отклоняет несовпадение `event_type` с `type`
+- Консьюмер отклоняет несовпадение `locomotive_id` с целевым потоком
 
-Validation rules implemented:
+Валидация применяется в обоих путях — WS-инжесте и Kafka-инжесте диспетчера.
 
-- producer always emits `event` metadata with `schema_version=1.0`
-- consumer rejects frames without `event`
-- consumer rejects unsupported `schema_version`
-- consumer rejects `event_type` mismatch with transport `type`
-- consumer rejects `locomotive_id` mismatch for the current target stream
+## 4. Контракты `back_locomotive`
 
-These validation rules are applied in both dispatcher WS ingestion and dispatcher Kafka ingestion paths.
+### 4.1 HTTP-маршруты
 
-## 5. `back_locomotive` Contracts
+| Маршрут | Назначение |
+| --- | --- |
+| `GET /ping` | Liveness check (публичный) |
+| `GET /api/telemetry/current` | Текущий фрейм телеметрии |
+| `GET /api/telemetry/metrics` | Определения метрик и пороги |
+| `GET /api/telemetry/history/{metric_id}` | In-memory история метрики |
+| `GET /api/health` | Текущий индекс здоровья подсистем |
+| `GET /api/alerts` | Лента алертов |
+| `POST /api/alerts/{alert_id}/acknowledge` | Подтверждение алерта |
+| `GET /api/messages` | Лента сообщений |
+| `POST /api/messages/{message_id}/read` | Отметить сообщение прочитанным |
+| `POST /api/messages/{message_id}/acknowledge` | Подтвердить сообщение |
+| `GET /api/connection/status` | Статус подключения |
+| `GET /api/config/thresholds` | Текущие пороговые значения |
+| `PUT /api/config/thresholds` | Обновить пороги без перезапуска |
+| `GET /api/export/telemetry/csv` | Экспорт телеметрии в CSV |
+| `GET /api/export/alerts/csv` | Экспорт алертов в CSV |
+| `GET /api/replay/snapshot` | In-memory снимок replay |
 
-### 5.1 HTTP Routes
+### 4.2 WebSocket-маршрут
 
-Defined in:
+Маршрут: `WS /ws?apiKey=...`
 
-- [back_locomotive/app/main.py](/home/martian/Documents/swe/KTZ_twin/back_locomotive/app/main.py)
-- route modules under [back_locomotive/app/routes](/home/martian/Documents/swe/KTZ_twin/back_locomotive/app/routes)
-
-Current HTTP routes:
-
-- `GET /ping`
-- `GET /api/telemetry/current`
-- `GET /api/telemetry/metrics`
-- `GET /api/telemetry/history/{metric_id}`
-- `GET /api/health`
-- `GET /api/alerts`
-- `POST /api/alerts/{alert_id}/acknowledge`
-- `GET /api/messages`
-- `POST /api/messages/{message_id}/read`
-- `POST /api/messages/{message_id}/acknowledge`
-- `GET /api/connection/status`
-- `GET /api/replay/snapshot`
-
-These are still simulator-era routes.
-
-### 5.2 WebSocket Route
-
-Route:
-
-- `WS /ws`
-
-Defined in:
-
-- [back_locomotive/app/ws/handler.py](/home/martian/Documents/swe/KTZ_twin/back_locomotive/app/ws/handler.py)
-- [back_locomotive/app/ws/broadcaster.py](/home/martian/Documents/swe/KTZ_twin/back_locomotive/app/ws/broadcaster.py)
-
-Incoming client messages accepted:
-
+Входящие сообщения от клиента:
 - `subscribe`
 - `heartbeat.ack`
 
-Outgoing message types:
-
+Исходящие типы:
 - `connection.status`
 - `telemetry.frame`
 - `health.update`
 - `connection.heartbeat`
 - `alert.new`
+- `alert.update`
+- `alert.resolved`
 - `message.new`
 
-Important behavior:
+### 4.3 Телеметрический контракт
 
-- no per-client filtering
-- all clients receive all live events
-- `connection.status` payload currently contains only:
-
-```json
-{
-  "dispatcherStatus": "connected"
-}
-```
-
-### 5.3 Telemetry Contract From `back_locomotive`
-
-Current emitted telemetry is UI-oriented, not raw-seeding-oriented.
-
-Current payload shape:
+Текущая форма пейлоада `telemetry.frame`:
 
 ```json
 {
@@ -286,271 +205,166 @@ Current payload shape:
 }
 ```
 
-Key metric IDs currently produced:
+14 метрик (5 групп):
 
-- `motion.speed`
-- `motion.acceleration`
-- `motion.distance`
-- `fuel.level`
-- `fuel.consumption_rate`
-- `thermal.coolant_temp`
-- `thermal.oil_temp`
-- `thermal.exhaust_temp`
-- `pressure.brake_main`
-- `pressure.brake_pipe`
-- `pressure.oil`
-- `electrical.traction_voltage`
-- `electrical.traction_current`
-- `electrical.battery_voltage`
+| Группа | Метрики |
+| --- | --- |
+| motion | `speed`, `acceleration`, `distance` |
+| fuel | `level`, `consumption_rate` |
+| thermal | `coolant_temp`, `oil_temp`, `exhaust_temp` |
+| pressure | `brake_main`, `brake_pipe`, `oil` |
+| electrical | `traction_voltage`, `traction_current`, `battery_voltage` |
 
-This is defined by the simulator in [back_locomotive/app/simulator/telemetry.py](/home/martian/Documents/swe/KTZ_twin/back_locomotive/app/simulator/telemetry.py).
+### 4.4 Health-контракт
 
-## 6. `back_dispatcher` Contracts
-
-### 6.1 HTTP Routes
-
-Defined in:
-
-- [back_dispatcher/app/main.py](/home/martian/Documents/swe/KTZ_twin/back_dispatcher/app/main.py)
-- [back_dispatcher/app/routes/health.py](/home/martian/Documents/swe/KTZ_twin/back_dispatcher/app/routes/health.py)
-- [back_dispatcher/app/routes/locomotives.py](/home/martian/Documents/swe/KTZ_twin/back_dispatcher/app/routes/locomotives.py)
-
-Routes:
-
-- `GET /ping`
-- `GET /api/health`
-- `GET /api/locomotives`
-- `GET /api/locomotives/{locomotive_id}/latest-telemetry`
-- `GET /api/locomotives/{locomotive_id}/chat`
-
-Meaning:
-
-- `/ping`: liveness
-- `/api/health`: dispatcher service health, not locomotive health
-- `/api/locomotives`: configured locomotive targets and status
-- `/latest-telemetry`: latest cached `telemetry.frame` payload
-- `/chat`: in-memory chat history for one locomotive
-
-### 6.2 Dispatcher WebSocket Route
-
-Route:
-
-- `WS /ws`
-
-Defined in:
-
-- [back_dispatcher/app/main.py](/home/martian/Documents/swe/KTZ_twin/back_dispatcher/app/main.py)
-- [back_dispatcher/app/ws_server.py](/home/martian/Documents/swe/KTZ_twin/back_dispatcher/app/ws_server.py)
-
-Incoming client messages:
-
-#### `subscribe`
-
-Examples:
+Пейлоад `health.update` от `back_locomotive`:
 
 ```json
-{ "type": "subscribe", "payload": { "channels": ["telemetry"] } }
+{
+  "locomotiveId": "KTZ-2001",
+  "overallHealth": 74,
+  "timestamp": 1710000000000,
+  "subsystems": [
+    {
+      "subsystemId": "brakes",
+      "label": "Brakes",
+      "healthScore": 52.0,
+      "status": "warning",
+      "activeAlertCount": 1,
+      "lastUpdated": 1710000000000,
+      "penalties": [
+        {
+          "metricId": "pressure.brake_pipe",
+          "metricLabel": "Brake Pipe Pressure",
+          "currentValue": 3.2,
+          "thresholdType": "criticalLow",
+          "thresholdValue": 3.5,
+          "penaltyPoints": 15.0
+        }
+      ]
+    }
+  ],
+  "topFactors": [...]
+}
 ```
+
+6 подсистем: `engine`, `brakes`, `electrical`, `fuel`, `cooling`, `pneumatic`.
+
+Статусы: `normal` (80+), `degraded` (60–79), `warning` (40–59), `critical` (<40).
+
+## 5. Контракты `back_dispatcher`
+
+### 5.1 HTTP-маршруты
+
+| Маршрут | Назначение |
+| --- | --- |
+| `GET /ping` | Liveness check (публичный) |
+| `GET /api/health` | Здоровье сервиса, runtime-статистика, backpressure |
+| `GET /api/locomotives` | Сконфигурированные локомотивы и статус подключения |
+| `GET /api/locomotives/{id}/latest-telemetry` | Последний полученный фрейм телеметрии |
+| `GET /api/locomotives/{id}/chat` | История чата диспетчера |
+| `GET /api/locomotives/{id}/telemetry/recent` | Недавняя телеметрия из TimescaleDB |
+| `GET /api/locomotives/{id}/replay/time-range` | Диапазон доступных replay-данных |
+| `GET /api/locomotives/{id}/replay/range` | Исторические серии с контролем resolution |
+| `GET /api/locomotives/{id}/replay/snapshot` | Полный снимок на момент времени |
+| `POST /api/auth/login` | Аутентификация |
+| `POST /api/auth/refresh` | Обновление JWT-токена |
+| `GET /api/auth/me` | Текущий пользователь |
+| `POST /api/auth/change-password` | Смена пароля |
+| `POST /api/auth/logout` | Выход |
+| `GET /api/admin/users` | Список пользователей (admin) |
+| `POST /api/admin/users` | Создание пользователя (admin) |
+| `PUT /api/admin/users/{id}` | Обновление пользователя (admin) |
+| `POST /api/admin/users/{id}/reset-password` | Сброс пароля (admin) |
+
+### 5.2 WebSocket-маршрут диспетчера
+
+Маршрут: `WS /ws?apiKey=...` или `WS /ws?token=...`
+
+#### Входящие сообщения
+
+**subscribe** — подписка на данные:
 
 ```json
 { "type": "subscribe", "payload": { "locomotiveId": "KTZ-2001" } }
 ```
 
-Behavior:
+`locomotiveId` = `"all"` или `"*"` для всех, конкретный ID для одного локомотива.
 
-- no `locomotiveId` means unfiltered / all
-- `"*"` or `"all"` means all locomotives
-- specific `locomotiveId` means only that locomotive
-
-#### `dispatcher.chat`
-
-Example:
+**dispatcher.chat** — отправка команды:
 
 ```json
 {
   "type": "dispatcher.chat",
   "payload": {
     "locomotiveId": "KTZ-2001",
-    "body": "Reduce speed to 60 km/h",
-    "timestamp": 1710000000000
+    "body": "Снизьте скорость до 80 км/ч"
   }
 }
 ```
 
-Behavior:
+Поведение:
+- Диспетчер сохраняет сообщение в базу данных и in-memory историю
+- Пытается переслать на WebSocket соответствующего локомотива
+- Бродкастит `message.new` подписчикам
 
-- dispatcher stores the message in in-memory chat history
-- dispatcher tries to forward it to the configured locomotive websocket
-- a `message.new` event is broadcast afterward
+#### Исходящие типы
 
-### 6.3 Outgoing Dispatcher WS Message Types
+- `dispatcher.snapshot` — полный снимок при подключении
+- `dispatcher.locomotive_status` — изменение статуса подключения
+- `telemetry.frame` — фрейм телеметрии
+- `health.update` — обновление здоровья (вычисляется rule engine)
+- `alert.new` / `alert.update` / `alert.resolved` — жизненный цикл алертов
+- `message.new` — новое сообщение
 
-Current outgoing types:
+### 5.3 Rule Engine
 
-- `dispatcher.snapshot`
-- `dispatcher.locomotive_status`
-- `telemetry.frame`
-- `health.update`
-- `alert.new`
-- `alert.update`
-- `alert.resolved`
-- `message.new`
-- `locomotive.event`
+Файл: `back_dispatcher/app/health_engine.py`
 
-#### `dispatcher.snapshot`
+Логика:
+1. Принимает `telemetry.frame`
+2. Конвертирует `readings[]` в карту метрик
+3. Хранит роллинг-историю в памяти
+4. Вычисляет здоровье по 4 доменам:
+   - Тормоза (вес 0.40)
+   - Термика (вес 0.25)
+   - Трансмиссия (вес 0.20)
+   - Неисправности (вес 0.15)
+5. Генерирует алерты по 11 правилам с temporal windows (1с/5с/30с/10мин)
 
-Sent immediately on client connect.
+### 5.4 Backpressure fan-out
 
-Payload:
+Реализация в `back_dispatcher/app/ws_server.py`:
 
-```json
-{
-  "locomotives": [
-    {
-      "locomotiveId": "KTZ-2001",
-      "wsUrl": "ws://localhost:3001/ws",
-      "connected": true,
-      "lastSeenAt": 1710000000000,
-      "reconnectAttempt": 0
-    }
-  ]
-}
-```
+- Per-client очереди с asyncio
+- Телеметрия: latest-wins / coalesced delivery
+- Алерты и статусы: ordered, non-lossy
+- Мониторинг глубины очередей и dropped-сообщений
+- Статистика через `GET /api/health` → `runtimeStats`
 
-#### `dispatcher.locomotive_status`
+### 5.5 Структура БД (TimescaleDB)
 
-Broadcast when a locomotive websocket connects or disconnects.
+| Таблица | Назначение |
+| --- | --- |
+| `telemetry_points` | Временные ряды метрик (hypertable) |
+| `health_snapshots` | Снимки индекса здоровья |
+| `alert_events` | Лог жизненного цикла алертов |
+| `incoming_messages` | Сообщения от локомотивов |
+| `dispatcher_commands` | Команды от диспетчера |
+| `users` | Пользователи системы |
+| `auth_sessions` | JWT-сессии |
+| `auth_audit_events` | Audit log аутентификации |
+| `application_logs` | Логи приложения |
 
-Payload fields:
+Миграции: 5 версий Alembic в `back_dispatcher/app/alembic/versions/`.
 
-- `locomotiveId`
-- `connected`
-- `wsUrl`
-- `lastSeenAt`
-- optional `reconnectAttempt`
-- optional `error`
+Retention: контролируется через `TELEMETRY_RETENTION_HOURS` (рекомендуется 24–72).
 
-#### `telemetry.frame`
+## 6. Фронтенд-контракты
 
-Dispatcher forwards the `telemetry.frame` payload it received from the locomotive backend.
+### 6.1 Потребляемые WS-типы
 
-Dispatcher does not re-map the payload shape yet.
-
-#### `health.update`
-
-Dispatcher computes this locally from incoming telemetry using [back_dispatcher/app/health_engine.py](/home/martian/Documents/swe/KTZ_twin/back_dispatcher/app/health_engine.py).
-
-Payload shape:
-
-```json
-{
-  "locomotive_id": "KTZ-2001",
-  "overall": 74,
-  "timestamp": 1710000000000,
-  "subsystems": [
-    {
-      "subsystem_id": "brakes",
-      "label": "Brakes",
-      "health_score": 52.0,
-      "status": "warning",
-      "active_alert_count": 1,
-      "last_updated": 1710000000000
-    }
-  ]
-}
-```
-
-Subsystem IDs currently used by the locomotive UI:
-
-- `engine`
-- `brakes`
-- `electrical`
-- `fuel`
-- `cooling`
-- `pneumatic`
-
-#### `alert.new` / `alert.update`
-
-Payload shape:
-
-```json
-{
-  "alert_id": "KTZ-2001:brake_response_weak",
-  "locomotive_id": "KTZ-2001",
-  "severity": "critical",
-  "status": "active",
-  "source": "brakes",
-  "title": "Brake response weak at speed",
-  "description": "Brake demand is high but braking pressure response and deceleration remain weak.",
-  "recommended_action": "Reduce speed immediately and inspect brake valves, cylinders, and pneumatic lines.",
-  "triggered_at": 1710000000000,
-  "related_metric_ids": ["pressure.brake_pipe", "pressure.brake_main", "motion.speed"]
-}
-```
-
-Alert `source` should align with locomotive UI subsystem IDs where possible:
-
-- `engine`
-- `brakes`
-- `electrical`
-- `fuel`
-- `cooling`
-- `pneumatic`
-
-#### `alert.resolved`
-
-Payload shape:
-
-```json
-{
-  "alert_id": "KTZ-2001:brake_response_weak",
-  "locomotive_id": "KTZ-2001",
-  "resolved_at": 1710000005000
-}
-```
-
-#### `message.new`
-
-Payload shape currently varies by origin.
-
-Dispatcher-originated message payload:
-
-```json
-{
-  "message_id": "dispatcher-1710000000000",
-  "locomotive_id": "KTZ-2001",
-  "body": "Reduce speed to 60 km/h",
-  "sender": "dispatcher",
-  "sent_at": 1710000000000,
-  "delivered": true
-}
-```
-
-Locomotive-originated payload is passed through from `back_locomotive`.
-
-### 6.4 Rule Engine Contract
-
-Rule engine file:
-
-- [back_dispatcher/app/health_engine.py](/home/martian/Documents/swe/KTZ_twin/back_dispatcher/app/health_engine.py)
-
-What it currently does:
-
-- takes incoming `telemetry.frame`
-- converts `readings[]` into a metric map
-- stores rolling history in memory
-- computes health scores and alert lifecycle
-
-Important limitation:
-
-- current implementation evaluates against the old simulator metric IDs
-- it does not yet consume the reduced raw telemetry schema from `generate_core_synthetic_telemetry.py`
-
-## 7. Frontend Contracts
-
-### 7.1 `front_locomotive`
-
-Current websocket message types consumed:
+Определены в `front_locomotive/src/types/websocket.ts`:
 
 - `telemetry.frame`
 - `health.update`
@@ -560,173 +374,91 @@ Current websocket message types consumed:
 - `message.new`
 - `connection.heartbeat`
 - `connection.status`
-
-Defined in [front_locomotive/src/types/websocket.ts](/home/martian/Documents/swe/KTZ_twin/front_locomotive/src/types/websocket.ts).
-
-Important UI behavior:
-
-- the dashboard and diagram use `health.update` subsystem IDs to color subsystem zones
-- the detail panel filters alerts by `alert.source === zone.subsystemId`
-- the locomotive UI now filters incoming events by `APP_CONFIG.LOCOMOTIVE_ID`
-
-### 7.2 `front_dispatcher`
-
-Current websocket usage:
-
-- subscribes to dispatcher websocket
-- currently uses only:
-  - `telemetry.frame`
-  - `message.new`
-
-It does not currently consume:
-
-- `health.update`
-- `alert.*`
+- `dispatcher.snapshot`
 - `dispatcher.locomotive_status`
 
-## 8. Telemetry Contracts
+### 6.2 Поток данных фронтенда
 
-### 8.1 Current Live Telemetry Contract
+1. `useWebSocketLifecycle` подключается к WS диспетчера
+2. `wsClient.ts` подписывается на каналы
+3. Входящие события маршрутизируются через `wsMessageRouter.ts`
+4. Пейлоады адаптируются через 5 адаптеров (`services/adapters/*`) и записываются в Zustand-сторы
+5. UI-компоненты читают сторы и ре-рендерятся
+6. REST-данные загружаются через TanStack Query хуки
 
-Current live runtime telemetry contract is the simulator metric frame from `back_locomotive`.
+### 6.3 Особенности UI
 
-This is the contract actively flowing through:
+- Dashboard и Diagram используют `health.update` subsystem IDs для цветовой кодировки зон
+- Панель деталей фильтрует алерты по `alert.source === zone.subsystemId`
+- EMA-сглаживание устраняет визуальное дрожание (toggle в TopBar)
+- Sparkline и trend-буферы для высокочастотного рендеринга
+- Тёмная и светлая темы
 
+## 7. Kafka-контракт
+
+- Топик: `ktz-events` (конфигурируется через `KAFKA_TOPIC_EVENTS`)
+- Ключ партиции: `locomotive_id`
+- Партиций по умолчанию: `100`
+- Producer: `back_locomotive` с идемпотентностью (`enable.idempotence=true`)
+- Consumer: `back_dispatcher` с валидацией Event Envelope V1 и мониторингом лага
+
+Kafka может увеличивать количество партиций, но не может уменьшать.
+
+## 8. Docker / Compose
+
+Файл: `docker-compose.microservices.yml`
+Конфигурация: `.env.microservices`
+Скрипт: `scripts/start_microservices.sh`
+
+5 сервисов:
+- `kafka` — Apache Kafka (KRaft mode)
+- `timescaledb` — TimescaleDB/PostgreSQL
+- `back_locomotive` — Python 3.12 / FastAPI
+- `back_dispatcher` — Python 3.12 / FastAPI (зависит от kafka, timescaledb)
+- `front_locomotive` — Nginx (multi-stage build: Node.js → Nginx)
+
+Порты: kafka `9092`, timescaledb `5433`, back_locomotive `3001`, back_dispatcher `3010`, front_locomotive `5183`.
+
+`shared/thresholds.json` монтируется как volume в оба бэкенда для единой конфигурации порогов.
+
+## 9. Телеметрические контракты
+
+### 9.1 Текущий live-контракт
+
+Текущий рантайм использует симуляторный фрейм из `back_locomotive` с 14 метриками в UI-ориентированном формате (`metricId`, `value`, `unit`, `quality`).
+
+Поток:
 ```text
-back_locomotive simulator -> telemetry.frame -> back_dispatcher -> frontends
+back_locomotive simulator → telemetry.frame → Kafka → back_dispatcher → frontends
 ```
 
-### 8.2 Intended Raw Telemetry Contract
+### 9.2 Целевой raw-контракт
 
-The intended raw telemetry contract is documented in:
+Целевая raw-телеметрия описана в:
+- `docs/CORE_TELEMETRY_SEEDING_DOCS.md`
+- `docs/HEALTH_INDEX_RULES.md`
 
-- [docs/CORE_TELEMETRY_SEEDING_DOCS.md](/home/martian/Documents/swe/KTZ_twin/docs/CORE_TELEMETRY_SEEDING_DOCS.md)
-- [docs/HEALTH_INDEX_RULES.md](/home/martian/Documents/swe/KTZ_twin/docs/HEALTH_INDEX_RULES.md)
+Сокращённый набор сигналов: `speed_kmh`, `adhesion_coeff`, `traction_current_a`, `brake_pipe_pressure_bar`, `brake_cylinder_pressure_bar`, `traction_motor_temp_c`, `bearing_temp_c`, `fault_code`, `catenary_voltage_kv`, `transformer_temp_c`, `fuel_level_l`, `fuel_rate_lph`, `oil_pressure_bar`, `coolant_temp_c`.
 
-Reduced raw fields:
+Текущий симулятор эмитит UI-метрики, не raw-контракт. Маппинг между raw-сигналами и UI-метриками реализуется в rule engine диспетчера.
 
-- `timestamp`
-- `t_ms`
-- `locomotive_id`
-- `locomotive_type`
-- `speed_kmh`
-- `adhesion_coeff`
-- `traction_current_a`
-- `brake_pipe_pressure_bar`
-- `brake_cylinder_pressure_bar`
-- `traction_motor_temp_c`
-- `bearing_temp_c`
-- `fault_code`
-- `catenary_voltage_kv`
-- `transformer_temp_c`
-- `fuel_level_l`
-- `fuel_rate_lph`
-- `oil_pressure_bar`
-- `coolant_temp_c`
+## 10. Индекс ключевых файлов
 
-This contract is not currently emitted by `back_locomotive`.
-
-## 9. Docker / Compose Contracts
-
-Current compose file:
-
-- [docker-compose.microservices.yml](/home/martian/Documents/swe/KTZ_twin/docker-compose.microservices.yml)
-
-Current file behavior:
-
-- starts four services:
-  - `back_locomotive`
-  - `back_dispatcher`
-  - `front_locomotive`
-  - `front_dispatcher`
-- no Kafka service is present in the current compose file
-- dispatcher depends on locomotive
-- both frontends depend on their respective backends
-
-Important current mismatch:
-
-- docs elsewhere describe a Kafka-based topology
-- current compose is still websocket-only
-
-## 10. Current Inconsistencies
-
-These are the main inconsistencies you need to keep in mind while working in this repo.
-
-### 10.1 Raw seeding docs vs runtime implementation
-
-Docs say:
-
-- raw telemetry comes from `generate_core_synthetic_telemetry.py`
-- dispatcher should compute health from raw signals
-
-Code currently does:
-
-- `back_locomotive` simulates old metric-frame telemetry
-- dispatcher computes health from those simulator metrics
-
-### 10.2 Intended replay service vs current simulator
-
-Target idea:
-
-- locomotive backend should replay CSV
-
-Current implementation:
-
-- locomotive backend is still a simulator with random alerts/messages
-
-### 10.3 Kafka architecture vs current code
-
-Target idea:
-
-- backend-to-backend via Kafka
-
-Current implementation:
-
-- dispatcher uses outbound websocket clients to locomotive services
-
-### 10.4 Frontend default URLs
-
-- `front_locomotive` defaults to dispatcher websocket, which is correct for the current health/alert flow
-- `front_dispatcher` defaults to `ws://localhost:3001/ws`, which is wrong unless overridden at build time
-
-## 11. Recommended Contract Direction
-
-The clean target architecture should be:
-
-```text
-telemetry.csv replay -> back_locomotive -> raw event transport -> back_dispatcher -> health/alerts -> frontends
-```
-
-Recommended contract split:
-
-1. raw backend contract
-   - reduced raw telemetry schema from `CORE_TELEMETRY_SEEDING_DOCS.md`
-
-2. frontend live contract
-   - `telemetry.frame`
-   - `health.update`
-   - `alert.*`
-   - `message.new`
-
-3. explicit mapping layer
-   - raw telemetry -> UI metric IDs
-   - raw telemetry -> rule engine features
-
-That avoids coupling frontend display contracts directly to raw data storage contracts.
-
-## 12. File Index
-
-Most important files for understanding the system:
-
-- [back_locomotive/app/main.py](/home/martian/Documents/swe/KTZ_twin/back_locomotive/app/main.py)
-- [back_locomotive/app/simulator/telemetry.py](/home/martian/Documents/swe/KTZ_twin/back_locomotive/app/simulator/telemetry.py)
-- [back_locomotive/app/ws/broadcaster.py](/home/martian/Documents/swe/KTZ_twin/back_locomotive/app/ws/broadcaster.py)
-- [back_dispatcher/app/main.py](/home/martian/Documents/swe/KTZ_twin/back_dispatcher/app/main.py)
-- [back_dispatcher/app/locomotive_client.py](/home/martian/Documents/swe/KTZ_twin/back_dispatcher/app/locomotive_client.py)
-- [back_dispatcher/app/health_engine.py](/home/martian/Documents/swe/KTZ_twin/back_dispatcher/app/health_engine.py)
-- [back_dispatcher/app/ws_server.py](/home/martian/Documents/swe/KTZ_twin/back_dispatcher/app/ws_server.py)
-- [front_locomotive/src/services/websocket/wsClient.ts](/home/martian/Documents/swe/KTZ_twin/front_locomotive/src/services/websocket/wsClient.ts)
-- [front_locomotive/src/services/websocket/wsMessageRouter.ts](/home/martian/Documents/swe/KTZ_twin/front_locomotive/src/services/websocket/wsMessageRouter.ts)
-- [front_dispatcher/src/services/wsClient.ts](/home/martian/Documents/swe/KTZ_twin/front_dispatcher/src/services/wsClient.ts)
-- [docs/CORE_TELEMETRY_SEEDING_DOCS.md](/home/martian/Documents/swe/KTZ_twin/docs/CORE_TELEMETRY_SEEDING_DOCS.md)
-- [docs/HEALTH_INDEX_RULES.md](/home/martian/Documents/swe/KTZ_twin/docs/HEALTH_INDEX_RULES.md)
+| Файл | Назначение |
+| --- | --- |
+| `back_locomotive/app/main.py` | Точка входа, 6 фоновых задач, 8 роутеров |
+| `back_locomotive/app/simulator/telemetry.py` | Физический симулятор, 10 FaultPatternProfiles |
+| `back_locomotive/app/simulator/health.py` | Health engine с SubsystemPenalty |
+| `back_locomotive/app/broker.py` | Kafka producer |
+| `back_locomotive/app/ws/broadcaster.py` | WS broadcasting |
+| `back_dispatcher/app/main.py` | Точка входа, dual ingest, JWT WS auth |
+| `back_dispatcher/app/health_engine.py` | Rule engine, 4 домена, 11 правил алертов |
+| `back_dispatcher/app/kafka_consumer.py` | Kafka consumer, валидация, дедупликация |
+| `back_dispatcher/app/ws_server.py` | Backpressure fan-out |
+| `back_dispatcher/app/repository.py` | TimescaleDB, replay queries, resolution buckets |
+| `back_dispatcher/app/auth.py` | JWT + Argon2, RBAC, audit |
+| `front_locomotive/src/services/websocket/wsClient.ts` | WS-клиент с auto-reconnect |
+| `front_locomotive/src/services/websocket/wsMessageRouter.ts` | Роутер 10 типов событий |
+| `front_locomotive/src/features/telemetry/useTelemetryStore.ts` | Стор телеметрии с smoothed readings |
+| `front_locomotive/src/config/diagram.config.ts` | 8 SVG-зон схемы TE33A |
+| `front_locomotive/src/config/metrics.config.ts` | 14 определений метрик с порогами |

@@ -1,14 +1,14 @@
-# Health Index Rules
+# Правила индекса здоровья
 
-## Goal
+## Цель
 
-This document defines backend rules for deriving a locomotive health index and raw alarms from the reduced telemetry stream produced by `generate_core_synthetic_telemetry.py`.
+Документ определяет бэкенд-правила для деривации индекса здоровья локомотива и сырых алармов из reduced-телеметрического потока, генерируемого `generate_core_synthetic_telemetry.py`.
 
-The health index should not be generated inside the seeding script. It should be computed downstream from raw telemetry.
+Индекс здоровья не генерируется внутри сидинг-скрипта. Он вычисляется downstream из сырой телеметрии.
 
-## Input Telemetry
+## Входная телеметрия
 
-The health logic uses these raw fields:
+Логика здоровья использует следующие raw-поля:
 
 - `speed_kmh`
 - `adhesion_coeff`
@@ -25,56 +25,53 @@ The health logic uses these raw fields:
 - `oil_pressure_bar`
 - `coolant_temp_c`
 
-## Current Schema Limits And Proxies
+## Ограничения текущей схемы и прокси
 
-Some of the requested causal rules depend on signals that are not yet present in the reduced telemetry schema.
+Некоторые каузальные правила зависят от сигналов, ещё отсутствующих в reduced-схеме.
 
-Current proxy strategy:
+Текущая стратегия прокси:
 
-- use speed change over time as an acceleration proxy
-- use `brake_pipe_pressure_bar` as the nearest available proxy for reservoir or pneumatic brake health
-- use `adhesion_coeff` plus current-vs-acceleration mismatch as a proxy for slip-like behavior
-- use `bearing_temp_c` without matching electrical load as a proxy for a developing mechanical fault
+- Изменение скорости по времени — как прокси для ускорения
+- `brake_pipe_pressure_bar` — ближайший прокси для пневматического здоровья тормозов
+- `adhesion_coeff` + несоответствие ток/ускорение — прокси для slip-поведения
+- `bearing_temp_c` без соответствующей электрической нагрузки — прокси для развивающейся механической неисправности
 
-Signals that would improve these rules later:
+Сигналы для улучшения в будущем:
 
-- brake reservoir pressure
-- compressor duty or compressor current
-- vibration
-- wheel-slip alarm count
-- sander state
+- Давление ресивера тормозов
+- Duty/ток компрессора
+- Вибрация
+- Счётчик wheel-slip алармов
+- Состояние песочницы
 
-## Processing Windows
+## Окна обработки
 
-Use rolling windows rather than single-sample decisions.
+Использовать роллинг-окна, а не решения по одному сэмплу.
 
-Recommended windows:
+Рекомендуемые окна:
 
-- fast window: `1s`
-- short window: `5s`
-- stability window: `30s`
+| Окно | Интервал | Назначение |
+| --- | --- | --- |
+| Быстрое | `1с` | Аларм-детекция |
+| Короткое | `5с` | Аларм-детекция + здоровье |
+| Стабильности | `30с` | Здоровье |
+| Длинное | `10мин` | Повторяющиеся события |
 
-Use the fast and short windows for alarms. Use the short and stability windows for the health index.
+## Деривированные бэкенд-фичи
 
-## Derived Backend Features
+Перед применением правил вычислить:
 
-Before applying rules, compute:
-
-- `speed_1s_avg`
-- `speed_5s_avg`
-- `speed_30s_avg`
+- `speed_1s_avg`, `speed_5s_avg`, `speed_30s_avg`
 - `adhesion_5s_avg`
 - `current_5s_avg`
-- `brake_pipe_1s_avg`
-- `brake_cyl_1s_avg`
-- `motor_temp_30s_avg`
-- `bearing_temp_30s_avg`
-- `transformer_temp_30s_avg` for `KZ8A`
-- `coolant_temp_30s_avg` for `TE33A`
-- `oil_pressure_5s_avg` for `TE33A`
-- `fuel_rate_30s_avg` for `TE33A`
+- `brake_pipe_1s_avg`, `brake_cyl_1s_avg`
+- `motor_temp_30s_avg`, `bearing_temp_30s_avg`
+- `transformer_temp_30s_avg` (для KZ8A)
+- `coolant_temp_30s_avg` (для TE33A)
+- `oil_pressure_5s_avg` (для TE33A)
+- `fuel_rate_30s_avg` (для TE33A)
 
-Also compute:
+Также вычислить:
 
 - `speed_drop_3s = speed_3s_ago - speed_now`
 - `accel_3s_est_mps2 = (speed_now - speed_3s_ago) / 3 / 3.6`
@@ -87,365 +84,270 @@ Also compute:
 - `weak_brake_response = hard_brake_command and brake_cyl_1s_avg < 0.8 and speed_1s_avg > 40`
 - `mechanical_mismatch = bearing_temp_30s_avg > 80 and current_5s_avg < 350 and motor_temp_30s_avg < 90`
 - `slip_like_event = adhesion_5s_avg < 0.18 and high_current_low_accel`
-- `slip_like_events_10m = count of slip_like_event windows in trailing 10 minutes`
+- `slip_like_events_10m = количество slip_like_event окон за последние 10 минут`
 
-## Health Index Structure
+## Структура индекса здоровья
 
-Start from `100`.
+Стартовое значение: `100`.
 
+Вычисляются 4 доменных скора:
 
-Calculate four domain scores:
+1. Скор тормозов (braking)
+2. Скор термики (thermal)
+3. Скор тяги и трансмиссии (powertrain)
+4. Скор неисправностей (fault)
 
-1. braking score
-2. thermal score
-3. traction and powertrain score
-4. fault score
-
-Then calculate final health index:
+Итоговый индекс:
 
 ```text
 health_index =
-    0.40 * braking_score +
-    0.25 * thermal_score +
-    0.20 * powertrain_score +
-    0.15 * fault_score
+    0.40 × braking_score +
+    0.25 × thermal_score +
+    0.20 × powertrain_score +
+    0.15 × fault_score
 ```
 
-Round to integer and clamp to `0..100`.
+Округление до целого, ограничение `0..100`.
 
-Braking is weighted highest because it is the most safety-critical domain.
+Тормоза взвешены наиболее высоко — это наиболее safety-critical домен.
 
-## Health Bands
+## Полосы здоровья
 
-- `85..100` = normal
-- `70..84` = watch
-- `50..69` = warning
-- `0..49` = critical
+| Диапазон | Статус |
+| --- | --- |
+| `85..100` | normal |
+| `70..84` | watch |
+| `50..69` | warning |
+| `0..49` | critical |
 
-## Domain Rules
+## Доменные правила
 
-### 1. Braking score
+### 1. Скор тормозов
 
-Start with `100`.
+Начало: `100`.
 
-Apply penalties:
+Пенальти:
 
-- `-10` if `adhesion_5s_avg < 0.20` while `speed_1s_avg > 40`
-- `-20` if `adhesion_5s_avg < 0.16` while `speed_1s_avg > 40`
-- `-10` if `brake_pipe_1s_avg < 4.8` while `speed_1s_avg > 40`
-- `-20` if `brake_pipe_1s_avg < 4.5` while `speed_1s_avg > 40`
-- `-25` if `hard_brake_command` is true and `speed_drop_3s < 5 km/h`
-- `-35` if `hard_brake_command` is true and `brake_cyl_1s_avg < 0.8` while `speed_1s_avg > 50`
-- `-20` if `brake_pipe_1s_avg < 3.8` for more than `2s`
-- `-20` if `weak_brake_response` is true for `>= 3s`
-- `-20` if `brake_pipe_1s_avg` is falling but `brake_cyl_1s_avg` does not rise as expected for `>= 3s`
+| Условие | Пенальти |
+| --- | --- |
+| `adhesion_5s_avg < 0.20` при `speed > 40` | −10 |
+| `adhesion_5s_avg < 0.16` при `speed > 40` | −20 |
+| `brake_pipe_1s_avg < 4.8` при `speed > 40` | −10 |
+| `brake_pipe_1s_avg < 4.5` при `speed > 40` | −20 |
+| `hard_brake_command` и `speed_drop_3s < 5 км/ч` | −25 |
+| `hard_brake_command` и `brake_cyl < 0.8` при `speed > 50` | −35 |
+| `brake_pipe_1s_avg < 3.8` более `2с` | −20 |
+| `weak_brake_response` ≥ `3с` | −20 |
+| Падение brake_pipe без роста brake_cyl ≥ `3с` | −20 |
 
-Interpretation:
+Интерпретация: падение давления в тормозной магистрали с плохим откликом указывает на проблемы компрессора, утечку, клапан или слабость тормозной системы.
 
-- falling brake pipe with poor response suggests compressor, leak, valve, or brake-system weakness
-- low brake cylinder under braking demand means weak brake response
-- if speed stays high despite hard brake demand, braking effectiveness is poor
-- since reservoir pressure is not available yet, `brake_pipe_pressure_bar` is used as the current pneumatic proxy
+Ограничение: `0..100`.
 
-Clamp the braking score to `0..100`.
+### 2. Скор термики
 
-### 2. Thermal score
+Начало: `100`.
 
-Start with `100`.
+Общие пенальти:
 
-Apply common penalties:
+| Условие | Пенальти |
+| --- | --- |
+| `motor_temp_30s_avg > 95` | −10 |
+| `motor_temp_30s_avg > 105` | −20 |
+| `bearing_temp_30s_avg > 75` | −10 |
+| `bearing_temp_30s_avg > 85` | −20 |
+| `current > 700` ≥ `10с` и `motor_temp > 95` | −20 |
+| `current > 850` ≥ `10с` и `motor_temp > 105` | −30 |
+| `mechanical_mismatch` ≥ `10с` | −25 |
 
-- `-10` if `motor_temp_30s_avg > 95`
-- `-20` if `motor_temp_30s_avg > 105`
-- `-10` if `bearing_temp_30s_avg > 75`
-- `-20` if `bearing_temp_30s_avg > 85`
-- `-20` if `current_5s_avg > 700` for `>= 10s` and `motor_temp_30s_avg > 95`
-- `-30` if `current_5s_avg > 850` for `>= 10s` and `motor_temp_30s_avg > 105`
-- `-25` if `mechanical_mismatch` is true for `>= 10s`
+Для KZ8A:
 
-For `KZ8A`:
+| Условие | Пенальти |
+| --- | --- |
+| `transformer_temp_30s_avg > 95` | −15 |
+| `transformer_temp_30s_avg > 110` | −30 |
 
-- `-15` if `transformer_temp_30s_avg > 95`
-- `-30` if `transformer_temp_30s_avg > 110`
+Для TE33A:
 
-For `TE33A`:
+| Условие | Пенальти |
+| --- | --- |
+| `coolant_temp_30s_avg > 95` | −15 |
+| `coolant_temp_30s_avg > 105` | −30 |
 
-- `-15` if `coolant_temp_30s_avg > 95`
-- `-30` if `coolant_temp_30s_avg > 105`
+Ограничение: `0..100`.
 
-Clamp the thermal score to `0..100`.
+### 3. Скор тяги и трансмиссии
 
-### 3. Traction And Powertrain score
+Начало: `100`.
 
-Start with `100`.
+Для всех локомотивов:
 
-For all locomotives:
+| Условие | Пенальти |
+| --- | --- |
+| `current_5s_avg > 700` > `5с` | −10 |
+| `current_5s_avg > 900` > `5с` | −20 |
+| `high_current_low_accel` ≥ `5с` | −20 |
+| `high_current_low_accel` ≥ `10с` | −30 |
+| `slip_like_events_10m >= 3` | −15 |
 
-- `-10` if `current_5s_avg > 700` for more than `5s`
-- `-20` if `current_5s_avg > 900` for more than `5s`
-- `-20` if `high_current_low_accel` is true for `>= 5s`
-- `-30` if `high_current_low_accel` is true for `>= 10s`
-- `-15` if `slip_like_events_10m >= 3`
+Для KZ8A:
 
-Interpretation:
+| Условие | Пенальти |
+| --- | --- |
+| `catenary_voltage_kv < 23.0` | −15 |
+| `catenary_voltage_kv < 21.5` | −30 |
+| `catenary_voltage < 23.0` и `current > 500` | −10 доп. |
 
-- high current with weak acceleration usually indicates low adhesion or excessive running resistance
-- repeated slip-like episodes at normal operating speed suggest rail-condition, axle-control, or sanding-related problems
+Для TE33A:
 
-For `KZ8A`:
+| Условие | Пенальти |
+| --- | --- |
+| `oil_pressure_5s_avg < 2.0` | −15 |
+| `oil_pressure_5s_avg < 1.4` | −30 |
+| `fuel_rate` аномально высок для текущей скорости | −10 |
 
-- `-15` if `catenary_voltage_kv < 23.0`
-- `-30` if `catenary_voltage_kv < 21.5`
-- add `-10` extra if `catenary_voltage_kv < 23.0` and `current_5s_avg > 500`
+Правило топливной эффективности TE33A:
 
-For `TE33A`:
+| Скорость | Порог fuel_rate | Пенальти |
+| --- | --- | --- |
+| `< 20 км/ч` | `> 80 л/ч` | −10 |
+| `20–50 км/ч` | `> 140 л/ч` | −10 |
+| `≥ 50 км/ч` | `> 220 л/ч` | −10 |
 
-- `-15` if `oil_pressure_5s_avg < 2.0`
-- `-30` if `oil_pressure_5s_avg < 1.4`
-- `-10` if `fuel_rate_30s_avg` is abnormally high for the current speed band
+Ограничение: `0..100`.
 
-Suggested fuel-efficiency rule for `TE33A`:
+### 4. Скор неисправностей
 
-- if `speed_30s_avg < 20` and `fuel_rate_30s_avg > 80`, apply `-10`
-- if `20 <= speed_30s_avg < 50` and `fuel_rate_30s_avg > 140`, apply `-10`
-- if `speed_30s_avg >= 50` and `fuel_rate_30s_avg > 220`, apply `-10`
+Начало: `100`.
 
-Clamp the powertrain score to `0..100`.
+Пенальти по активному fault_code:
 
-### 4. Fault score
+| Fault code | Пенальти |
+| --- | --- |
+| `BRAKE_RESPONSE_WEAK` | −40 |
+| `KZ8A_VOLTAGE_DIP` | −20 |
+| `KZ8A_TRANSFORMER_HOT` | −35 |
+| `TE33A_OIL_LOW` | −30 |
+| `TE33A_COOLANT_HOT` | −35 |
 
-Start with `100`.
+Без активной неисправности — без пенальти. Ограничение: `0..100`.
 
-Apply penalties based on active raw fault code:
+## Правила алармов
 
-- `BRAKE_RESPONSE_WEAK` -> `-40`
-- `KZ8A_VOLTAGE_DIP` -> `-20`
-- `KZ8A_TRANSFORMER_HOT` -> `-35`
-- `TE33A_OIL_LOW` -> `-30`
-- `TE33A_COOLANT_HOT` -> `-35`
+Алармы генерируются независимо от health band. Серьёзное правило может поднять аларм, даже если общий индекс здоровья ещё не упал далеко.
 
-If no fault is active, no penalty applies.
+### Критические алармы
 
-Clamp the fault score to `0..100`.
+Срабатывают немедленно при истинности ≥ `1с`:
 
-## Alarm Rules
+1. **Слабое торможение на скорости**
+   ```
+   speed_1s_avg > 50 и hard_brake_command и brake_cyl_1s_avg < 0.8
+   ```
 
-These alarms should be generated independently of the health index band. A severe rule should be able to raise an alarm even if the overall health index has not fallen far yet.
+2. **Нет замедления при жёстком торможении**
+   ```
+   speed_1s_avg > 60 и hard_brake_command и speed_drop_3s < 5
+   ```
 
-### Critical alarms
+3. **Падение пневматики с плохим откликом тормозов**
+   ```
+   speed_1s_avg > 50 и brake_pipe_1s_avg < 4.3 и brake_cyl_1s_avg < 0.8
+   ```
 
-Raise `critical` immediately when any of these are true for `>= 1s`:
+4. **Низкое сцепление при торможении на скорости**
+   ```
+   speed_1s_avg > 60 и hard_brake_command и adhesion_5s_avg < 0.15
+   ```
 
-1. Weak braking at speed
+5. **Тяжёлый электрический стресс KZ8A**
+   ```
+   catenary_voltage_kv < 21.5 и current_5s_avg > 500
+   ```
 
-```text
-speed_1s_avg > 50
-and hard_brake_command
-and brake_cyl_1s_avg < 0.8
-```
+6. **Тяжёлый отказ смазки TE33A**
+   ```
+   oil_pressure_5s_avg < 1.2 и speed_1s_avg > 20
+   ```
 
-2. No deceleration despite hard braking
+7. **Тяжёлый перегрев после нагрузки**
+   ```
+   transformer_temp_30s_avg > 115 или coolant_temp_30s_avg > 108 или motor_temp_30s_avg > 110
+   ```
 
-```text
-speed_1s_avg > 60
-and hard_brake_command
-and speed_drop_3s < 5
-```
+8. **Тяжёлое несоответствие тяги**
+   ```
+   speed_1s_avg > 20 и high_current_low_accel и adhesion_5s_avg < 0.16
+   ```
 
-3. Falling pneumatic pressure with bad brake response
+### Предупредительные алармы (warning)
 
-```text
-speed_1s_avg > 50
-and brake_pipe_1s_avg < 4.3
-and brake_cyl_1s_avg < 0.8
-```
+Срабатывают при истинности ≥ `3с`:
 
-4. Low adhesion during braking at speed
+1. **Деградация тормозов** — `speed > 40` и `brake_command` и `brake_cyl < 1.0`
+2. **Низкое сцепление на скорости** — `speed > 40` и `adhesion_5s_avg < 0.18`
+3. **Высокий ток, слабое ускорение** — `high_current_low_accel`
+4. **Горячий трансформатор** — `transformer_temp_30s_avg > 100`
+5. **Горячий coolant** — `coolant_temp_30s_avg > 98`
+6. **Низкое давление масла** — `oil_pressure_5s_avg < 2.0`
+7. **Просадка напряжения под нагрузкой** — `catenary_voltage < 23.0` и `current > 400`
+8. **Механическое несоответствие** — `bearing_temp > 80` и `current < 350` и `motor_temp < 90`
 
-```text
-speed_1s_avg > 60
-and hard_brake_command
-and adhesion_5s_avg < 0.15
-```
+### Наблюдательные алармы (watch)
 
-5. Severe KZ8A electrical stress
-
-```text
-catenary_voltage_kv < 21.5
-and current_5s_avg > 500
-```
-
-6. Severe TE33A lubrication failure
-
-```text
-oil_pressure_5s_avg < 1.2
-and speed_1s_avg > 20
-```
-
-7. Severe overheating after sustained load
-
-```text
-transformer_temp_30s_avg > 115
-or coolant_temp_30s_avg > 108
-or motor_temp_30s_avg > 110
-```
-
-8. Severe traction mismatch
-
-```text
-speed_1s_avg > 20
-and high_current_low_accel
-and adhesion_5s_avg < 0.16
-```
-
-### Warning alarms
-
-Raise `warning` when any of these are true for `>= 3s`:
-
-1. Brake degradation
-
-```text
-speed_1s_avg > 40
-and brake_command
-and brake_cyl_1s_avg < 1.0
-```
-
-2. Adhesion low at speed
-
-```text
-speed_1s_avg > 40
-and adhesion_5s_avg < 0.18
-```
-
-3. High current but weak acceleration
-
-```text
-high_current_low_accel
-```
-
-4. Transformer hot
-
-```text
-transformer_temp_30s_avg > 100
-```
-
-5. Coolant hot
-
-```text
-coolant_temp_30s_avg > 98
-```
-
-6. Oil pressure low
-
-```text
-oil_pressure_5s_avg < 2.0
-```
-
-7. Voltage dip under load
-
-```text
-catenary_voltage_kv < 23.0
-and current_5s_avg > 400
-```
-
-8. Mechanical mismatch
-
-```text
-bearing_temp_30s_avg > 80
-and current_5s_avg < 350
-and motor_temp_30s_avg < 90
-```
-
-### Watch alarms
-
-Raise `watch` when any of these are true for `>= 5s`:
+Срабатывают при истинности ≥ `5с`:
 
 - `adhesion_5s_avg < 0.22`
 - `motor_temp_30s_avg > 95`
 - `bearing_temp_30s_avg > 75`
 - `current_5s_avg > 700`
-- `fuel_rate_30s_avg` outside expected band for current speed
+- `fuel_rate_30s_avg` вне ожидаемой полосы для текущей скорости
 - `slip_like_events_10m >= 2`
 
-## Priority Rule
+## Правило приоритета
 
-If multiple alarms are active at once:
+При множестве одновременных алармов:
 
-- `critical` overrides `warning`
-- `warning` overrides `watch`
+- `critical` переопределяет `warning`
+- `warning` переопределяет `watch`
 
-## How Speed Should Affect Alarm Severity
+## Влияние скорости на серьёзность аларма
 
-Speed should amplify the severity of braking and lubrication faults.
+Скорость должна усиливать серьёзность тормозных и смазочных неисправностей.
 
-Examples:
+Примеры:
 
-- low brake performance at `5 km/h` may be a warning
-- the same condition at `70 km/h` should be critical
-- low oil pressure at idle may be a watch
-- low oil pressure while moving under load should be warning or critical
+- Слабое торможение при `5 км/ч` — может быть warning
+- То же при `70 км/ч` — должно быть critical
+- Низкое давление масла на холостом ходу — может быть watch
+- То же под нагрузкой в движении — warning или critical
 
-Recommended multiplier:
+Рекомендуемый множитель:
 
-- low speed `< 10 km/h`: severity factor `0.5`
-- medium speed `10..40 km/h`: severity factor `1.0`
-- high speed `> 40 km/h`: severity factor `1.5`
+| Диапазон скорости | Множитель |
+| --- | --- |
+| `< 10 км/ч` | 0.5 |
+| `10–40 км/ч` | 1.0 |
+| `> 40 км/ч` | 1.5 |
 
-Apply this factor to braking-related and oil-pressure-related penalty points.
+Применяется к пенальти-очкам тормозов и давления масла.
 
-## Example Rule From Your Scenario
+## Запрошенные каузальные маппинги
 
-If speed is high but brake-related telemetry indicates poor stopping capability, raise an alarm immediately.
+1. **Высокий ток + слабое ускорение** — вероятно: низкое сцепление или избыточное сопротивление. Реализация: `high_current_low_accel`. Серьёзность растёт при низком `adhesion_5s_avg`.
 
-Concrete implementation:
+2. **Падение пневматического давления + плохой отклик тормозов** — вероятно: проблема компрессора, утечка, клапан. Реализация: `brake_pipe_pressure_bar` как прокси до добавления давления ресивера.
 
-```text
-if speed_1s_avg > 60
-and brake_pipe_1s_avg < 4.3
-and brake_cyl_1s_avg < 0.8:
-    alarm = critical
-    reason = "high_speed_brake_response_weak"
-```
+3. **Высокая температура мотора после длительного тока** — вероятно: электрическая/термическая перегрузка. Реализация: sustained current window + elevated motor temperature.
 
-This is the exact type of rule that should override a normal-looking average health index.
+4. **Высокая температура подшипника без электрической нагрузки** — вероятно: развивающаяся механическая неисправность. Реализация: `mechanical_mismatch`. В будущем — вибрация как primary corroborating signal.
 
-## Requested Causal Mappings
+5. **Нормальная скорость, но повторяющиеся slip-алармы** — вероятно: состояние рельсов, осевой контроль, песочница. Реализация: repeated `slip_like_event` окна.
 
-These are the requested cause-effect rules translated into backend logic:
+## Рекомендации по реализации
 
-1. High current + weak acceleration
-
-- likely interpretation: low adhesion or excessive resistance
-- implementation: `high_current_low_accel`
-- severity rises further if `adhesion_5s_avg` is also low
-
-2. Falling pneumatic pressure + bad brake response
-
-- likely interpretation: compressor issue, leak, valve issue, or brake-system fault
-- implementation: use `brake_pipe_pressure_bar` as the current proxy until reservoir pressure is added
-- condition: falling brake pipe plus weak brake cylinder response plus poor speed reduction
-
-3. High motor temperature after prolonged high current
-
-- likely interpretation: electrical or thermal overload
-- implementation: sustained current window combined with elevated motor temperature
-
-4. High bearing temperature without matching electrical load
-
-- likely interpretation: mechanical fault developing
-- implementation: `mechanical_mismatch`
-- if vibration is added later, it should become the primary corroborating signal
-
-5. Normal speed but repeated slip alarms
-
-- likely interpretation: rail condition issue, axle-control issue, or sander issue
-- current implementation: repeated `slip_like_event` windows based on low adhesion plus high current and weak acceleration
-- recommended future improvement: add explicit wheel-slip alarm count and sanding state
-
-## Implementation Advice
-
-- compute health index from rolling windows, not raw samples
-- emit alarms from rule evaluation first
-- compute health band second
-- keep rule thresholds in config so you can tune them with real or synthetic data
-- treat raw `fault_code` as one input, not as the only source of truth
+- Вычислять health index из роллинг-окон, не из raw-сэмплов
+- Сначала эмитить алармы из rule evaluation
+- Затем вычислять health band
+- Держать пороги правил в конфигурации для тюнинга
+- Рассматривать raw `fault_code` как один вход, не как единственный источник истины
