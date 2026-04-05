@@ -84,22 +84,21 @@ function getWindowBounds(
 
   const duration = getVisibleWindowMs(preset, timeRange)
   const span = duration === 'all' ? getSpanMs(timeRange) : duration
-  const halfWindow = span / 2
 
-  let from = Math.max(timeRange.earliest, Math.round(timestamp - halfWindow))
-  let to = Math.min(timeRange.latest, Math.round(timestamp + halfWindow))
-
-  const covered = to - from
-  if (covered < span) {
-    const missing = span - covered
-    if (from === timeRange.earliest) {
-      to = Math.min(timeRange.latest, to + missing)
-    } else if (to === timeRange.latest) {
-      from = Math.max(timeRange.earliest, from - missing)
-    }
-  }
-
+  // Replay visible windows are "last N minutes" and should stay anchored to latest.
+  const to = timeRange.latest
+  const from = Math.max(timeRange.earliest, to - span)
   return { from, to }
+}
+
+function clampTimestampToVisibleWindow(
+  timestamp: number,
+  preset: ReplayVisibleWindow,
+  timeRange: ReplayTimeRange | null
+): number {
+  const clamped = clampTimestamp(timestamp, timeRange)
+  const bounds = getWindowBounds(clamped, preset, timeRange)
+  return Math.min(bounds.to, Math.max(bounds.from, clamped))
 }
 
 async function loadReplayWindow(
@@ -292,7 +291,11 @@ export const useReplayStore = create<ReplayState>()(
         const state = get()
         if (!state.timeRange) return
 
-        const nextTimestamp = clampTimestamp(timestamp, state.timeRange)
+        const nextTimestamp = clampTimestampToVisibleWindow(
+          timestamp,
+          state.visibleWindow,
+          state.timeRange
+        )
         set({ currentTimestamp: nextTimestamp })
         await get().ensureWindowForTimestamp(locomotiveId, nextTimestamp)
         get().scheduleSnapshotRefresh(locomotiveId, nextTimestamp)
@@ -329,14 +332,23 @@ export const useReplayStore = create<ReplayState>()(
         set({ visibleWindow: preset })
         const state = get()
         if (state.currentTimestamp === null || !state.timeRange) return
+
+        const nextTimestamp = clampTimestampToVisibleWindow(
+          state.currentTimestamp,
+          preset,
+          state.timeRange
+        )
+        set({ currentTimestamp: nextTimestamp })
+
         await loadReplayWindow(
           locomotiveId,
           state.timeRange,
-          state.currentTimestamp,
+          nextTimestamp,
           preset,
           state.selectedMetricIds,
           set
         )
+        get().scheduleSnapshotRefresh(locomotiveId, nextTimestamp)
       },
 
       setSelectedMetricIds: async (locomotiveId, metricIds) => {
@@ -398,14 +410,17 @@ export const useReplayStore = create<ReplayState>()(
         const state = get()
         if (!state.isPlaying || state.currentTimestamp === null || !state.timeRange) return
 
-        const nextTimestamp = clampTimestamp(
+        const nextTimestamp = clampTimestampToVisibleWindow(
           state.currentTimestamp + state.playbackSpeed * 1_000,
+          state.visibleWindow,
           state.timeRange
         )
 
+        const windowBounds = getWindowBounds(nextTimestamp, state.visibleWindow, state.timeRange)
+
         set({
           currentTimestamp: nextTimestamp,
-          isPlaying: state.timeRange.latest !== null ? nextTimestamp < state.timeRange.latest : false,
+          isPlaying: nextTimestamp < windowBounds.to,
         })
 
         await get().ensureWindowForTimestamp(locomotiveId, nextTimestamp)

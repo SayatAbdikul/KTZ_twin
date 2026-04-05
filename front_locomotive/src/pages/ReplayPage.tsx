@@ -11,6 +11,42 @@ import { ReplayChart } from '@/components/replay/ReplayChart'
 import { REPLAY_SKIP_INTERVAL_MS, useReplayStore } from '@/features/replay/useReplayStore'
 import { useMetricCatalog } from '@/features/telemetry/metricCatalog'
 import type { MetricDefinition } from '@/types/telemetry'
+import type { ReplayResolution } from '@/types/replay'
+
+const REPLAY_WINDOW_PRESETS = ['1m', '5m', '15m'] as const
+
+const RESOLUTION_STEP_MS: Record<Exclude<ReplayResolution, 'raw'>, number> = {
+  '1s': 1_000,
+  '10s': 10_000,
+  '1m': 60_000,
+  '5m': 300_000,
+}
+
+function median(values: number[]): number {
+  if (values.length === 0) return 0
+  const sorted = [...values].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  if (sorted.length % 2 === 0) return (sorted[mid - 1] + sorted[mid]) / 2
+  return sorted[mid]
+}
+
+function getExpectedStepMs(resolution: ReplayResolution, timestamps: number[]): number {
+  if (resolution !== 'raw') return RESOLUTION_STEP_MS[resolution]
+  if (timestamps.length < 2) return 1_000
+  const deltas: number[] = []
+  for (let index = 1; index < timestamps.length; index += 1) {
+    const delta = timestamps[index] - timestamps[index - 1]
+    if (delta > 0) deltas.push(delta)
+  }
+
+  const inferred = median(deltas)
+  if (!Number.isFinite(inferred) || inferred <= 0) return 1_000
+  return Math.max(250, Math.round(inferred))
+}
+
+function clampToBounds(value: number, lower: number, upper: number): number {
+  return Math.min(upper, Math.max(lower, value))
+}
 
 function formatRangeLabel(earliest: number | null, latest: number | null): string {
   if (earliest === null || latest === null) return 'No replay history available yet'
@@ -36,6 +72,7 @@ export function ReplayPage() {
   const visibleWindow = useReplayStore((state) => state.visibleWindow)
   const selectedMetricIds = useReplayStore((state) => state.selectedMetricIds)
   const seriesByMetric = useReplayStore((state) => state.seriesByMetric)
+  const loadedWindow = useReplayStore((state) => state.loadedWindow)
   const snapshot = useReplayStore((state) => state.snapshot)
   const isLoading = useReplayStore((state) => state.isLoading)
   const isLoadingWindow = useReplayStore((state) => state.isLoadingWindow)
@@ -73,6 +110,68 @@ export function ReplayPage() {
   )
 
   const hasReplayData = timeRange?.earliest !== null && timeRange?.latest !== null
+  const scrubberWindow = useMemo(() => {
+    if (!loadedWindow) return null
+    return {
+      locomotiveId: timeRange?.locomotiveId ?? selectedLocomotiveId ?? '',
+      earliest: loadedWindow.from,
+      latest: loadedWindow.to,
+    }
+  }, [loadedWindow, selectedLocomotiveId, timeRange?.locomotiveId])
+
+  const noDataRanges = useMemo(() => {
+    if (!loadedWindow) return []
+
+    const from = loadedWindow.from
+    const to = loadedWindow.to
+    if (to <= from) return []
+
+    const timestampSet = new Set<number>()
+    for (const metricId of selectedMetricIds) {
+      const points = seriesByMetric[metricId] ?? []
+      for (const point of points) {
+        if (point.timestamp >= from && point.timestamp <= to) {
+          timestampSet.add(point.timestamp)
+        }
+      }
+    }
+
+    const timestamps = Array.from(timestampSet).sort((left, right) => left - right)
+    if (timestamps.length === 0) {
+      return [{ from, to }]
+    }
+
+    const expectedStepMs = getExpectedStepMs(loadedWindow.resolution, timestamps)
+    const gapThresholdMs = expectedStepMs * 1.8
+    const halfStep = expectedStepMs / 2
+    const ranges: Array<{ from: number; to: number }> = []
+
+    const pushGap = (gapFrom: number, gapTo: number) => {
+      const normalizedFrom = clampToBounds(Math.round(gapFrom), from, to)
+      const normalizedTo = clampToBounds(Math.round(gapTo), from, to)
+      if (normalizedTo - normalizedFrom >= Math.max(500, expectedStepMs * 0.75)) {
+        ranges.push({ from: normalizedFrom, to: normalizedTo })
+      }
+    }
+
+    if (timestamps[0] - from > gapThresholdMs) {
+      pushGap(from, timestamps[0] - halfStep)
+    }
+
+    for (let index = 1; index < timestamps.length; index += 1) {
+      const prev = timestamps[index - 1]
+      const next = timestamps[index]
+      if (next - prev > gapThresholdMs) {
+        pushGap(prev + halfStep, next - halfStep)
+      }
+    }
+
+    if (to - timestamps[timestamps.length - 1] > gapThresholdMs) {
+      pushGap(timestamps[timestamps.length - 1] + halfStep, to)
+    }
+
+    return ranges
+  }, [loadedWindow, selectedMetricIds, seriesByMetric])
 
   function handleMetricToggle(metricId: string) {
     if (!selectedLocomotiveId) return
@@ -100,6 +199,7 @@ export function ReplayPage() {
 
         <TimeRangeSelector
           value={visibleWindow}
+          options={[...REPLAY_WINDOW_PRESETS]}
           onChange={(preset) => {
             if (!selectedLocomotiveId) return
             void setVisibleWindow(selectedLocomotiveId, preset)
@@ -133,8 +233,9 @@ export function ReplayPage() {
           />
 
           <TimelineScrubber
-            timeRange={timeRange}
+            timeRange={scrubberWindow ?? timeRange}
             currentTimestamp={currentTimestamp}
+            noDataRanges={noDataRanges}
             disabled={!selectedLocomotiveId || !hasReplayData || isLoading}
             onSeek={(timestamp) => {
               if (!selectedLocomotiveId) return

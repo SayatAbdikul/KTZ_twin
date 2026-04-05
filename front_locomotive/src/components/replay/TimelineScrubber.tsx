@@ -3,6 +3,7 @@ import type { ReplayTimeRange } from '@/types/replay'
 interface TimelineScrubberProps {
   timeRange: ReplayTimeRange | null
   currentTimestamp: number | null
+  noDataRanges?: Array<{ from: number; to: number }>
   disabled?: boolean
   onSeek: (timestamp: number) => void
 }
@@ -47,6 +48,7 @@ function buildTicks(timeRange: ReplayTimeRange | null): number[] {
 export function TimelineScrubber({
   timeRange,
   currentTimestamp,
+  noDataRanges = [],
   disabled = false,
   onSeek,
 }: TimelineScrubberProps) {
@@ -59,6 +61,18 @@ export function TimelineScrubber({
       : 0
   const effectiveValue =
     currentTimestamp ?? (earliest !== null && earliest !== undefined ? earliest : 0)
+  const hasScrubberRange =
+    earliest !== null && earliest !== undefined && latest !== null && latest !== undefined && spanMs > 0
+
+  const normalizedNoDataRanges = hasScrubberRange
+    ? noDataRanges
+        .map((range) => {
+          const clampedFrom = Math.max(earliest, Math.min(latest, range.from))
+          const clampedTo = Math.max(earliest, Math.min(latest, range.to))
+          return { from: clampedFrom, to: clampedTo }
+        })
+        .filter((range) => range.to > range.from)
+    : []
 
   return (
     <section className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
@@ -104,6 +118,29 @@ export function TimelineScrubber({
         onChange={(event) => onSeek(Number(event.target.value))}
         className="h-2 w-full cursor-pointer accent-blue-500 disabled:cursor-not-allowed"
       />
+
+      {hasScrubberRange ? (
+        <div className="mt-2">
+          <div className="relative h-2 w-full overflow-hidden rounded-full bg-slate-800/80">
+            {normalizedNoDataRanges.map((range) => {
+              const left = ((range.from - earliest) / spanMs) * 100
+              const width = ((range.to - range.from) / spanMs) * 100
+
+              return (
+                <span
+                  key={`${range.from}-${range.to}`}
+                  className="absolute top-0 bottom-0 bg-amber-500/55"
+                  style={{ left: `${left}%`, width: `${Math.max(width, 0.4)}%` }}
+                  title="No data points in this interval"
+                />
+              )
+            })}
+          </div>
+          <p className="mt-1 text-[11px] text-slate-500">
+            Amber segments show intervals with no replay data points.
+          </p>
+        </div>
+      ) : null}
 
       <div className="mt-3 flex justify-between gap-2 text-[11px] text-slate-500">
         {ticks.map((tick) => (

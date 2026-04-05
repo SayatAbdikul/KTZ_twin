@@ -5,6 +5,7 @@ export type TimeRangePreset = '1m' | '5m' | '15m' | '1h' | 'all'
 interface TimeRangeSelectorProps {
   value: TimeRangePreset
   onChange: (preset: TimeRangePreset) => void
+  options?: TimeRangePreset[]
 }
 
 const OPTIONS: Array<{ value: TimeRangePreset; label: string }> = [
@@ -15,14 +16,18 @@ const OPTIONS: Array<{ value: TimeRangePreset; label: string }> = [
   { value: 'all', label: 'All' },
 ]
 
-export function TimeRangeSelector({ value, onChange }: TimeRangeSelectorProps) {
+export function TimeRangeSelector({ value, onChange, options }: TimeRangeSelectorProps) {
+  const optionList = options
+    ? OPTIONS.filter((option) => options.includes(option.value))
+    : OPTIONS
+
   return (
     <div
       className="flex flex-wrap items-center gap-2"
       role="group"
       aria-label="Live trend time range"
     >
-      {OPTIONS.map((option) => {
+      {optionList.map((option) => {
         const active = option.value === value
         return (
           <button
