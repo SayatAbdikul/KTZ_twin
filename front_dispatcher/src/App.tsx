@@ -9,6 +9,23 @@ import { useAuthStore } from './store/useAuthStore'
 import { useDispatcherStore } from './store/useDispatcherStore'
 import { changePassword, login, logoutSession, refreshSession } from './services/authApi'
 
+type ThemeMode = 'dark' | 'light'
+
+const THEME_STORAGE_KEY = 'dispatcher-theme'
+
+function resolveInitialTheme(): ThemeMode {
+    if (typeof window === 'undefined') {
+        return 'dark'
+    }
+
+    const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY)
+    if (storedTheme === 'dark' || storedTheme === 'light') {
+        return storedTheme
+    }
+
+    return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+}
+
 async function refreshSessionWithTimeout() {
     let timeoutId: number | undefined
     try {
@@ -26,9 +43,28 @@ async function refreshSessionWithTimeout() {
     }
 }
 
-function LoadingScreen() {
+function ThemeToggle({ theme, onToggle }: { theme: ThemeMode; onToggle: () => void }) {
+    return (
+        <button
+            className="theme-toggle"
+            type="button"
+            onClick={onToggle}
+            aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
+        >
+            <span className="theme-toggle-label">{theme === 'dark' ? 'Dark' : 'Light'} mode</span>
+            <span className="theme-toggle-track" aria-hidden="true">
+                <span className="theme-toggle-thumb" />
+            </span>
+        </button>
+    )
+}
+
+function LoadingScreen({ theme, onToggle }: { theme: ThemeMode; onToggle: () => void }) {
     return (
         <div className="auth-shell">
+            <div className="shell-toolbar">
+                <ThemeToggle theme={theme} onToggle={onToggle} />
+            </div>
             <section className="auth-card">
                 <p className="kicker">KTZ Digital Twin</p>
                 <h1>Restoring dispatcher session...</h1>
@@ -37,7 +73,7 @@ function LoadingScreen() {
     )
 }
 
-function LoginScreen() {
+function LoginScreen({ theme, onToggle }: { theme: ThemeMode; onToggle: () => void }) {
     const setSession = useAuthStore((state) => state.setSession)
     const clearSession = useAuthStore((state) => state.clearSession)
     const resetDispatcherState = useDispatcherStore((state) => state.reset)
@@ -70,6 +106,9 @@ function LoginScreen() {
 
     return (
         <div className="auth-shell">
+            <div className="shell-toolbar">
+                <ThemeToggle theme={theme} onToggle={onToggle} />
+            </div>
             <section className="auth-card">
                 <p className="kicker">KTZ Digital Twin</p>
                 <h1>Dispatcher Console Login</h1>
@@ -108,7 +147,7 @@ function LoginScreen() {
     )
 }
 
-function ChangePasswordScreen() {
+function ChangePasswordScreen({ theme, onToggle }: { theme: ThemeMode; onToggle: () => void }) {
     const accessToken = useAuthStore((state) => state.accessToken)
     const user = useAuthStore((state) => state.user)
     const setSession = useAuthStore((state) => state.setSession)
@@ -152,6 +191,9 @@ function ChangePasswordScreen() {
 
     return (
         <div className="auth-shell">
+            <div className="shell-toolbar">
+                <ThemeToggle theme={theme} onToggle={onToggle} />
+            </div>
             <section className="auth-card">
                 <p className="kicker">Password Required</p>
                 <h1>Change your password to continue</h1>
@@ -212,7 +254,7 @@ function ChangePasswordScreen() {
     )
 }
 
-function ConsoleShell() {
+function ConsoleShell({ theme, onToggle }: { theme: ThemeMode; onToggle: () => void }) {
     const accessToken = useAuthStore((state) => state.accessToken)
     const user = useAuthStore((state) => state.user)
     const clearSession = useAuthStore((state) => state.clearSession)
@@ -245,6 +287,7 @@ function ConsoleShell() {
                     </p>
                 </div>
                 <div className="header-actions">
+                    <ThemeToggle theme={theme} onToggle={onToggle} />
                     <ConnectionBadge />
                     <button className="logout-button" type="button" onClick={() => void handleLogout()}>
                         Logout
@@ -262,6 +305,7 @@ function ConsoleShell() {
 }
 
 export function App() {
+    const [theme, setTheme] = useState<ThemeMode>(() => resolveInitialTheme())
     const accessToken = useAuthStore((state) => state.accessToken)
     const user = useAuthStore((state) => state.user)
     const hasHydrated = useAuthStore((state) => state.hasHydrated)
@@ -271,6 +315,16 @@ export function App() {
     const clearSession = useAuthStore((state) => state.clearSession)
     const setBootstrapping = useAuthStore((state) => state.setBootstrapping)
     const resetDispatcherState = useDispatcherStore((state) => state.reset)
+
+    useEffect(() => {
+        document.documentElement.dataset.theme = theme
+        document.documentElement.style.colorScheme = theme
+        window.localStorage.setItem(THEME_STORAGE_KEY, theme)
+    }, [theme])
+
+    function toggleTheme() {
+        setTheme((currentTheme) => (currentTheme === 'dark' ? 'light' : 'dark'))
+    }
 
     useEffect(() => {
         if (!hasHydrated) {
@@ -325,16 +379,16 @@ export function App() {
     ])
 
     if (!hasHydrated || isBootstrapping) {
-        return <LoadingScreen />
+        return <LoadingScreen theme={theme} onToggle={toggleTheme} />
     }
 
     if (!accessToken || !user) {
-        return <LoginScreen />
+        return <LoginScreen theme={theme} onToggle={toggleTheme} />
     }
 
     if (mustChangePassword) {
-        return <ChangePasswordScreen />
+        return <ChangePasswordScreen theme={theme} onToggle={toggleTheme} />
     }
 
-    return <ConsoleShell />
+    return <ConsoleShell theme={theme} onToggle={toggleTheme} />
 }
