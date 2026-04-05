@@ -16,9 +16,12 @@ import { UserManagementPage } from '@/pages/UserManagementPage'
 import { APP_CONFIG } from '@/config/app.config'
 import { ROUTES } from '@/config/routes'
 import { useWebSocketLifecycle } from './useWebSocketLifecycle'
-import { useMetricDefinitions } from '@/features/telemetry/useTelemetryQueries'
+import { useInitialAlerts } from '@/features/alerts/useAlertQueries'
 import { useAuthStore } from '@/features/auth/useAuthStore'
+import { useInitialMessages } from '@/features/dispatcher-messages/useMessageQueries'
 import { useFleetStore } from '@/features/fleet/useFleetStore'
+import { useInitialHealth } from '@/features/health/useHealthQueries'
+import { useInitialTelemetry, useMetricDefinitions } from '@/features/telemetry/useTelemetryQueries'
 import { refreshSession } from '@/services/api/authApi'
 
 function defaultRouteForRole(role: 'admin' | 'dispatcher' | 'regular_train') {
@@ -144,6 +147,10 @@ function AuthenticatedApp() {
   }, [selectLocomotive, user])
 
   useWebSocketLifecycle(accessToken)
+  useInitialTelemetry()
+  useInitialHealth()
+  useInitialAlerts()
+  useInitialMessages()
   useMetricDefinitions()
   return <AppShell />
 }
