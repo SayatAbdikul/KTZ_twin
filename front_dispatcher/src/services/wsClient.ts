@@ -107,7 +107,7 @@ export function connectWs(): void {
                     id: String(payload['message_id'] ?? crypto.randomUUID()),
                     locomotiveId,
                     sender: sender === 'dispatcher' ? 'dispatcher' : 'regular_train',
-                    body: String(payload['body'] ?? payload['subject'] ?? 'Incoming operation message'),
+                    body: String(payload['body'] ?? payload['subject'] ?? 'Входящее служебное сообщение'),
                     sentAt: Number(payload['sent_at'] ?? msg.timestamp ?? Date.now()),
                     delivered: typeof payload['delivered'] === 'boolean' ? (payload['delivered'] as boolean) : undefined,
                 }

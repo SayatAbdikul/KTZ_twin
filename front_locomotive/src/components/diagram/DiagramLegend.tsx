@@ -1,10 +1,10 @@
 const LEGEND_ITEMS = [
-  { color: '#10b981', label: 'Normal' },
-  { color: '#f59e0b', label: 'Degraded' },
-  { color: '#f97316', label: 'Warning' },
-  { color: '#ef4444', label: 'Critical' },
-  { color: '#3b82f6', label: 'No health data' },
-  { color: '#475569', label: 'No data' },
+  { color: '#10b981', label: 'Норма' },
+  { color: '#f59e0b', label: 'Снижение' },
+  { color: '#f97316', label: 'Предупреждение' },
+  { color: '#ef4444', label: 'Критично' },
+  { color: '#3b82f6', label: 'Нет данных о состоянии' },
+  { color: '#475569', label: 'Нет данных' },
 ]
 
 export function DiagramLegend() {

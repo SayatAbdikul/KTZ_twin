@@ -26,7 +26,7 @@ function adaptChatMessage(raw: unknown, locomotiveId: string): ChatMessage {
         id: String(payload['message_id'] ?? payload['messageId'] ?? crypto.randomUUID()),
         locomotiveId: String(payload['locomotive_id'] ?? payload['locomotiveId'] ?? locomotiveId),
         sender: sender === 'dispatcher' ? 'dispatcher' : 'regular_train',
-        body: String(payload['body'] ?? payload['subject'] ?? 'Incoming operation message'),
+        body: String(payload['body'] ?? payload['subject'] ?? 'Входящее служебное сообщение'),
         sentAt: Number(payload['sent_at'] ?? payload['sentAt'] ?? Date.now()),
         delivered: typeof payload['delivered'] === 'boolean' ? (payload['delivered'] as boolean) : undefined,
     }
@@ -39,7 +39,7 @@ export async function fetchChatHistory(locomotiveId: string): Promise<ChatMessag
     })
     const payload = (await response.json().catch(() => null)) as ApiEnvelope<unknown[]> | null
     if (!response.ok) {
-        throw new Error(payload?.error?.message ?? 'Unable to load chat history.')
+        throw new Error(payload?.error?.message ?? 'Не удалось загрузить историю чата.')
     }
     return (payload?.data ?? []).map((item) => adaptChatMessage(item, locomotiveId))
 }

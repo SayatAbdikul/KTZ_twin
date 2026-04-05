@@ -38,7 +38,7 @@ def latest_telemetry(locomotive_id: str, request: Request) -> dict:
     require_locomotive_access(get_request_auth(request), locomotive_id)
     rt = state.locomotives.get(locomotive_id)
     if not rt:
-        return {"data": None, "error": {"code": "NOT_FOUND", "message": "Locomotive not configured"}}
+        return {"data": None, "error": {"code": "NOT_FOUND", "message": "Локомотив не настроен"}}
     return {"data": rt.latest_telemetry}
 
 
@@ -57,7 +57,7 @@ def recent_telemetry(
 ) -> dict:
     require_locomotive_access(get_request_auth(request), locomotive_id)
     if locomotive_id not in state.locomotives:
-        return {"data": None, "error": {"code": "NOT_FOUND", "message": "Locomotive not configured"}}
+        return {"data": None, "error": {"code": "NOT_FOUND", "message": "Локомотив не настроен"}}
 
     to_ts = now_ms()
     from_ts = to_ts - minutes * 60 * 1000

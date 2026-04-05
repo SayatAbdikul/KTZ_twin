@@ -41,8 +41,8 @@ def upgrade() -> None:
     op.bulk_insert(
         role_types_table,
         [
-            {"code": "dispatcher", "label": "Dispatcher", "created_at": now_ms},
-            {"code": "regular_train", "label": "Regular Train", "created_at": now_ms},
+            {"code": "dispatcher", "label": "Диспетчер", "created_at": now_ms},
+            {"code": "regular_train", "label": "Локомотивная бригада", "created_at": now_ms},
         ],
     )
 

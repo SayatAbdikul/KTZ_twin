@@ -36,7 +36,7 @@ export function DetailPanel({ selectedZoneId, onClose }: DetailPanelProps) {
         </div>
         <button
           onClick={onClose}
-          aria-label="Close detail panel"
+          aria-label="Закрыть панель деталей"
           className="shrink-0 rounded p-0.5 text-slate-500 transition-colors hover:bg-slate-800 hover:text-slate-200"
         >
           <X size={16} />
@@ -48,14 +48,14 @@ export function DetailPanel({ selectedZoneId, onClose }: DetailPanelProps) {
         {/* Health */}
         {subsystem && (
           <div>
-            <SectionHeader title="Health" />
+            <SectionHeader title="Состояние" />
             <SubsystemBar subsystem={subsystem} />
           </div>
         )}
 
         {/* Live Metrics */}
         <div>
-          <SectionHeader title="Live Metrics" count={definitions.length} />
+          <SectionHeader title="Текущие метрики" count={definitions.length} />
           <div className="mt-2 grid grid-cols-1 gap-2">
             {definitions.map((def) => (
               <DynamicMetricRenderer key={def.metricId} definition={def} />
@@ -65,10 +65,10 @@ export function DetailPanel({ selectedZoneId, onClose }: DetailPanelProps) {
 
         {/* Active Alerts */}
         <div>
-          <SectionHeader title="Active Alerts" count={alertCount > 0 ? alertCount : undefined} />
+          <SectionHeader title="Активные оповещения" count={alertCount > 0 ? alertCount : undefined} />
           {alerts.length === 0 ? (
             <div className="mt-2 rounded-lg border border-dashed border-slate-700 py-4 text-center text-xs text-slate-600">
-              No active alerts
+              Активных оповещений нет
             </div>
           ) : (
             <div className="mt-2 space-y-2">

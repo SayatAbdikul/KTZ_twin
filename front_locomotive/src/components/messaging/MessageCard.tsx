@@ -21,6 +21,20 @@ const PRIORITY_BADGE: Record<DispatcherMessage['priority'], string> = {
   low: 'bg-slate-700/30 text-slate-500',
 }
 
+function priorityLabel(priority: DispatcherMessage['priority']): string {
+  if (priority === 'urgent') return 'Срочно'
+  if (priority === 'high') return 'Высокий'
+  if (priority === 'normal') return 'Обычный'
+  return 'Низкий'
+}
+
+function typeLabel(type: DispatcherMessage['type']): string {
+  if (type === 'assessment') return 'Оценка'
+  if (type === 'recommendation') return 'Рекомендация'
+  if (type === 'directive') return 'Директива'
+  return 'Информация'
+}
+
 export function MessageCard({ message, onAcknowledge }: MessageCardProps) {
   const isUnread = !message.readAt
   const isAcked = !!message.acknowledgedAt
@@ -36,9 +50,9 @@ export function MessageCard({ message, onAcknowledge }: MessageCardProps) {
               PRIORITY_BADGE[message.priority]
             )}
           >
-            {message.priority}
+            {priorityLabel(message.priority)}
           </span>
-          <span className="text-[10px] uppercase tracking-wide text-slate-500">{message.type}</span>
+          <span className="text-[10px] uppercase tracking-wide text-slate-500">{typeLabel(message.type)}</span>
         </div>
         <span className="flex-shrink-0 text-xs text-slate-500">{relativeTime(message.sentAt)}</span>
       </div>
@@ -55,10 +69,10 @@ export function MessageCard({ message, onAcknowledge }: MessageCardProps) {
             onClick={() => onAcknowledge(message.messageId)}
             className="rounded bg-slate-700 px-2 py-0.5 text-xs text-slate-300 hover:bg-slate-600 hover:text-white transition-colors"
           >
-            Acknowledge
+            Подтвердить
           </button>
         )}
-        {isAcked && <span className="text-xs text-emerald-500">Acknowledged</span>}
+        {isAcked && <span className="text-xs text-emerald-500">Подтверждено</span>}
       </div>
     </div>
   )

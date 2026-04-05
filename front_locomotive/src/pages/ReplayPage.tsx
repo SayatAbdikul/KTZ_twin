@@ -124,9 +124,9 @@ function renderAlertRows(alerts: Alert[]) {
 }
 
 function formatRangeLabel(earliest: number | null, latest: number | null): string {
-  if (earliest === null || latest === null) return 'No replay history available yet'
+  if (earliest === null || latest === null) return 'История воспроизведения пока недоступна'
 
-  const formatter = new Intl.DateTimeFormat('en-GB', {
+  const formatter = new Intl.DateTimeFormat('ru-RU', {
     year: 'numeric',
     month: 'short',
     day: '2-digit',
@@ -367,11 +367,11 @@ export function ReplayPage() {
         <div className="flex items-center gap-2">
           <History size={18} className="text-slate-400" />
           <div>
-            <h1 className="text-base font-semibold text-slate-200">History & Replay</h1>
+            <h1 className="text-base font-semibold text-slate-200">История и воспроизведение</h1>
             <p className="text-sm text-slate-500">
               {selectedLocomotiveId
                 ? `${selectedLocomotiveId} · ${formatRangeLabel(timeRange?.earliest ?? null, timeRange?.latest ?? null)}`
-                : 'Select a locomotive to inspect replay history'}
+                : 'Выберите локомотив, чтобы просмотреть историю воспроизведения'}
             </p>
           </div>
         </div>
@@ -457,14 +457,12 @@ export function ReplayPage() {
             <section className="space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Replay charts</p>
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Графики воспроизведения</p>
                   <h2 className="text-sm font-semibold text-slate-100">
-                    {isLoadingWindow ? 'Refreshing replay window…' : 'Historical trends'}
+                    {isLoadingWindow ? 'Обновление окна воспроизведения...' : 'Исторические тренды'}
                   </h2>
                 </div>
-                <span className="text-xs text-slate-500">
-                  {selectedDefinitions.length} metric{selectedDefinitions.length === 1 ? '' : 's'} selected
-                </span>
+                <span className="text-xs text-slate-500">Выбрано метрик: {selectedDefinitions.length}</span>
               </div>
 
               {selectedDefinitions.length > 0 ? (
@@ -480,13 +478,13 @@ export function ReplayPage() {
                 </div>
               ) : (
                 <div className="flex h-48 items-center justify-center rounded-xl border border-dashed border-slate-700 bg-slate-900/40 text-sm text-slate-500">
-                  Select at least one metric to render replay charts.
+                  Выберите хотя бы одну метрику для построения графиков воспроизведения.
                 </div>
               )}
             </section>
           ) : (
             <div className="flex h-64 items-center justify-center rounded-xl border border-dashed border-slate-700 bg-slate-900/40 text-sm text-slate-500">
-              {isLoading ? 'Loading replay history…' : 'Replay history will appear once dispatcher telemetry is stored.'}
+              {isLoading ? 'Загрузка истории воспроизведения...' : 'История воспроизведения появится после сохранения диспетчерской телеметрии.'}
             </div>
           )}
         </div>

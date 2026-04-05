@@ -77,17 +77,17 @@ export function DispatchConsolePage() {
       <section className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
-            <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Admin</p>
-            <h1 className="mt-1 text-base font-semibold text-slate-100">Dispatcher Console</h1>
+            <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Админ</p>
+            <h1 className="mt-1 text-base font-semibold text-slate-100">Диспетчерская консоль</h1>
           </div>
           <div className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300">
-            Live
+            Онлайн
           </div>
         </div>
 
         {locomotiveIds.length === 0 ? (
           <div className="flex h-40 items-center justify-center rounded-xl border border-dashed border-slate-700 text-sm text-slate-500">
-            Waiting for dispatcher snapshot.
+            Ожидание диспетчерского снимка.
           </div>
         ) : (
           <div className="space-y-2">
@@ -118,14 +118,14 @@ export function DispatchConsolePage() {
                           : 'bg-slate-800 text-slate-400'
                       )}
                     >
-                      {summary.connected ? 'Online' : 'Offline'}
+                      {summary.connected ? 'Онлайн' : 'Офлайн'}
                     </span>
                   </div>
                   <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-400">
-                    <div>Health {summary.healthScore?.toFixed(0) ?? '--'}</div>
-                    <div>Alerts {summary.activeAlertCount}</div>
-                    <div>Speed {formatMetric(summary.speedKmh, 'km/h')}</div>
-                    <div>Fuel {formatMetric(summary.fuelLevel, '%')}</div>
+                    <div>Состояние {summary.healthScore?.toFixed(0) ?? '--'}</div>
+                    <div>Оповещения {summary.activeAlertCount}</div>
+                    <div>Скорость {formatMetric(summary.speedKmh, 'км/ч')}</div>
+                    <div>Топливо {formatMetric(summary.fuelLevel, '%')}</div>
                   </div>
                 </button>
               )
@@ -139,34 +139,34 @@ export function DispatchConsolePage() {
           <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
             <div className="flex items-center gap-2 text-xs uppercase tracking-[0.24em] text-slate-500">
               <Shield size={14} />
-              Selected Unit
+              Выбранная единица
             </div>
             <div className="mt-3 text-xl font-semibold text-slate-100">
-              {selectedSummary?.locomotiveId ?? 'No locomotive'}
+              {selectedSummary?.locomotiveId ?? 'Локомотив не выбран'}
             </div>
             <div className="mt-1 text-sm text-slate-500">
               {selectedSummary?.latestTelemetryAt
-                ? `Updated ${relativeTime(selectedSummary.latestTelemetryAt)}`
-                : 'Awaiting telemetry'}
+                ? `Обновлено ${relativeTime(selectedSummary.latestTelemetryAt)}`
+                : 'Ожидание телеметрии'}
             </div>
           </div>
 
           <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-            <div className="text-xs uppercase tracking-[0.24em] text-slate-500">Speed</div>
+            <div className="text-xs uppercase tracking-[0.24em] text-slate-500">Скорость</div>
             <div className="mt-3 text-2xl font-semibold text-slate-100">
-              {formatMetric(selectedSummary?.speedKmh, 'km/h')}
+              {formatMetric(selectedSummary?.speedKmh, 'км/ч')}
             </div>
           </div>
 
           <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-            <div className="text-xs uppercase tracking-[0.24em] text-slate-500">Coolant</div>
+            <div className="text-xs uppercase tracking-[0.24em] text-slate-500">Охлаждение</div>
             <div className="mt-3 text-2xl font-semibold text-slate-100">
-              {formatMetric(selectedSummary?.coolantTemp, 'C')}
+              {formatMetric(selectedSummary?.coolantTemp, '°C')}
             </div>
           </div>
 
           <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-            <div className="text-xs uppercase tracking-[0.24em] text-slate-500">Traction</div>
+            <div className="text-xs uppercase tracking-[0.24em] text-slate-500">Тяга</div>
             <div className="mt-3 text-2xl font-semibold text-slate-100">
               {formatMetric(tractionCurrent, 'A')}
             </div>
@@ -177,25 +177,25 @@ export function DispatchConsolePage() {
           <div className="flex min-h-0 flex-col rounded-2xl border border-slate-800 bg-slate-950/60">
             <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
               <div>
-                <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Radio Link</p>
+                <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Радиоканал</p>
                 <h2 className="mt-1 text-sm font-semibold text-slate-100">
-                  {selectedLocomotiveId ? `${selectedLocomotiveId} command channel` : 'Select a locomotive'}
+                  {selectedLocomotiveId ? `${selectedLocomotiveId} · канал команд` : 'Выберите локомотив'}
                 </h2>
               </div>
               <div className="flex items-center gap-2 text-xs text-slate-400">
                 <Radio size={14} className="text-blue-300" />
-                Realtime
+                Реальное время
               </div>
             </div>
 
             <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
               {!selectedLocomotiveId ? (
                 <div className="flex h-full items-center justify-center text-sm text-slate-500">
-                  Pick a locomotive to open chat.
+                  Выберите локомотив, чтобы открыть чат.
                 </div>
               ) : selectedMessages.length === 0 ? (
                 <div className="flex h-full items-center justify-center text-sm text-slate-500">
-                  No messages yet for this locomotive.
+                  Для этого локомотива сообщений пока нет.
                 </div>
               ) : (
                 selectedMessages.map((message) => (
@@ -210,7 +210,7 @@ export function DispatchConsolePage() {
                   >
                     <p>{message.body}</p>
                     <div className="mt-2 text-[11px] uppercase tracking-[0.16em] text-slate-400">
-                      {message.sender === 'dispatcher' ? 'Dispatcher' : 'Train'} · {relativeTime(message.sentAt)}
+                      {message.sender === 'dispatcher' ? 'Диспетчер' : 'Локомотив'} · {relativeTime(message.sentAt)}
                     </div>
                   </div>
                 ))
@@ -220,9 +220,9 @@ export function DispatchConsolePage() {
             <div className="border-t border-slate-800 px-4 py-3">
               <div className="flex gap-3">
                 <textarea
-                  value={draft}
-                  onChange={(event) => setDraft(event.target.value)}
-                  placeholder="Send operational instruction to the selected train"
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                placeholder="Отправьте эксплуатационную команду выбранному локомотиву"
                   rows={3}
                   disabled={!selectedLocomotiveId}
                   className="min-h-[84px] flex-1 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none transition-colors focus:border-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
@@ -234,31 +234,31 @@ export function DispatchConsolePage() {
                   className="flex h-[84px] w-24 items-center justify-center gap-2 rounded-xl bg-blue-600 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500"
                 >
                   <Send size={16} />
-                  Send
+                  Отправить
                 </button>
               </div>
             </div>
           </div>
 
           <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-            <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Operations Summary</p>
+            <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Оперативная сводка</p>
             <div className="mt-4 space-y-3 text-sm text-slate-300">
               <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-3">
-                Health score: <span className="font-semibold text-slate-100">{selectedSummary?.healthScore?.toFixed(0) ?? '--'}</span>
+                Индекс состояния: <span className="font-semibold text-slate-100">{selectedSummary?.healthScore?.toFixed(0) ?? '--'}</span>
               </div>
               <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-3">
-                Active alerts: <span className="font-semibold text-slate-100">{selectedSummary?.activeAlertCount ?? 0}</span>
+                Активные оповещения: <span className="font-semibold text-slate-100">{selectedSummary?.activeAlertCount ?? 0}</span>
               </div>
               <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-3">
-                Last health update:{' '}
+                Последнее обновление состояния:{' '}
                 <span className="font-semibold text-slate-100">
-                  {selectedSummary?.latestHealthAt ? relativeTime(selectedSummary.latestHealthAt) : 'n/a'}
+                  {selectedSummary?.latestHealthAt ? relativeTime(selectedSummary.latestHealthAt) : 'н/д'}
                 </span>
               </div>
               <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-3">
-                Link state:{' '}
+                Состояние канала:{' '}
                 <span className="font-semibold text-slate-100">
-                  {selectedSummary?.connected ? 'Connected' : 'Disconnected'}
+                  {selectedSummary?.connected ? 'Подключено' : 'Отключено'}
                 </span>
               </div>
             </div>

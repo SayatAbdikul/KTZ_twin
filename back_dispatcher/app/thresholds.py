@@ -58,7 +58,7 @@ def _coerce_number(value: Any, *, allow_none: bool = False) -> float | None:
         return None
     if isinstance(value, (int, float)):
         return float(value)
-    raise ThresholdValidationError("Threshold values must be numeric.")
+    raise ThresholdValidationError("Пороговые значения должны быть числовыми.")
 
 
 def _merge_threshold_config(base: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
@@ -67,16 +67,16 @@ def _merge_threshold_config(base: dict[str, Any], patch: dict[str, Any]) -> dict
     metrics_patch = patch.get("metrics")
     if metrics_patch is not None:
         if not isinstance(metrics_patch, dict):
-            raise ThresholdValidationError("'metrics' must be an object.")
+            raise ThresholdValidationError("'metrics' должен быть объектом.")
         for metric_id, raw_thresholds in metrics_patch.items():
             if metric_id not in STATIC_METRICS:
-                raise ThresholdValidationError(f"Unknown metricId '{metric_id}'.")
+                raise ThresholdValidationError(f"Неизвестный metricId '{metric_id}'.")
             if not isinstance(raw_thresholds, dict):
-                raise ThresholdValidationError(f"Threshold patch for '{metric_id}' must be an object.")
+                raise ThresholdValidationError(f"Патч порогов для '{metric_id}' должен быть объектом.")
             target = dict(merged["metrics"].get(metric_id, {}))
             for key, value in raw_thresholds.items():
                 if key not in THRESHOLD_KEYS:
-                    raise ThresholdValidationError(f"Unsupported threshold key '{key}' for '{metric_id}'.")
+                    raise ThresholdValidationError(f"Неподдерживаемый ключ порога '{key}' для '{metric_id}'.")
                 target[key] = _coerce_number(value, allow_none=True)
             merged["metrics"][metric_id] = target
 
@@ -85,10 +85,10 @@ def _merge_threshold_config(base: dict[str, Any], patch: dict[str, Any]) -> dict
         if root_patch is None:
             continue
         if not isinstance(root_patch, dict):
-            raise ThresholdValidationError(f"'{root_key}' must be an object.")
+            raise ThresholdValidationError(f"'{root_key}' должен быть объектом.")
         for key, value in root_patch.items():
             if key not in allowed_keys:
-                raise ThresholdValidationError(f"Unsupported key '{key}' in '{root_key}'.")
+                raise ThresholdValidationError(f"Неподдерживаемый ключ '{key}' в '{root_key}'.")
             merged[root_key][key] = _coerce_number(value)
 
     return merged
@@ -100,14 +100,14 @@ def _validate_config(config: dict[str, Any]) -> dict[str, Any]:
     health_status = config.get("healthStatus")
 
     if not isinstance(metrics, dict) or not isinstance(penalties, dict) or not isinstance(health_status, dict):
-        raise ThresholdValidationError("Threshold config must contain metrics, penalties, and healthStatus objects.")
+        raise ThresholdValidationError("Конфигурация порогов должна содержать объекты metrics, penalties и healthStatus.")
 
     normalized_metrics: dict[str, dict[str, float | None]] = {}
     for metric_id, raw_thresholds in metrics.items():
         if metric_id not in STATIC_METRICS:
-            raise ThresholdValidationError(f"Unknown metricId '{metric_id}'.")
+            raise ThresholdValidationError(f"Неизвестный metricId '{metric_id}'.")
         if not isinstance(raw_thresholds, dict):
-            raise ThresholdValidationError(f"Threshold definition for '{metric_id}' must be an object.")
+            raise ThresholdValidationError(f"Описание порогов для '{metric_id}' должно быть объектом.")
 
         normalized = {
             key: _coerce_number(value, allow_none=True)
@@ -118,33 +118,33 @@ def _validate_config(config: dict[str, Any]) -> dict[str, Any]:
         metric_max = float(metric["max"] or 0.0)
         for key, value in normalized.items():
             if key not in THRESHOLD_KEYS:
-                raise ThresholdValidationError(f"Unsupported threshold key '{key}' for '{metric_id}'.")
+                raise ThresholdValidationError(f"Неподдерживаемый ключ порога '{key}' для '{metric_id}'.")
             if value is not None and (value < metric_min or value > metric_max):
                 raise ThresholdValidationError(
-                    f"{metric_id}.{key} must be between {metric_min:g} and {metric_max:g}."
+                    f"{metric_id}.{key} должен быть в диапазоне от {metric_min:g} до {metric_max:g}."
                 )
         if normalized.get("criticalLow") is not None and normalized.get("warningLow") is not None and normalized["criticalLow"] >= normalized["warningLow"]:
-            raise ThresholdValidationError(f"{metric_id}: criticalLow must be less than warningLow.")
+            raise ThresholdValidationError(f"{metric_id}: criticalLow должен быть меньше warningLow.")
         if normalized.get("warningHigh") is not None and normalized.get("criticalHigh") is not None and normalized["warningHigh"] >= normalized["criticalHigh"]:
-            raise ThresholdValidationError(f"{metric_id}: warningHigh must be less than criticalHigh.")
+            raise ThresholdValidationError(f"{metric_id}: warningHigh должен быть меньше criticalHigh.")
         if normalized.get("warningLow") is not None and normalized.get("warningHigh") is not None and normalized["warningLow"] >= normalized["warningHigh"]:
-            raise ThresholdValidationError(f"{metric_id}: warningLow must be less than warningHigh.")
+            raise ThresholdValidationError(f"{metric_id}: warningLow должен быть меньше warningHigh.")
         normalized_metrics[metric_id] = normalized
 
     warning_penalty = _coerce_number(penalties.get("warning"))
     critical_penalty = _coerce_number(penalties.get("critical"))
     if warning_penalty is None or critical_penalty is None:
-        raise ThresholdValidationError("Warning and critical penalties are required.")
+        raise ThresholdValidationError("Требуются оба штрафа: warning и critical.")
     if warning_penalty < 0 or critical_penalty < 0 or critical_penalty < warning_penalty:
-        raise ThresholdValidationError("Penalty values must be non-negative and critical must be >= warning.")
+        raise ThresholdValidationError("Значения штрафов не могут быть отрицательными, а critical должен быть не меньше warning.")
 
     normal_cutoff = _coerce_number(health_status.get("normal"))
     degraded_cutoff = _coerce_number(health_status.get("degraded"))
     warning_cutoff = _coerce_number(health_status.get("warning"))
     if normal_cutoff is None or degraded_cutoff is None or warning_cutoff is None:
-        raise ThresholdValidationError("Health status cutoffs are required.")
+        raise ThresholdValidationError("Требуются пороги состояния.")
     if not (0 <= warning_cutoff < degraded_cutoff < normal_cutoff <= 100):
-        raise ThresholdValidationError("Health status thresholds must satisfy 0 <= warning < degraded < normal <= 100.")
+        raise ThresholdValidationError("Пороги состояния должны удовлетворять условию 0 <= warning < degraded < normal <= 100.")
 
     return {
         "metrics": normalized_metrics,
@@ -178,7 +178,7 @@ class ThresholdConfigStore:
 
             raw = json.loads(self._path.read_text(encoding="utf-8"))
             if not isinstance(raw, dict):
-                raise ThresholdValidationError("Threshold file must contain a JSON object.")
+                raise ThresholdValidationError("Файл порогов должен содержать JSON-объект.")
             merged = _merge_threshold_config(DEFAULT_THRESHOLD_CONFIG, raw)
             self._config = _validate_config(merged)
             self._mtime_ns = stat.st_mtime_ns

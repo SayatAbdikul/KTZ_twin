@@ -76,7 +76,7 @@ async def lifespan(app: FastAPI):
         tasks.append(asyncio.create_task(consume_kafka_forever(), name="kafka-consumer"))
 
     logger.info(
-        "Dispatcher started with ingest mode=%s and %d locomotive targets",
+        "Диспетчерский сервер запущен: режим ingest=%s, целевых локомотивов=%d",
         INGEST_MODE,
         len(LOCOMOTIVE_TARGETS),
     )
@@ -89,8 +89,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="KTZ Dispatcher Backend",
-    description="Realtime dispatcher backend that bridges multiple locomotive telemetry streams.",
+    title="Диспетчерский сервер КТЖ",
+    description="Диспетчерский сервер реального времени, объединяющий потоки телеметрии локомотивов.",
     version="1.0.0",
     lifespan=lifespan,
 )

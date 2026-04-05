@@ -64,7 +64,7 @@ export function adaptDispatchChatMessage(raw: unknown, eventLocomotiveId?: strin
     id: String(payload['message_id'] ?? payload['messageId'] ?? crypto.randomUUID()),
     locomotiveId: String(payload['locomotive_id'] ?? payload['locomotiveId'] ?? eventLocomotiveId ?? ''),
     sender: sender === 'dispatcher' ? 'dispatcher' : 'regular_train',
-    body: String(payload['body'] ?? payload['subject'] ?? 'Incoming locomotive message'),
+    body: String(payload['body'] ?? payload['subject'] ?? 'Входящее сообщение локомотива'),
     sentAt: Number(payload['sent_at'] ?? payload['sentAt'] ?? Date.now()),
     delivered: typeof payload['delivered'] === 'boolean' ? (payload['delivered'] as boolean) : undefined,
   }

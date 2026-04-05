@@ -88,8 +88,8 @@ export function MessagesPage() {
         <div className="flex items-center gap-2">
           <Radio size={18} className="text-blue-400" />
           <div>
-            <h1 className="text-base font-semibold text-slate-200">Dispatcher Chat</h1>
-            <p className="text-sm text-slate-500">{trainLocomotiveId ?? 'No locomotive assigned'}</p>
+            <h1 className="text-base font-semibold text-slate-200">Чат с диспетчером</h1>
+            <p className="text-sm text-slate-500">{trainLocomotiveId ?? 'Локомотив не назначен'}</p>
           </div>
         </div>
 
@@ -97,7 +97,7 @@ export function MessagesPage() {
           <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
             {chatMessages.length === 0 ? (
               <div className="flex h-full items-center justify-center text-sm text-slate-500">
-                No chat messages yet.
+                Сообщений в чате пока нет.
               </div>
             ) : (
               chatMessages.map((message) => (
@@ -112,7 +112,7 @@ export function MessagesPage() {
                 >
                   <p>{message.body}</p>
                   <div className="mt-2 text-[11px] uppercase tracking-[0.16em] text-slate-400">
-                    {message.sender === 'regular_train' ? 'Train' : 'Dispatcher'} · {relativeTime(message.sentAt)}
+                    {message.sender === 'regular_train' ? 'Локомотив' : 'Диспетчер'} · {relativeTime(message.sentAt)}
                   </div>
                 </div>
               ))
@@ -124,7 +124,7 @@ export function MessagesPage() {
               <textarea
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
-                placeholder="Reply to dispatcher"
+                placeholder="Ответить диспетчеру"
                 rows={3}
                 disabled={!trainLocomotiveId}
                 className="min-h-[84px] flex-1 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none transition-colors focus:border-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
@@ -134,9 +134,9 @@ export function MessagesPage() {
                 onClick={handleSendTrainChat}
                 disabled={!trainLocomotiveId || !draft.trim()}
                 className="flex h-[84px] w-24 items-center justify-center gap-2 rounded-xl bg-blue-600 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500"
-              >
-                <Send size={16} />
-                Send
+                >
+                  <Send size={16} />
+                Отправить
               </button>
             </div>
           </div>
@@ -149,13 +149,13 @@ export function MessagesPage() {
     <PageContainer>
       <div className="mb-4 flex items-center gap-2">
         <MessageSquare size={18} className="text-blue-400" />
-        <h1 className="text-base font-semibold text-slate-200">Dispatcher Messages</h1>
+        <h1 className="text-base font-semibold text-slate-200">Сообщения диспетчера</h1>
       </div>
 
       <div className="flex flex-col gap-2">
         {messages.length === 0 ? (
           <div className="flex h-32 items-center justify-center rounded-lg border border-dashed border-slate-700 text-slate-500">
-            No messages
+            Сообщений нет
           </div>
         ) : (
           messages.map((msg) => (

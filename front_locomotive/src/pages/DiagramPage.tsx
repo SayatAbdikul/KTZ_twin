@@ -44,9 +44,9 @@ export function DiagramPage() {
         {/* Header */}
         <div className="flex shrink-0 items-center justify-between">
           <div>
-            <h1 className="text-sm font-semibold text-slate-200">Locomotive Diagram</h1>
+            <h1 className="text-sm font-semibold text-slate-200">Схема локомотива</h1>
             <p className="text-xs text-slate-500">
-              Hover over a subsystem zone to preview live data · Click to open details
+              Наведите курсор на зону подсистемы для предварительного просмотра · Нажмите, чтобы открыть детали
             </p>
           </div>
           <DiagramLegend />

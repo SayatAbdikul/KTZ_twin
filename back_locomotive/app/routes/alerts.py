@@ -40,17 +40,17 @@ def acknowledge_alert(alert_id: str) -> dict:
             continue
 
         if alert.status == "resolved":
-            raise HTTPException(status_code=409, detail="Resolved alerts cannot be acknowledged")
+            raise HTTPException(status_code=409, detail="Подтверждение уже закрытого оповещения невозможно.")
 
         if alert.status != "acknowledged":
             state.alerts[index] = alert.model_copy(
                 update={
                     "status": "acknowledged",
                     "acknowledged_at": now_ms(),
-                    "acknowledged_by": "Operator",
+                    "acknowledged_by": "Машинист",
                 }
             )
 
         return make_response(state.alerts[index].model_dump(by_alias=True, exclude_none=True))
 
-    raise HTTPException(status_code=404, detail=f"Alert not found: {alert_id}")
+    raise HTTPException(status_code=404, detail=f"Оповещение не найдено: {alert_id}")

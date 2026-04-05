@@ -40,43 +40,43 @@ function getThresholdLines(definition: MetricDefinition, currentTimestamp: numbe
 
   if (definition.warningLow !== undefined) {
     lines.push({
-      name: 'Warning Low',
+      name: 'Нижнее предупреждение',
       yAxis: definition.warningLow,
       lineStyle: { color: '#f59e0b', type: 'dashed', width: 1 },
-      label: { formatter: 'Warn Low', color: '#fbbf24' },
+      label: { formatter: 'Пред. мин.', color: '#fbbf24' },
     })
   }
   if (definition.warningHigh !== undefined) {
     lines.push({
-      name: 'Warning High',
+      name: 'Верхнее предупреждение',
       yAxis: definition.warningHigh,
       lineStyle: { color: '#f59e0b', type: 'dashed', width: 1 },
-      label: { formatter: 'Warn High', color: '#fbbf24' },
+      label: { formatter: 'Пред. макс.', color: '#fbbf24' },
     })
   }
   if (definition.criticalLow !== undefined) {
     lines.push({
-      name: 'Critical Low',
+      name: 'Нижний критический порог',
       yAxis: definition.criticalLow,
       lineStyle: { color: '#ef4444', type: 'dashed', width: 1 },
-      label: { formatter: 'Critical Low', color: '#f87171' },
+      label: { formatter: 'Крит. мин.', color: '#f87171' },
     })
   }
   if (definition.criticalHigh !== undefined) {
     lines.push({
-      name: 'Critical High',
+      name: 'Верхний критический порог',
       yAxis: definition.criticalHigh,
       lineStyle: { color: '#ef4444', type: 'dashed', width: 1 },
-      label: { formatter: 'Critical High', color: '#f87171' },
+      label: { formatter: 'Крит. макс.', color: '#f87171' },
     })
   }
 
   if (currentTimestamp !== null) {
     lines.push({
-      name: 'Current',
+      name: 'Текущий момент',
       xAxis: currentTimestamp,
       lineStyle: { color: '#e2e8f0', type: 'solid', width: 1 },
-      label: { formatter: 'Now', color: '#e2e8f0' },
+      label: { formatter: 'Сейчас', color: '#e2e8f0' },
     })
   }
 
@@ -98,7 +98,7 @@ export function ReplayChart({ definition, points, currentTimestamp }: ReplayChar
           <p className="text-xs text-slate-500">{definition.unit}</p>
         </div>
         <div className="flex h-[260px] items-center justify-center rounded-lg border border-dashed border-slate-700 text-sm text-slate-500">
-          No replay samples in this window
+          В этом окне нет точек воспроизведения
         </div>
       </article>
     )

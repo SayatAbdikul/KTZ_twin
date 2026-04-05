@@ -14,7 +14,7 @@ function formatTick(timestamp: number, spanMs: number): string {
       ? { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' }
       : { hour: '2-digit', minute: '2-digit' }
 
-  return new Intl.DateTimeFormat('en-GB', options).format(timestamp)
+  return new Intl.DateTimeFormat('ru-RU', options).format(timestamp)
 }
 
 function getTickSpacing(spanMs: number): number {
@@ -78,19 +78,19 @@ export function TimelineScrubber({
     <section className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Timeline</p>
-          <h2 className="text-sm font-semibold text-slate-100">Replay scrubber</h2>
+          <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Шкала времени</p>
+          <h2 className="text-sm font-semibold text-slate-100">Ползунок воспроизведения</h2>
         </div>
         {earliest !== null && earliest !== undefined && latest !== null && latest !== undefined ? (
           <span className="text-xs text-slate-500">
-            {new Intl.DateTimeFormat('en-GB', {
+            {new Intl.DateTimeFormat('ru-RU', {
               month: 'short',
               day: '2-digit',
               hour: '2-digit',
               minute: '2-digit',
             }).format(earliest)}
             {' - '}
-            {new Intl.DateTimeFormat('en-GB', {
+            {new Intl.DateTimeFormat('ru-RU', {
               month: 'short',
               day: '2-digit',
               hour: '2-digit',
@@ -98,7 +98,7 @@ export function TimelineScrubber({
             }).format(latest)}
           </span>
         ) : (
-          <span className="text-xs text-slate-500">No stored replay history</span>
+          <span className="text-xs text-slate-500">Сохранённая история воспроизведения отсутствует</span>
         )}
       </div>
 
@@ -131,13 +131,13 @@ export function TimelineScrubber({
                   key={`${range.from}-${range.to}`}
                   className="absolute top-0 bottom-0 bg-amber-500/55"
                   style={{ left: `${left}%`, width: `${Math.max(width, 0.4)}%` }}
-                  title="No data points in this interval"
+                  title="В этом интервале нет точек данных"
                 />
               )
             })}
           </div>
           <p className="mt-1 text-[11px] text-slate-500">
-            Amber segments show intervals with no replay data points.
+            Оранжевые сегменты показывают интервалы без точек данных воспроизведения.
           </p>
         </div>
       ) : null}

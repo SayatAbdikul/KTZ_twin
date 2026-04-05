@@ -181,7 +181,7 @@ def _validate_new_password(password: str) -> str:
     if len(candidate) < PASSWORD_MIN_LENGTH:
         raise HTTPException(
             status_code=400,
-            detail=f"Password must be at least {PASSWORD_MIN_LENGTH} characters long.",
+            detail=f"Пароль должен содержать не менее {PASSWORD_MIN_LENGTH} символов.",
         )
 
     classes = [
@@ -193,7 +193,7 @@ def _validate_new_password(password: str) -> str:
     if sum(classes) < 3:
         raise HTTPException(
             status_code=400,
-            detail="Password must contain at least three of: lowercase, uppercase, number, symbol.",
+            detail="Пароль должен содержать как минимум три из четырёх категорий: строчные буквы, заглавные буквы, цифры, символы.",
         )
     return candidate
 
@@ -232,13 +232,13 @@ def _user_role(user: User) -> str:
         return ROLE_DISPATCHER
     if role_type == ROLE_TYPE_REGULAR_TRAIN:
         return ROLE_REGULAR_TRAIN
-    raise HTTPException(status_code=500, detail="User role type is misconfigured.")
+    raise HTTPException(status_code=500, detail="Тип роли пользователя настроен неверно.")
 
 
 def _get_role_type(session, code: str) -> RoleType:
     role_type = session.scalar(select(RoleType).where(RoleType.code == code))
     if role_type is None:
-        raise HTTPException(status_code=500, detail=f"Role type {code!r} is missing.")
+        raise HTTPException(status_code=500, detail=f"Тип роли {code!r} отсутствует.")
     return role_type
 
 
@@ -307,7 +307,7 @@ def _record_audit_event(
 
 
 def _service_context() -> AuthContext:
-    return AuthContext(role=ROLE_SERVICE, subject="service:api-key", display_name="Internal Service")
+    return AuthContext(role=ROLE_SERVICE, subject="service:api-key", display_name="Внутренний сервис")
 
 
 def create_access_token(auth: AuthContext) -> str:
@@ -395,18 +395,18 @@ def _find_session_by_refresh_token(session, refresh_token: str) -> AuthSession |
 
 def _require_active_user(user: User | None) -> User:
     if user is None:
-        raise HTTPException(status_code=401, detail="Authentication required")
+        raise HTTPException(status_code=401, detail="Требуется аутентификация.")
     if user.status != USER_STATUS_ACTIVE:
-        raise HTTPException(status_code=403, detail="This account is disabled.")
+        raise HTTPException(status_code=403, detail="Эта учётная запись отключена.")
     return user
 
 
 def _require_active_session(auth_session: AuthSession | None) -> AuthSession:
     if auth_session is None:
-        raise HTTPException(status_code=401, detail="Authentication required")
+        raise HTTPException(status_code=401, detail="Требуется аутентификация.")
     now = now_ms()
     if auth_session.revoked_at is not None or auth_session.expires_at <= now:
-        raise HTTPException(status_code=401, detail="Session expired. Please sign in again.")
+        raise HTTPException(status_code=401, detail="Сессия истекла. Войдите снова.")
     return auth_session
 
 
@@ -455,7 +455,7 @@ def _resolve_auth_context(authorization: str | None, api_key: str | None) -> Aut
 def authenticate_credentials(identifier: str, password: str, *, user_agent: str | None, ip_address: str | None) -> IssuedSession:
     normalized_identifier = identifier.strip()
     if not normalized_identifier or not password:
-        raise HTTPException(status_code=400, detail="Identifier and password are required.")
+        raise HTTPException(status_code=400, detail="Укажите идентификатор и пароль.")
 
     with session_scope() as session:
         user = _find_user_by_identifier(session, normalized_identifier)
@@ -466,7 +466,7 @@ def authenticate_credentials(identifier: str, password: str, *, user_agent: str 
                 success=False,
                 payload={"identifier": normalized_identifier, "reason": "user_not_found"},
             )
-            raise HTTPException(status_code=401, detail="Invalid credentials.")
+            raise HTTPException(status_code=401, detail="Неверные учётные данные.")
 
         if user.status != USER_STATUS_ACTIVE:
             _record_audit_event(
@@ -476,7 +476,7 @@ def authenticate_credentials(identifier: str, password: str, *, user_agent: str 
                 success=False,
                 payload={"identifier": normalized_identifier, "reason": "disabled"},
             )
-            raise HTTPException(status_code=403, detail="This account is disabled.")
+            raise HTTPException(status_code=403, detail="Эта учётная запись отключена.")
 
         if not _verify_password(user.password_hash, password):
             _record_audit_event(
@@ -486,7 +486,7 @@ def authenticate_credentials(identifier: str, password: str, *, user_agent: str 
                 success=False,
                 payload={"identifier": normalized_identifier, "reason": "invalid_password"},
             )
-            raise HTTPException(status_code=401, detail="Invalid credentials.")
+            raise HTTPException(status_code=401, detail="Неверные учётные данные.")
 
         if _password_needs_rehash(user.password_hash):
             user.password_hash = _password_hash(password)
@@ -513,7 +513,7 @@ def authenticate_credentials(identifier: str, password: str, *, user_agent: str 
 
 def refresh_session(refresh_token: str | None, *, user_agent: str | None, ip_address: str | None) -> IssuedSession:
     if not refresh_token:
-        raise HTTPException(status_code=401, detail="Refresh session not found.")
+        raise HTTPException(status_code=401, detail="Сессия обновления не найдена.")
 
     with session_scope() as session:
         auth_session = _find_session_by_refresh_token(session, refresh_token)
@@ -564,7 +564,7 @@ def logout_refresh_session(refresh_token: str | None) -> None:
 
 def get_current_user(auth: AuthContext) -> dict[str, object]:
     if auth.user_id is None:
-        raise HTTPException(status_code=401, detail="Authentication required")
+        raise HTTPException(status_code=401, detail="Требуется аутентификация.")
 
     with session_scope() as session:
         user = _require_active_user(session.get(User, auth.user_id))
@@ -580,7 +580,7 @@ def change_password(
     ip_address: str | None,
 ) -> IssuedSession:
     if auth.user_id is None:
-        raise HTTPException(status_code=401, detail="Authentication required")
+        raise HTTPException(status_code=401, detail="Требуется аутентификация.")
 
     validated_password = _validate_new_password(new_password)
     with session_scope() as session:
@@ -595,7 +595,7 @@ def change_password(
                 success=False,
                 payload={"reason": "invalid_current_password"},
             )
-            raise HTTPException(status_code=401, detail="Current password is incorrect.")
+            raise HTTPException(status_code=401, detail="Текущий пароль указан неверно.")
 
         now = now_ms()
         user.password_hash = _password_hash(validated_password)
@@ -648,17 +648,17 @@ def create_user_account(
     normalized_locomotive_id = _normalize_locomotive_id(locomotive_id)
     display = display_name.strip()
     if not display:
-        raise HTTPException(status_code=400, detail="Display name is required.")
+        raise HTTPException(status_code=400, detail="Требуется отображаемое имя.")
 
     if normalized_role not in {ROLE_ADMIN, ROLE_DISPATCHER, ROLE_REGULAR_TRAIN}:
-        raise HTTPException(status_code=400, detail="Unsupported role.")
+        raise HTTPException(status_code=400, detail="Неподдерживаемая роль.")
     if normalized_role == ROLE_REGULAR_TRAIN:
         if normalized_locomotive_id is None:
-            raise HTTPException(status_code=400, detail="Regular train users require a locomotiveId.")
+            raise HTTPException(status_code=400, detail="Для обычного локомотивного пользователя требуется locomotiveId.")
         normalized_username = None
     else:
         if normalized_username is None:
-            raise HTTPException(status_code=400, detail="Admin and dispatcher users require a username.")
+            raise HTTPException(status_code=400, detail="Для администратора и диспетчера требуется имя пользователя.")
         normalized_locomotive_id = None
 
     temporary_password = _generate_temporary_password()
@@ -667,12 +667,12 @@ def create_user_account(
         if normalized_username is not None:
             existing_username = session.scalar(select(User).where(User.username == normalized_username))
             if existing_username is not None:
-                raise HTTPException(status_code=409, detail="That username is already in use.")
+                raise HTTPException(status_code=409, detail="Это имя пользователя уже занято.")
 
         if normalized_locomotive_id is not None:
             existing_locomotive = session.scalar(select(User).where(User.locomotive_id == normalized_locomotive_id))
             if existing_locomotive is not None:
-                raise HTTPException(status_code=409, detail="That locomotive already has an assigned train account.")
+                raise HTTPException(status_code=409, detail="Для этого локомотива уже назначена локомотивная учётная запись.")
 
         role_type = _get_role_type(
             session,
@@ -720,26 +720,26 @@ def update_user_account(
     with session_scope() as session:
         user = session.get(User, user_id)
         if user is None:
-            raise HTTPException(status_code=404, detail="User not found.")
+            raise HTTPException(status_code=404, detail="Пользователь не найден.")
 
         if user.id == actor.user_id and status == USER_STATUS_DISABLED:
-            raise HTTPException(status_code=400, detail="You cannot disable your own account.")
+            raise HTTPException(status_code=400, detail="Нельзя отключить собственную учётную запись.")
 
         if display_name is not None:
             updated_display_name = display_name.strip()
             if not updated_display_name:
-                raise HTTPException(status_code=400, detail="Display name cannot be empty.")
+                raise HTTPException(status_code=400, detail="Отображаемое имя не может быть пустым.")
             user.display_name = updated_display_name
 
         if status is not None:
             if status not in {USER_STATUS_ACTIVE, USER_STATUS_DISABLED}:
-                raise HTTPException(status_code=400, detail="Unsupported status.")
+                raise HTTPException(status_code=400, detail="Неподдерживаемый статус.")
             user.status = status
 
         if _user_role(user) == ROLE_REGULAR_TRAIN:
             if locomotive_id is not None:
                 if normalized_locomotive_id is None:
-                    raise HTTPException(status_code=400, detail="Regular train users require a locomotiveId.")
+                    raise HTTPException(status_code=400, detail="Для обычного локомотивного пользователя требуется locomotiveId.")
                 existing = session.scalar(
                     select(User).where(
                         User.locomotive_id == normalized_locomotive_id,
@@ -747,10 +747,10 @@ def update_user_account(
                     )
                 )
                 if existing is not None:
-                    raise HTTPException(status_code=409, detail="That locomotive already has an assigned train account.")
+                    raise HTTPException(status_code=409, detail="Для этого локомотива уже назначена локомотивная учётная запись.")
                 user.locomotive_id = normalized_locomotive_id
         elif locomotive_id is not None:
-            raise HTTPException(status_code=400, detail="Only regular train accounts can set locomotiveId.")
+            raise HTTPException(status_code=400, detail="Задавать locomotiveId можно только для обычных локомотивных учётных записей.")
 
         user.updated_at = now_ms()
         if user.status == USER_STATUS_DISABLED:
@@ -778,7 +778,7 @@ def reset_user_password(actor: AuthContext, user_id: int) -> dict[str, object]:
     with session_scope() as session:
         user = session.get(User, user_id)
         if user is None:
-            raise HTTPException(status_code=404, detail="User not found.")
+            raise HTTPException(status_code=404, detail="Пользователь не найден.")
 
         user.password_hash = _password_hash(temporary_password)
         user.must_change_password = True
@@ -924,13 +924,13 @@ async def enforce_http_auth(request: Request, call_next):
         request.headers.get("X-API-Key"),
     )
     if auth is None:
-        return _json_error(401, UNAUTHORIZED_CODE, "A valid bearer token is required for this endpoint.")
+        return _json_error(401, UNAUTHORIZED_CODE, "Для этого запроса требуется действительный bearer-токен.")
 
     if auth.must_change_password and request.url.path not in PASSWORD_CHANGE_ALLOWED_PATHS:
         return _json_error(
             403,
             PASSWORD_CHANGE_REQUIRED_CODE,
-            "Password change is required before accessing the rest of the system.",
+            "Перед доступом к остальной части системы необходимо сменить пароль.",
         )
 
     request.state.auth = auth
@@ -941,25 +941,25 @@ def get_request_auth(request: Request | WebSocket) -> AuthContext:
     auth = getattr(request.state, "auth", None)
     if isinstance(auth, AuthContext):
         return auth
-    raise HTTPException(status_code=401, detail="Authentication context missing")
+    raise HTTPException(status_code=401, detail="Контекст аутентификации отсутствует.")
 
 
 def require_admin(auth: AuthContext) -> None:
     if auth.is_admin:
         return
-    raise HTTPException(status_code=403, detail="Admin role is required for this action.")
+    raise HTTPException(status_code=403, detail="Для этого действия требуется роль администратора.")
 
 
 def require_dispatcher_access(auth: AuthContext) -> None:
     if auth.can_use_dispatcher_console:
         return
-    raise HTTPException(status_code=403, detail="Dispatcher access is required for this action.")
+    raise HTTPException(status_code=403, detail="Для этого действия требуется доступ диспетчера.")
 
 
 def require_locomotive_access(auth: AuthContext, locomotive_id: str) -> None:
     if auth.can_access_locomotive(locomotive_id):
         return
-    raise HTTPException(status_code=403, detail="You do not have access to this locomotive.")
+    raise HTTPException(status_code=403, detail="У вас нет доступа к этому локомотиву.")
 
 
 async def authorize_websocket(websocket: WebSocket) -> AuthContext | None:
@@ -973,11 +973,11 @@ async def authorize_websocket(websocket: WebSocket) -> AuthContext | None:
             auth = _resolve_user_from_access_token(token)
 
     if auth is None:
-        await websocket.close(code=1008, reason="Unauthorized")
+        await websocket.close(code=1008, reason="Нет авторизации")
         return None
 
     if auth.must_change_password:
-        await websocket.close(code=1008, reason="Password change required")
+        await websocket.close(code=1008, reason="Требуется смена пароля")
         return None
 
     websocket.state.auth = auth

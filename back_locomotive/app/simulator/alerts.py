@@ -22,48 +22,48 @@ _ALERT_TEMPLATES: list[dict[str, Any]] = [
     {
         "severity": "critical",
         "source": "engine",
-        "title": "Engine Coolant Temperature High",
-        "description": "Coolant temperature exceeded critical threshold of 105°C.",
+        "title": "Высокая температура охлаждающей жидкости двигателя",
+        "description": "Температура охлаждающей жидкости превысила критический порог 105°C.",
         "recommended_action": (
-            "Reduce throttle and monitor temperature. "
-            "Prepare for emergency stop if temperature continues rising."
+            "Снизьте тягу и контролируйте температуру. "
+            "Подготовьтесь к экстренной остановке, если температура продолжит расти."
         ),
         "related_metric_ids": ["thermal.coolant_temp"],
     },
     {
         "severity": "warning",
         "source": "brakes",
-        "title": "Brake Pipe Pressure Low",
-        "description": "Brake pipe pressure has dropped below warning threshold.",
-        "recommended_action": "Inspect brake pipe for leaks. Notify maintenance at next stop.",
+        "title": "Низкое давление в тормозной магистрали",
+        "description": "Давление в тормозной магистрали опустилось ниже предупредительного порога.",
+        "recommended_action": "Проверьте тормозную магистраль на утечки. Сообщите в обслуживание на следующей остановке.",
         "related_metric_ids": ["pressure.brake_pipe"],
     },
     {
         "severity": "warning",
         "source": "fuel",
-        "title": "Fuel Level Below 20%",
-        "description": "Remaining fuel is at 18.3%. Plan for refueling stop.",
+        "title": "Уровень топлива ниже 20%",
+        "description": "Остаток топлива составляет 18,3%. Запланируйте дозаправку.",
         "recommended_action": (
-            "Contact dispatch to schedule refueling. "
-            "Continue to next designated fuel point."
+            "Свяжитесь с диспетчером, чтобы согласовать дозаправку. "
+            "Следуйте до ближайшей запланированной точки заправки."
         ),
         "related_metric_ids": ["fuel.level"],
     },
     {
         "severity": "info",
         "source": "electrical",
-        "title": "Traction Voltage Fluctuation",
-        "description": "Minor voltage fluctuation detected in traction system. Within acceptable range.",
+        "title": "Колебание тягового напряжения",
+        "description": "В тяговой системе зафиксировано незначительное колебание напряжения. Значение остаётся в допустимых пределах.",
         "recommended_action": None,
         "related_metric_ids": ["electrical.traction_voltage"],
     },
     {
         "severity": "critical",
         "source": "pneumatic",
-        "title": "Main Reservoir Pressure Critical",
-        "description": "Main brake reservoir pressure is critically low at 4.8 bar.",
+        "title": "Критическое давление в главном резервуаре",
+        "description": "Давление в главном тормозном резервуаре критически низкое: 4,8 бар.",
         "recommended_action": (
-            "Immediate action required. Apply emergency brake and stop train."
+            "Требуются немедленные действия. Примените экстренное торможение и остановите поезд."
         ),
         "related_metric_ids": ["pressure.brake_main"],
     },

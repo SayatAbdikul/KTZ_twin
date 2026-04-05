@@ -9,7 +9,7 @@ export function adaptMessage(raw: unknown, eventLocomotiveId?: string): Dispatch
     type: (d['type'] ?? 'informational') as DispatcherMessage['type'],
     subject: (d['subject'] ?? '') as string,
     body: (d['body'] ?? '') as string,
-    senderName: (d['sender_name'] ?? d['senderName'] ?? 'Dispatcher') as string,
+    senderName: (d['sender_name'] ?? d['senderName'] ?? 'Диспетчер') as string,
     sentAt: (d['sent_at'] ?? d['sentAt'] ?? Date.now()) as number,
     readAt: d['read_at'] as number | undefined,
     acknowledgedAt: d['acknowledged_at'] as number | undefined,

@@ -2,12 +2,12 @@ import { METRIC_DEFINITIONS } from '@/config/metrics.config'
 import type { HealthIndex, SubsystemHealth, SubsystemPenalty, ThresholdType } from '@/types/health'
 
 const subsystemBase: Omit<SubsystemHealth, 'healthScore' | 'activeAlertCount' | 'lastUpdated'>[] = [
-  { subsystemId: 'engine', label: 'Engine', status: 'normal' },
-  { subsystemId: 'brakes', label: 'Brakes', status: 'normal' },
-  { subsystemId: 'electrical', label: 'Electrical', status: 'normal' },
-  { subsystemId: 'fuel', label: 'Fuel System', status: 'normal' },
-  { subsystemId: 'cooling', label: 'Cooling', status: 'normal' },
-  { subsystemId: 'pneumatic', label: 'Pneumatics', status: 'normal' },
+  { subsystemId: 'engine', label: 'Двигатель', status: 'normal' },
+  { subsystemId: 'brakes', label: 'Тормоза', status: 'normal' },
+  { subsystemId: 'electrical', label: 'Электрика', status: 'normal' },
+  { subsystemId: 'fuel', label: 'Топливная система', status: 'normal' },
+  { subsystemId: 'cooling', label: 'Охлаждение', status: 'normal' },
+  { subsystemId: 'pneumatic', label: 'Пневматика', status: 'normal' },
 ]
 
 const subsystemScores: Record<string, number> = {

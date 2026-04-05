@@ -38,7 +38,7 @@ export function ZoneTooltip({ zoneId, mousePos, containerRef }: ZoneTooltipProps
         {/* Health score */}
         {subsystem && (
           <div className="flex items-center justify-between text-xs">
-            <span className="text-slate-500">Health score</span>
+            <span className="text-slate-500">Индекс состояния</span>
             <span className="font-mono font-semibold text-slate-200">
               {Math.round(subsystem.healthScore)}/100
             </span>
@@ -69,7 +69,7 @@ export function ZoneTooltip({ zoneId, mousePos, containerRef }: ZoneTooltipProps
         {alertCount > 0 && (
           <div className="flex items-center gap-1.5 border-t border-slate-800 pt-1.5 text-xs text-amber-400">
             <AlertTriangle size={11} />
-            <span>{alertCount} active alert{alertCount !== 1 ? 's' : ''}</span>
+            <span>Активных оповещений: {alertCount}</span>
           </div>
         )}
       </div>

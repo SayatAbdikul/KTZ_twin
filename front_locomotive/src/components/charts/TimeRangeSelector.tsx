@@ -13,7 +13,7 @@ const OPTIONS: Array<{ value: TimeRangePreset; label: string }> = [
   { value: '5m', label: '5m' },
   { value: '15m', label: '15m' },
   { value: '1h', label: '1h' },
-  { value: 'all', label: 'All' },
+  { value: 'all', label: 'Все' },
 ]
 
 export function TimeRangeSelector({ value, onChange, options }: TimeRangeSelectorProps) {
@@ -25,7 +25,7 @@ export function TimeRangeSelector({ value, onChange, options }: TimeRangeSelecto
     <div
       className="flex flex-wrap items-center gap-2"
       role="group"
-      aria-label="Live trend time range"
+      aria-label="Диапазон времени графика"
     >
       {optionList.map((option) => {
         const active = option.value === value

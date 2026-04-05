@@ -14,29 +14,29 @@ _MESSAGE_TEMPLATES = [
     {
         "priority": "normal",
         "type": "informational",
-        "subject": "Updated Schedule",
-        "body": "Your updated schedule has been posted. Please review at next station stop.",
-        "sender_name": "Dispatcher",
+        "subject": "Обновлённое расписание",
+        "body": "Ваше обновлённое расписание опубликовано. Ознакомьтесь с ним на следующей остановке.",
+        "sender_name": "Диспетчер",
     },
     {
         "priority": "high",
         "type": "assessment",
-        "subject": "Performance Assessment",
+        "subject": "Оценка эффективности",
         "body": (
-            "Fuel efficiency for current segment is 8% below target. "
-            "Consider adjusting throttle management."
+            "Топливная эффективность на текущем участке на 8% ниже целевой. "
+            "Рассмотрите корректировку управления тягой."
         ),
-        "sender_name": "Operations Centre",
+        "sender_name": "Операционный центр",
     },
     {
         "priority": "normal",
         "type": "recommendation",
-        "subject": "Weather Advisory",
+        "subject": "Погодное предупреждение",
         "body": (
-            "Heavy rain forecast for sections KZ-15 to KZ-20. "
-            "Reduced visibility expected. Reduce speed accordingly."
+            "На участках KZ-15 - KZ-20 ожидается сильный дождь. "
+            "Возможна пониженная видимость. Снизьте скорость соответственно."
         ),
-        "sender_name": "Dispatcher",
+        "sender_name": "Диспетчер",
     },
 ]
 

@@ -45,13 +45,13 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Initialising KTZ Locomotive Telemetry Server…")
+    logger.info("Запуск сервера телеметрии локомотива КТЖ…")
     await start_broker()
 
     # Generate first snapshot so REST endpoints are ready immediately
     generate_instance_frame()
     generate_health_index()
-    logger.info("Initial telemetry frame and health index generated.")
+    logger.info("Сформированы начальный кадр телеметрии и индекс состояния.")
 
     # Launch background tasks
     tasks = [
@@ -62,16 +62,16 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(task_message_generator(),   name="messages"),
         asyncio.create_task(task_publish_fault_pattern_fleet(), name="pattern-fleet"),
     ]
-    logger.info("%d background tasks started.", len(tasks))
+    logger.info("Запущено фоновых задач: %d.", len(tasks))
 
     yield  # ← server is running
 
-    logger.info("Shutting down background tasks…")
+    logger.info("Остановка фоновых задач…")
     for t in tasks:
         t.cancel()
     await asyncio.gather(*tasks, return_exceptions=True)
     await stop_broker()
-    logger.info("Shutdown complete.")
+    logger.info("Остановка завершена.")
 
 
 # ---------------------------------------------------------------------------
@@ -79,8 +79,8 @@ async def lifespan(app: FastAPI):
 # ---------------------------------------------------------------------------
 
 app = FastAPI(
-    title="KTZ Locomotive Telemetry Server",
-    description="Real-time telemetry backend for the locomotive operator interface.",
+    title="Сервер телеметрии локомотива КТЖ",
+    description="Сервер реального времени для интерфейса машиниста локомотива.",
     version="1.0.0",
     lifespan=lifespan,
 )

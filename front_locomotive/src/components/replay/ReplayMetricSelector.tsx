@@ -27,8 +27,8 @@ export function ReplayMetricSelector({
   return (
     <section className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
       <div className="mb-4">
-        <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Metrics</p>
-        <h2 className="text-sm font-semibold text-slate-100">Chart selection</h2>
+        <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Метрики</p>
+        <h2 className="text-sm font-semibold text-slate-100">Выбор графиков</h2>
       </div>
 
       <div className="space-y-4">

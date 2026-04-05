@@ -32,20 +32,13 @@ const railwayLayer = L.tileLayer(RAILWAY_TILE_API, {
     attribution: '&copy; OpenRailwayMap contributors',
 }).addTo(map);
 
-const fallbackRouteLine = L.polyline(ROUTE, {
-    color: "#64748b",
-    weight: 2,
-    opacity: 0.55,
-    dashArray: "6 6",
-}).addTo(map);
-
 const liveTrailLine = L.polyline([], {
     color: "#2563eb",
     weight: 4,
     opacity: 0.92,
 }).addTo(map);
 
-map.fitBounds(fallbackRouteLine.getBounds(), { padding: [24, 24] });
+map.fitBounds(L.latLngBounds(ROUTE), { padding: [24, 24] });
 
 const marker = L.marker(ROUTE[0], { title: LOCOMOTIVE_ID }).addTo(map);
 marker.bindPopup("Locomotive position");

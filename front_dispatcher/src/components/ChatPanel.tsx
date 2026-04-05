@@ -59,21 +59,21 @@ export function ChatPanel() {
     return (
         <section className="panel chat-panel">
             <div className="panel-header">
-                <h2>Dispatcher Chat</h2>
-                <span className="muted">{selected ?? 'no locomotive selected'}</span>
+                <h2>Чат с диспетчером</h2>
+                <span className="muted">{selected ?? 'локомотив не выбран'}</span>
             </div>
 
             <div className="chat-log">
-                {!selected && <p className="empty">Select a locomotive to start chat.</p>}
+                {!selected && <p className="empty">Выберите локомотив, чтобы начать чат.</p>}
                 {selected && messages.length === 0 && (
-                    <p className="empty">No messages yet. Send first command.</p>
+                    <p className="empty">Сообщений пока нет. Отправьте первую команду.</p>
                 )}
 
                 {messages.map((msg) => (
                     <div key={msg.id} className={`bubble ${msg.sender === 'dispatcher' ? 'out' : 'in'}`}>
                         <p>{msg.body}</p>
                         <small>
-                            {msg.sender === 'dispatcher' ? 'Dispatcher' : 'Train'} · {formatClock(msg.sentAt)}
+                            {msg.sender === 'dispatcher' ? 'Диспетчер' : 'Локомотив'} · {formatClock(msg.sentAt)}
                         </small>
                     </div>
                 ))}
@@ -84,11 +84,11 @@ export function ChatPanel() {
                     value={text}
                     onChange={(e) => setText(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && onSend()}
-                    placeholder="Type command or message"
+                    placeholder="Введите команду или сообщение"
                     disabled={!selected}
                 />
                 <button onClick={onSend} disabled={!selected || !text.trim()}>
-                    Send
+                    Отправить
                 </button>
             </div>
         </section>

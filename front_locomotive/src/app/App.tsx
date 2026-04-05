@@ -20,6 +20,7 @@ import { useMetricDefinitions } from '@/features/telemetry/useTelemetryQueries'
 import { useInitialFleetSnapshot } from '@/features/fleet/useFleetQueries'
 import { useAuthStore } from '@/features/auth/useAuthStore'
 import { useFleetStore } from '@/features/fleet/useFleetStore'
+import { useSettingsStore } from '@/features/settings/useSettingsStore'
 import { refreshSession } from '@/services/api/authApi'
 
 function defaultRouteForRole(role: 'admin' | 'dispatcher' | 'regular_train') {
@@ -31,7 +32,7 @@ async function refreshSessionWithTimeout() {
     try {
         const timeoutPromise = new Promise<never>((_, reject) => {
             timeoutId = window.setTimeout(
-              () => reject(new Error('Session bootstrap timeout')),
+              () => reject(new Error('Превышено время восстановления сессии')),
               APP_CONFIG.BOOTSTRAP_REFRESH_TIMEOUT_MS
             )
         })
@@ -76,7 +77,7 @@ const router = createBrowserRouter([
 function FullscreenLoading() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#090b10] text-sm text-slate-400">
-      Restoring secure session...
+      Восстановление защищённой сессии...
     </div>
   )
 }
@@ -151,6 +152,7 @@ function AuthenticatedApp() {
 }
 
 function BootstrappedRouter() {
+  const theme = useSettingsStore((state) => state.theme)
   const accessToken = useAuthStore((state) => state.accessToken)
   const user = useAuthStore((state) => state.user)
   const hasHydrated = useAuthStore((state) => state.hasHydrated)
@@ -158,6 +160,12 @@ function BootstrappedRouter() {
   const setSession = useAuthStore((state) => state.setSession)
   const clearSession = useAuthStore((state) => state.clearSession)
   const setBootstrapping = useAuthStore((state) => state.setBootstrapping)
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    document.documentElement.style.colorScheme = theme
+    window.localStorage.setItem('ktz-theme', theme)
+  }, [theme])
 
   useEffect(() => {
     if (!hasHydrated) {

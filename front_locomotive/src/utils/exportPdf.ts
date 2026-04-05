@@ -60,7 +60,7 @@ function buildReportHtml({
     .join('')
 
   return `<!doctype html>
-<html lang="en">
+<html lang="ru">
   <head>
     <meta charset="utf-8" />
     <title>${escapeHtml(title)}</title>
@@ -258,7 +258,7 @@ export async function printReport(options: PrintReportOptions) {
 
   if (!printWindow) {
     cleanup()
-    throw new Error('Unable to prepare the print report.')
+    throw new Error('Не удалось подготовить отчёт к печати.')
   }
 
   printWindow.document.open()

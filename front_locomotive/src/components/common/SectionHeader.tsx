@@ -19,7 +19,7 @@ export function SectionHeader({ title, viewAllTo, count }: SectionHeaderProps) {
       </div>
       {viewAllTo && (
         <Link to={viewAllTo} className="text-xs text-blue-400 hover:text-blue-300">
-          View all
+          Все
         </Link>
       )}
     </div>

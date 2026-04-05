@@ -17,10 +17,10 @@ export const alertHandlers = [
         ...alerts[idx],
         status: 'acknowledged',
         acknowledgedAt: Date.now(),
-        acknowledgedBy: 'Operator',
+        acknowledgedBy: 'Машинист',
       }
       return HttpResponse.json({ data: alerts[idx], timestamp: Date.now() })
     }
-    return HttpResponse.json({ code: 'NOT_FOUND', message: 'Alert not found' }, { status: 404 })
+    return HttpResponse.json({ code: 'NOT_FOUND', message: 'Оповещение не найдено' }, { status: 404 })
   }),
 ]

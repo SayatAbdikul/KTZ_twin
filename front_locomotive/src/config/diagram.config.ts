@@ -18,8 +18,8 @@ import type { DiagramZone } from '@/types/diagram'
 export const DIAGRAM_ZONES: DiagramZone[] = [
   {
     zoneId: 'cab',
-    label: 'Cab / Controls',
-    shortLabel: 'Cab',
+    label: 'Кабина / управление',
+    shortLabel: 'Кабина',
     subsystemId: null,
     metricIds: ['motion.speed', 'motion.acceleration', 'motion.distance'],
     shape: { type: 'rect', x: 22, y: 45, w: 124, h: 165, rx: 5 },
@@ -27,8 +27,8 @@ export const DIAGRAM_ZONES: DiagramZone[] = [
   },
   {
     zoneId: 'electrical',
-    label: 'Electrical Cabinet',
-    shortLabel: 'Electrical',
+    label: 'Электрошкаф',
+    shortLabel: 'Электрика',
     subsystemId: 'electrical',
     metricIds: ['electrical.traction_voltage', 'electrical.traction_current', 'electrical.battery_voltage'],
     shape: { type: 'rect', x: 148, y: 67, w: 140, h: 143, rx: 5 },
@@ -36,8 +36,8 @@ export const DIAGRAM_ZONES: DiagramZone[] = [
   },
   {
     zoneId: 'pneumatics',
-    label: 'Pneumatic System',
-    shortLabel: 'Pneumatics',
+    label: 'Пневматическая система',
+    shortLabel: 'Пневматика',
     subsystemId: 'pneumatic',
     metricIds: ['pressure.brake_main'],
     shape: { type: 'rect', x: 290, y: 67, w: 122, h: 73, rx: 5 },
@@ -45,8 +45,8 @@ export const DIAGRAM_ZONES: DiagramZone[] = [
   },
   {
     zoneId: 'engine',
-    label: 'Engine',
-    shortLabel: 'Engine',
+    label: 'Двигатель',
+    shortLabel: 'Двигатель',
     subsystemId: 'engine',
     metricIds: ['thermal.coolant_temp', 'thermal.oil_temp', 'thermal.exhaust_temp', 'pressure.oil'],
     shape: { type: 'rect', x: 414, y: 67, w: 150, h: 73, rx: 5 },
@@ -54,8 +54,8 @@ export const DIAGRAM_ZONES: DiagramZone[] = [
   },
   {
     zoneId: 'fuel',
-    label: 'Fuel System',
-    shortLabel: 'Fuel',
+    label: 'Топливная система',
+    shortLabel: 'Топливо',
     subsystemId: 'fuel',
     metricIds: ['fuel.level', 'fuel.consumption_rate'],
     shape: { type: 'rect', x: 290, y: 142, w: 274, h: 68, rx: 5 },
@@ -63,8 +63,8 @@ export const DIAGRAM_ZONES: DiagramZone[] = [
   },
   {
     zoneId: 'cooling',
-    label: 'Cooling System',
-    shortLabel: 'Cooling',
+    label: 'Система охлаждения',
+    shortLabel: 'Охлаждение',
     subsystemId: 'cooling',
     metricIds: ['thermal.coolant_temp'],
     shape: { type: 'rect', x: 566, y: 67, w: 214, h: 143, rx: 5 },
@@ -72,8 +72,8 @@ export const DIAGRAM_ZONES: DiagramZone[] = [
   },
   {
     zoneId: 'brakes',
-    label: 'Brake System',
-    shortLabel: 'Brakes',
+    label: 'Тормозная система',
+    shortLabel: 'Тормоза',
     subsystemId: 'brakes',
     metricIds: ['pressure.brake_pipe', 'pressure.brake_main'],
     shape: { type: 'rect', x: 148, y: 209, w: 632, h: 11, rx: 3 },
@@ -81,8 +81,8 @@ export const DIAGRAM_ZONES: DiagramZone[] = [
   },
   {
     zoneId: 'traction',
-    label: 'Traction Motors',
-    shortLabel: 'Traction',
+    label: 'Тяговые двигатели',
+    shortLabel: 'Тяга',
     subsystemId: 'electrical',
     metricIds: ['electrical.traction_current', 'electrical.traction_voltage'],
     // Compound path: two bogie positions

@@ -108,7 +108,7 @@ def _payload_to_context(payload: dict[str, object]) -> AuthContext | None:
 
 
 def _service_context() -> AuthContext:
-    return AuthContext(role="service", subject="service:api-key", display_name="Internal Service")
+    return AuthContext(role="service", subject="service:api-key", display_name="Внутренний сервис")
 
 
 def _resolve_auth_context(authorization: str | None, api_key: str | None) -> AuthContext | None:
@@ -159,13 +159,13 @@ async def enforce_http_auth(request: Request, call_next):
         )
     )
     if auth is None:
-        return _json_error(401, UNAUTHORIZED_CODE, "A valid bearer token is required for this endpoint.")
+        return _json_error(401, UNAUTHORIZED_CODE, "Для этого запроса требуется действительный bearer-токен.")
 
     if auth.must_change_password:
         return _json_error(
             403,
             PASSWORD_CHANGE_REQUIRED_CODE,
-            "Password change is required before accessing locomotive resources.",
+            "Перед доступом к ресурсам локомотива необходимо сменить пароль.",
         )
 
     request.state.auth = auth
@@ -176,13 +176,13 @@ def get_request_auth(request: Request | WebSocket) -> AuthContext:
     auth = getattr(request.state, "auth", None)
     if isinstance(auth, AuthContext):
         return auth
-    raise HTTPException(status_code=401, detail="Authentication context missing")
+    raise HTTPException(status_code=401, detail="Контекст аутентификации отсутствует.")
 
 
 def require_admin(auth: AuthContext) -> None:
     if auth.is_admin:
         return
-    raise HTTPException(status_code=403, detail="Admin role is required for this action.")
+    raise HTTPException(status_code=403, detail="Для этого действия требуется роль администратора.")
 
 
 async def authorize_websocket(websocket: WebSocket) -> AuthContext | None:
@@ -200,11 +200,11 @@ async def authorize_websocket(websocket: WebSocket) -> AuthContext | None:
                 auth = _ensure_locomotive_access(_payload_to_context(payload))
 
     if auth is None:
-        await websocket.close(code=1008, reason="Unauthorized")
+        await websocket.close(code=1008, reason="Нет авторизации")
         return None
 
     if auth.must_change_password:
-        await websocket.close(code=1008, reason="Password change required")
+        await websocket.close(code=1008, reason="Требуется смена пароля")
         return None
 
     websocket.state.auth = auth

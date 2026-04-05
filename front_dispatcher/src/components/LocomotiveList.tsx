@@ -8,6 +8,12 @@ function statusClass(status: 'normal' | 'attention' | 'critical'): string {
     return 'status-normal'
 }
 
+function statusLabel(status: 'normal' | 'attention' | 'critical'): string {
+    if (status === 'critical') return 'Критично'
+    if (status === 'attention') return 'Внимание'
+    return 'Норма'
+}
+
 export function LocomotiveList() {
     const selected = useDispatcherStore((s) => s.selectedLocomotiveId)
     const locomotives = useDispatcherStore((s) => s.locomotives)
@@ -26,12 +32,12 @@ export function LocomotiveList() {
     return (
         <section className="panel list-panel">
             <div className="panel-header">
-                <h2>Remote Locomotives</h2>
-                <span className="muted">{entries.length} online</span>
+                <h2>Удалённые локомотивы</h2>
+                <span className="muted">Онлайн: {entries.length}</span>
             </div>
 
             <div className="loco-list">
-                {entries.length === 0 && <p className="empty">Waiting for telemetry...</p>}
+                {entries.length === 0 && <p className="empty">Ожидание телеметрии...</p>}
                 {entries.map((loco) => (
                     <button
                         key={loco.locomotiveId}
@@ -40,14 +46,14 @@ export function LocomotiveList() {
                     >
                         <div className="loco-top-row">
                             <strong>{loco.locomotiveId}</strong>
-                            <span className={`status-pill ${statusClass(loco.status)}`}>{loco.status}</span>
+                            <span className={`status-pill ${statusClass(loco.status)}`}>{statusLabel(loco.status)}</span>
                         </div>
                         <div className="loco-metrics-row">
                             <span>{loco.speedKmh.toFixed(0)} km/h</span>
-                            <span>Fuel {loco.fuelLevel.toFixed(0)}%</span>
-                            <span>Health {loco.healthScore.toFixed(0)}</span>
+                            <span>Топливо {loco.fuelLevel.toFixed(0)}%</span>
+                            <span>Состояние {loco.healthScore.toFixed(0)}</span>
                         </div>
-                        <small className="muted">Updated {formatAgo(loco.timestamp)}</small>
+                        <small className="muted">Обновлено {formatAgo(loco.timestamp)}</small>
                     </button>
                 ))}
             </div>

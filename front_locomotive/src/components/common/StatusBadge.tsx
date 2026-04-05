@@ -22,6 +22,16 @@ function getVariant(status: string): StatusVariant {
   return 'unknown'
 }
 
+function getLabel(status: string): string {
+  if (status === 'critical') return 'Критично'
+  if (status === 'warning') return 'Предупреждение'
+  if (status === 'normal') return 'Норма'
+  if (status === 'info') return 'Инфо'
+  if (status === 'unknown') return 'Неизвестно'
+  if (status === 'degraded') return 'Снижение'
+  return status
+}
+
 export function StatusBadge({ status, label, className }: StatusBadgeProps) {
   const variant = getVariant(status)
   return (
@@ -32,7 +42,7 @@ export function StatusBadge({ status, label, className }: StatusBadgeProps) {
         className
       )}
     >
-      {label ?? status}
+      {label ?? getLabel(status)}
     </span>
   )
 }

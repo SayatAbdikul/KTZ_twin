@@ -9,12 +9,12 @@ const REPLAY_END_TS = Date.now() - 30_000
 const REPLAY_START_TS = REPLAY_END_TS - 60 * 60_000
 
 const SUBSYSTEMS: Array<Pick<SubsystemHealth, 'subsystemId' | 'label'>> = [
-  { subsystemId: 'engine', label: 'Engine' },
-  { subsystemId: 'brakes', label: 'Brakes' },
-  { subsystemId: 'electrical', label: 'Electrical' },
-  { subsystemId: 'fuel', label: 'Fuel System' },
-  { subsystemId: 'cooling', label: 'Cooling' },
-  { subsystemId: 'pneumatic', label: 'Pneumatics' },
+  { subsystemId: 'engine', label: 'Двигатель' },
+  { subsystemId: 'brakes', label: 'Тормоза' },
+  { subsystemId: 'electrical', label: 'Электрика' },
+  { subsystemId: 'fuel', label: 'Топливная система' },
+  { subsystemId: 'cooling', label: 'Охлаждение' },
+  { subsystemId: 'pneumatic', label: 'Пневматика' },
 ]
 
 const SUBSYSTEM_METRICS: Record<string, string[]> = {
@@ -241,12 +241,12 @@ function buildAlerts(timestamp: number): Alert[] {
           severity,
           status: 'active',
           source: definition.group,
-          title: `${definition.label} threshold breached`,
-          description: `${definition.label} is currently at ${currentValue.toFixed(definition.precision)} ${definition.unit}.`,
+          title: `Превышен порог: ${definition.label}`,
+          description: `${definition.label}: текущее значение ${currentValue.toFixed(definition.precision)} ${definition.unit}.`,
           recommendedAction:
             severity === 'critical'
-              ? 'Reduce load and inspect the affected subsystem before continuing at full power.'
-              : 'Monitor the trend and prepare a maintenance follow-up if the value continues drifting.',
+              ? 'Снизьте нагрузку и проверьте затронутую подсистему перед продолжением работы на полной мощности.'
+              : 'Наблюдайте за трендом и подготовьте заявку на обслуживание, если отклонение сохранится.',
           triggeredAt: timestamp,
           relatedMetricIds: [definition.metricId],
         } satisfies Alert,
