@@ -4,17 +4,19 @@ import { ConnectionBadge } from './components/ConnectionBadge'
 import { LocomotiveList } from './components/LocomotiveList'
 import { TelemetryPanel } from './components/TelemetryPanel'
 import { ChatPanel } from './components/ChatPanel'
+import { CONFIG } from './config'
 import { useAuthStore } from './store/useAuthStore'
 import { useDispatcherStore } from './store/useDispatcherStore'
 import { changePassword, login, logoutSession, refreshSession } from './services/authApi'
-
-const BOOTSTRAP_REFRESH_TIMEOUT_MS = 9000
 
 async function refreshSessionWithTimeout() {
     let timeoutId: number | undefined
     try {
         const timeoutPromise = new Promise<never>((_, reject) => {
-            timeoutId = window.setTimeout(() => reject(new Error('Session bootstrap timeout')), BOOTSTRAP_REFRESH_TIMEOUT_MS)
+            timeoutId = window.setTimeout(
+                () => reject(new Error('Session bootstrap timeout')),
+                CONFIG.BOOTSTRAP_REFRESH_TIMEOUT_MS
+            )
         })
         return await Promise.race([refreshSession(), timeoutPromise])
     } finally {

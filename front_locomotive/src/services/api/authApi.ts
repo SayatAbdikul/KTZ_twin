@@ -30,11 +30,10 @@ interface ApiEnvelope<T> {
 }
 
 let refreshPromise: Promise<AuthSessionResponse> | null = null
-const AUTH_REQUEST_TIMEOUT_MS = 8000
 
 async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const controller = new AbortController()
-  const timeoutId = window.setTimeout(() => controller.abort(), AUTH_REQUEST_TIMEOUT_MS)
+  const timeoutId = window.setTimeout(() => controller.abort(), APP_CONFIG.AUTH_REQUEST_TIMEOUT_MS)
   try {
     return await fetch(input, { ...init, signal: controller.signal })
   } catch (error) {

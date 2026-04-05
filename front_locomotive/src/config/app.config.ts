@@ -4,6 +4,8 @@ export const APP_CONFIG = {
   API_BASE_URL: import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001',
   REPLAY_API_BASE_URL: import.meta.env.VITE_REPLAY_API_BASE_URL ?? 'http://localhost:3010',
   AUTH_API_BASE_URL: import.meta.env.VITE_AUTH_API_BASE_URL ?? 'http://localhost:3010',
+  AUTH_REQUEST_TIMEOUT_MS: Number(import.meta.env.VITE_AUTH_REQUEST_TIMEOUT_MS ?? 20000),
+  BOOTSTRAP_REFRESH_TIMEOUT_MS: Number(import.meta.env.VITE_BOOTSTRAP_REFRESH_TIMEOUT_MS ?? 25000),
   ENABLE_MOCKS: import.meta.env.VITE_ENABLE_MOCKS === 'true',
 
   // Update intervals (ms)

@@ -13,14 +13,13 @@ import { DispatchConsolePage } from '@/pages/DispatchConsolePage'
 import { LoginPage } from '@/pages/LoginPage'
 import { ChangePasswordPage } from '@/pages/ChangePasswordPage'
 import { UserManagementPage } from '@/pages/UserManagementPage'
+import { APP_CONFIG } from '@/config/app.config'
 import { ROUTES } from '@/config/routes'
 import { useWebSocketLifecycle } from './useWebSocketLifecycle'
 import { useMetricDefinitions } from '@/features/telemetry/useTelemetryQueries'
 import { useAuthStore } from '@/features/auth/useAuthStore'
 import { useFleetStore } from '@/features/fleet/useFleetStore'
 import { refreshSession } from '@/services/api/authApi'
-
-const BOOTSTRAP_REFRESH_TIMEOUT_MS = 9000
 
 function defaultRouteForRole(role: 'admin' | 'dispatcher' | 'regular_train') {
   return role === 'dispatcher' ? ROUTES.DISPATCH : ROUTES.DASHBOARD
@@ -30,7 +29,10 @@ async function refreshSessionWithTimeout() {
     let timeoutId: number | undefined
     try {
         const timeoutPromise = new Promise<never>((_, reject) => {
-            timeoutId = window.setTimeout(() => reject(new Error('Session bootstrap timeout')), BOOTSTRAP_REFRESH_TIMEOUT_MS)
+            timeoutId = window.setTimeout(
+              () => reject(new Error('Session bootstrap timeout')),
+              APP_CONFIG.BOOTSTRAP_REFRESH_TIMEOUT_MS
+            )
         })
         return await Promise.race([refreshSession(), timeoutPromise])
     } finally {
