@@ -309,13 +309,15 @@ class ThresholdConfigStore:
                 return
 
             candidate = self._load_file_config()
+            merged = candidate
 
-            raw = json.loads(self._path.read_text(encoding="utf-8"))
-            if not isinstance(raw, dict):
-                raise ThresholdValidationError("Файл порогов должен содержать JSON-объект.")
-            merged = _merge_threshold_config(DEFAULT_THRESHOLD_CONFIG, raw)
+            if db_due:
+                db_payload = self._load_db_patch()
+                if isinstance(db_payload, dict):
+                    merged = _merge_threshold_config(candidate, db_payload)
+
             self._config = _validate_config(merged)
-            self._mtime_ns = stat.st_mtime_ns
+            self._next_db_check_s = now_s + 2.0
 
     def get_config(self) -> dict[str, Any]:
         self._reload()
