@@ -1,15 +1,14 @@
-INFO:     Started server process [101046]
+INFO:     Started server process [88027]
 INFO:     Waiting for application startup.
-2026-04-05 10:41:21,343  INFO      app.main — Запуск сервера телеметрии локомотива КТЖ…
-2026-04-05 10:41:21,346  WARNING   aiokafka — Unable to request metadata from "localhost:9092": KafkaConnectionError: Connection at localhost:9092 closed
-2026-04-05 10:41:23,349  WARNING   aiokafka — Unable to request metadata from "localhost:9092": KafkaConnectionError: Connection at localhost:9092 closed
-2026-04-05 10:41:25,352  WARNING   aiokafka — Unable to request metadata from "localhost:9092": KafkaConnectionError: Connection at localhost:9092 closed
-2026-04-05 10:41:27,399  INFO      app.broker — Kafka topic ensured: topic=ktz.locomotive.events partitions=100 replication_factor=1
-2026-04-05 10:41:27,405  INFO      app.broker — Kafka topic partitioning ready: topic=ktz.locomotive.events current_partitions=100 target_partitions=100
-2026-04-05 10:41:27,430  INFO      app.broker — Kafka producer started: localhost:9092, topic=ktz.locomotive.events
-2026-04-05 10:41:27,438  INFO      app.main — Сформированы начальный кадр телеметрии и индекс состояния.
-2026-04-05 10:41:27,438  INFO      app.main — Запущено фоновых задач: 6.
+2026-04-05 11:15:43,556  INFO      app.main — Запуск сервера телеметрии локомотива КТЖ…
+2026-04-05 11:15:43,580  INFO      app.broker — Kafka topic ensured: topic=ktz.locomotive.events partitions=100 replication_factor=1
+2026-04-05 11:15:43,581  INFO      app.broker — Kafka topic partitioning ready: topic=ktz.locomotive.events current_partitions=100 target_partitions=100
+2026-04-05 11:15:43,589  INFO      app.broker — Kafka producer started: localhost:9092, topic=ktz.locomotive.events
+2026-04-05 11:15:43,592  INFO      app.main — Сформированы начальный кадр телеметрии и индекс состояния.
+2026-04-05 11:15:43,592  INFO      app.main — Запущено фоновых задач: 6.
 INFO:     Application startup complete.
-INFO:     Uvicorn running on http://127.0.0.1:3101 (Press CTRL+C to quit)
-2026-04-05 10:41:27,443  WARNING   aiokafka.producer.sender — Got error produce response on topic-partition TopicPartition(topic='ktz.locomotive.events', partition=26), retrying. Error: <class 'aiokafka.errors.NotLeaderForPartitionError'>
-2026-04-05 10:41:51,060  INFO      app.broker — Kafka producer published 100 messages to topic=ktz.locomotive.events
+ERROR:    [Errno 48] error while attempting to bind on address ('127.0.0.1', 3101): address already in use
+INFO:     Waiting for application shutdown.
+2026-04-05 11:15:43,593  INFO      app.main — Остановка фоновых задач…
+2026-04-05 11:15:43,594  INFO      app.main — Остановка завершена.
+INFO:     Application shutdown complete.
